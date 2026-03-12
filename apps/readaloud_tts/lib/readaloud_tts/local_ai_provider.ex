@@ -35,21 +35,11 @@ defmodule ReadaloudTTS.LocalAIProvider do
            form_multipart: [
              file: {"audio.wav", audio, content_type: "audio/wav"},
              model: config.stt_model,
-             response_format: "verbose_json",
-             timestamp_granularities: "word"
+             response_format: "vtt"
            ]
          ) do
-      {:ok, %{status: 200, body: %{"words" => words}}} ->
-        timings =
-          Enum.map(words, fn w ->
-            %{
-              word: w["word"],
-              start_ms: round(w["start"] * 1000),
-              end_ms: round(w["end"] * 1000)
-            }
-          end)
-
-        {:ok, timings}
+      {:ok, %{status: 200, body: body}} when is_binary(body) ->
+        {:ok, parse_vtt_timings(body)}
 
       {:ok, %{status: status, body: body}} ->
         {:error, "Transcription failed with status #{status}: #{inspect(body)}"}
@@ -57,6 +47,32 @@ defmodule ReadaloudTTS.LocalAIProvider do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp parse_vtt_timings(vtt) do
+    vtt
+    |> String.split("\n\n")
+    |> Enum.flat_map(fn block ->
+      case Regex.run(~r/(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})\n(.+)/s, block) do
+        [_, start_ts, end_ts, text] ->
+          text
+          |> String.split(~r/\s+/)
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.map(fn word ->
+            %{word: word, start_ms: parse_ts(start_ts), end_ms: parse_ts(end_ts)}
+          end)
+
+        _ ->
+          []
+      end
+    end)
+  end
+
+  defp parse_ts(ts) do
+    [h, m, rest] = String.split(ts, ":")
+    [s, ms] = String.split(rest, ".")
+    String.to_integer(h) * 3_600_000 + String.to_integer(m) * 60_000 +
+      String.to_integer(s) * 1_000 + String.to_integer(ms)
   end
 
   @impl true
