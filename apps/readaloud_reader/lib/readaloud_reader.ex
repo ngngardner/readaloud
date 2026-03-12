@@ -1,18 +1,18 @@
 defmodule ReadaloudReader do
-  @moduledoc """
-  Documentation for `ReadaloudReader`.
-  """
+  alias ReadaloudLibrary.Repo
+  alias ReadaloudReader.ReadingProgress
+  import Ecto.Query
 
-  @doc """
-  Hello world.
+  def get_progress(book_id) do
+    ReadingProgress |> where(book_id: ^book_id) |> Repo.one()
+  end
 
-  ## Examples
-
-      iex> ReadaloudReader.hello()
-      :world
-
-  """
-  def hello do
-    :world
+  def upsert_progress(attrs) do
+    case get_progress(attrs.book_id) do
+      nil -> %ReadingProgress{}
+      existing -> existing
+    end
+    |> ReadingProgress.changeset(attrs)
+    |> Repo.insert_or_update()
   end
 end
