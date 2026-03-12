@@ -27,6 +27,7 @@ defmodule ReadaloudWebWeb.Router do
   scope "/api", ReadaloudWebWeb do
     pipe_through :api
 
+    get "/books/:book_id/cover", AudioController, :cover
     get "/books/:book_id/chapters/:chapter_id/audio", AudioController, :stream
     get "/books/:book_id/chapters/:chapter_id/timings", AudioController, :timings
   end

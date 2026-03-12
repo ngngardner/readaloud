@@ -18,7 +18,13 @@ defmodule ReadaloudImporter.EpubParser do
          {:ok, spine_ids} <- parse_spine(opf_content),
          {:ok, manifest} <- parse_manifest(opf_content, Path.dirname(opf_path)),
          chapters <- extract_chapters(files, spine_ids, manifest) do
-      {:ok, %{chapters: chapters, metadata: metadata}}
+      cover_image =
+        case extract_cover(files, opf_content, Path.dirname(opf_path)) do
+          {:ok, bytes} -> bytes
+          {:error, _} -> nil
+        end
+
+      {:ok, %{chapters: chapters, metadata: metadata, cover_image: cover_image}}
     end
   end
 
@@ -106,6 +112,65 @@ defmodule ReadaloudImporter.EpubParser do
     case Regex.run(~r/#{Regex.escape(name)}="([^"]+)"/, attrs_str) do
       [_, value] -> value
       _ -> nil
+    end
+  end
+
+  defp extract_cover(files, opf_content, opf_dir) do
+    # Try to find cover meta in OPF
+    cover_id =
+      case Regex.run(~r/meta\s+name="cover"\s+content="([^"]+)"/, opf_content) do
+        [_, id] -> id
+        _ -> nil
+      end
+
+    # Reuse parse_manifest's attribute extraction approach (order-independent)
+    {:ok, item_regex} = Regex.compile(~S'<item\s+([^>]+)/>', "s")
+
+    manifest =
+      Regex.scan(item_regex, opf_content)
+      |> Enum.map(fn [_, attrs] ->
+        id = extract_attr(attrs, "id")
+        href = extract_attr(attrs, "href")
+        media_type = extract_attr(attrs, "media-type")
+
+        if id && href && media_type do
+          full_href =
+            if opf_dir == "" or opf_dir == ".",
+              do: URI.decode(href),
+              else: Path.join(opf_dir, URI.decode(href))
+
+          {id, {full_href, media_type}}
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Map.new()
+
+    # Try cover_id first, then scan for "cover" in image filenames
+    image_items =
+      manifest
+      |> Enum.filter(fn {_, {_, type}} -> String.starts_with?(type, "image/") end)
+
+    cover_item =
+      if cover_id && Map.has_key?(manifest, cover_id) do
+        Map.get(manifest, cover_id)
+      else
+        image_items
+        |> Enum.find(fn {_, {href, _}} -> String.contains?(String.downcase(href), "cover") end)
+        |> case do
+          {_, item} -> item
+          nil -> nil
+        end
+      end
+
+    case cover_item do
+      {href, _type} ->
+        case Map.get(files, href) do
+          nil -> {:error, :cover_not_found}
+          bytes -> {:ok, bytes}
+        end
+
+      nil ->
+        {:error, :no_cover_in_epub}
     end
   end
 

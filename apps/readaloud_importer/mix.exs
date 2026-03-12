@@ -28,7 +28,8 @@ defmodule ReadaloudImporter.MixProject do
     [
       {:readaloud_library, in_umbrella: true},
       {:jason, "~> 1.4"},
-      {:oban, "~> 2.18"}
+      {:oban, "~> 2.18"},
+      {:req, "~> 0.5"}
     ]
   end
 end

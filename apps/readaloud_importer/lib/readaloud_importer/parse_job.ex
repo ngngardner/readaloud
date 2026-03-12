@@ -2,7 +2,7 @@ defmodule ReadaloudImporter.ParseJob do
   use Oban.Worker, queue: :import, max_attempts: 3
 
   alias ReadaloudLibrary.Repo
-  alias ReadaloudImporter.{ImportTask, EpubParser, PdfParser}
+  alias ReadaloudImporter.{ImportTask, EpubParser, PdfParser, CoverResolver, CoverJob}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"task_id" => task_id}}) do
@@ -19,7 +19,7 @@ defmodule ReadaloudImporter.ParseJob do
       end
 
     case result do
-      {:ok, %{chapters: chapters, metadata: metadata}} ->
+      {:ok, %{chapters: chapters, metadata: metadata} = result} ->
         {:ok, book} =
           ReadaloudLibrary.create_book(%{
             title: metadata.title,
@@ -39,6 +39,20 @@ defmodule ReadaloudImporter.ParseJob do
             content_path: content_path,
             word_count: chapter_data.word_count
           })
+        end
+
+        # Handle cover image: save embedded cover or enqueue Open Library lookup
+        case Map.get(result, :cover_image) do
+          bytes when is_binary(bytes) ->
+            CoverResolver.save_cover(book.id, bytes)
+
+            Ecto.Changeset.change(book, %{cover_path: CoverResolver.cover_path(book.id)})
+            |> Repo.update!()
+
+          _ ->
+            %{"book_id" => book.id, "title" => book.title, "author" => book.author}
+            |> CoverJob.new()
+            |> Oban.insert()
         end
 
         update_status(task, "completed", book.id)

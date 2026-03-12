@@ -22,4 +22,20 @@ defmodule ReadaloudWebWeb.AudioController do
         json(conn, %{timings: ReadaloudAudiobook.ChapterAudio.decoded_timings(audio)})
     end
   end
+
+  def cover(conn, %{"book_id" => book_id}) do
+    book = ReadaloudLibrary.get_book!(book_id)
+
+    case book.cover_path do
+      path when is_binary(path) and path != "" ->
+        if File.exists?(path) do
+          send_file(conn, 200, path)
+        else
+          send_resp(conn, 404, "Cover not found")
+        end
+
+      _ ->
+        send_resp(conn, 404, "No cover")
+    end
+  end
 end
