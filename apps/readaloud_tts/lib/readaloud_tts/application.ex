@@ -1,20 +1,13 @@
-defmodule ReadaloudTts.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
+defmodule ReadaloudTTS.Application do
   @moduledoc false
 
   use Application
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: ReadaloudTts.Worker.start_link(arg)
-      # {ReadaloudTts.Worker, arg}
-    ]
+    children = []
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: ReadaloudTts.Supervisor]
+    opts = [strategy: :one_for_one, name: ReadaloudTTS.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end
