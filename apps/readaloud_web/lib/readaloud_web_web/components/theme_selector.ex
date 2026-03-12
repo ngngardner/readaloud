@@ -23,7 +23,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button :for={theme <- @dark_themes} phx-click="set_theme" phx-value-theme={theme}
               class="btn btn-sm btn-ghost justify-start gap-2">
-              <div class="flex gap-0.5" data-theme={theme}>
+              <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
                 <div class="w-2 h-2 rounded-full bg-base-100"></div>
                 <div class="w-2 h-2 rounded-full bg-primary"></div>
                 <div class="w-2 h-2 rounded-full bg-secondary"></div>
@@ -39,7 +39,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button :for={theme <- @light_themes} phx-click="set_theme" phx-value-theme={theme}
               class="btn btn-sm btn-ghost justify-start gap-2">
-              <div class="flex gap-0.5" data-theme={theme}>
+              <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
                 <div class="w-2 h-2 rounded-full bg-base-100"></div>
                 <div class="w-2 h-2 rounded-full bg-primary"></div>
                 <div class="w-2 h-2 rounded-full bg-secondary"></div>
