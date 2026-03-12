@@ -57,4 +57,15 @@ defmodule ReadaloudAudiobookTest do
       assert changeset.changes[:attempt_number] == 5
     end
   end
+
+  describe "ChapterAudio.changeset/2" do
+    test "casts model and voice" do
+      changeset = ReadaloudAudiobook.ChapterAudio.changeset(
+        %ReadaloudAudiobook.ChapterAudio{},
+        %{chapter_id: 1, audio_path: "/tmp/test.wav", model: "kokoro", voice: "af_heart"}
+      )
+      assert changeset.changes[:model] == "kokoro"
+      assert changeset.changes[:voice] == "af_heart"
+    end
+  end
 end
