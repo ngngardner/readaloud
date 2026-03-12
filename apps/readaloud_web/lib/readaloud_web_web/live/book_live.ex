@@ -127,24 +127,107 @@ defmodule ReadaloudWebWeb.BookLive do
           style={gradient_style(@book)}
         />
         <div class="flex-1">
-          <h1 class="text-2xl font-bold tracking-tight"><%= @book.title %></h1>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-bold tracking-tight"><%= @book.title %></h1>
+            <%= if @book.audio_preferences do %>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
+                  <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
+                </div>
+                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                  <form phx-submit="update_audio_settings">
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Model</label>
+                      <select name="model" class="select select-sm select-bordered w-full">
+                        <option
+                          :for={m <- @models}
+                          value={m[:id]}
+                          selected={m[:id] == @selected_model}
+                        >
+                          <%= m[:id] %>
+                        </option>
+                      </select>
+                    </div>
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Voice</label>
+                      <select name="voice" class="select select-sm select-bordered w-full">
+                        <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                        <option
+                          :for={v <- (current_model && current_model[:voices]) || []}
+                          value={v}
+                          selected={v == @selected_voice}
+                        >
+                          <%= v %>
+                        </option>
+                      </select>
+                    </div>
+                    <p class="text-xs text-base-content/50 text-center mb-2">
+                      <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready
+                    </p>
+                    <button type="submit" class="btn btn-primary btn-sm w-full">Save</button>
+                  </form>
+                </div>
+              </div>
+            <% end %>
+          </div>
           <p :if={@book.author} class="text-base-content/60 mt-1"><%= @book.author %></p>
           <div class="flex flex-wrap gap-2 mt-3">
             <span class="badge badge-outline"><%= length(@chapters) %> chapters</span>
             <span class="badge badge-outline">
               <%= progress_count(@progress, @book) %>/<%= length(@chapters) %> read
             </span>
-            <span class="badge badge-outline">
-              <%= audio_count(@audio_map) %>/<%= length(@chapters) %> audio
-            </span>
+            <%= if @book.audio_preferences do %>
+              <span class="badge badge-outline">
+                <%= audio_count(@audio_map) %>/<%= length(@chapters) %> audio
+              </span>
+            <% end %>
           </div>
+          <%= if @book.audio_preferences do %>
+            <p class="text-xs text-base-content/50 mt-2">
+              <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready · <%= @book.audio_preferences["model"] %> / <%= @book.audio_preferences["voice"] %>
+            </p>
+          <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
             <.link navigate={resume_path(@book, @progress)} class="btn btn-primary btn-sm">
               Continue Reading
             </.link>
-            <button phx-click="toggle_generate_panel" class="btn btn-sm btn-outline">
-              Generate Audio
-            </button>
+            <%= if !@book.audio_preferences do %>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-sm btn-outline">
+                  Set up audio
+                </div>
+                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                  <div class="form-control mb-3">
+                    <label class="label label-text text-xs uppercase">Model</label>
+                    <select phx-change="select_model" name="model" class="select select-sm select-bordered w-full">
+                      <option
+                        :for={m <- @models}
+                        value={m[:id]}
+                        selected={m[:id] == @selected_model}
+                      >
+                        <%= m[:id] %>
+                      </option>
+                    </select>
+                  </div>
+                  <div class="form-control mb-3">
+                    <label class="label label-text text-xs uppercase">Voice</label>
+                    <select phx-change="select_voice" name="voice" class="select select-sm select-bordered w-full">
+                      <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                      <option
+                        :for={v <- (current_model && current_model[:voices]) || []}
+                        value={v}
+                        selected={v == @selected_voice}
+                      >
+                        <%= v %>
+                      </option>
+                    </select>
+                  </div>
+                  <button phx-click="activate_audio" class="btn btn-primary btn-sm w-full">
+                    Activate
+                  </button>
+                </div>
+              </div>
+            <% end %>
             <button
               phx-click="delete_book"
               data-confirm="This will remove the book and all generated audio. Continue?"
@@ -154,42 +237,6 @@ defmodule ReadaloudWebWeb.BookLive do
             </button>
           </div>
         </div>
-      </div>
-
-      <%!-- Batch generation panel --%>
-      <div :if={@show_generate_panel} class="card bg-base-200 p-4 mb-6">
-        <div class="flex flex-wrap gap-2 mb-3">
-          <button phx-click="select_all_chapters" class="btn btn-xs">All chapters</button>
-          <button phx-click="select_from_current" class="btn btn-xs">From current onward</button>
-        </div>
-        <div class="flex flex-wrap gap-3 mb-3">
-          <select phx-change="select_model" name="model" class="select select-sm select-bordered">
-            <option
-              :for={m <- @models}
-              value={m[:id]}
-              selected={m[:id] == @selected_model}
-            >
-              <%= m[:id] %>
-            </option>
-          </select>
-          <select phx-change="select_voice" name="voice" class="select select-sm select-bordered">
-            <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
-            <option
-              :for={v <- (current_model && current_model[:voices]) || []}
-              value={v}
-              selected={v == @selected_voice}
-            >
-              <%= v %>
-            </option>
-          </select>
-        </div>
-        <button
-          phx-click="generate_batch"
-          class="btn btn-primary btn-sm"
-          disabled={MapSet.size(@selected_chapters) == 0}
-        >
-          Generate Selected (<%= MapSet.size(@selected_chapters) %>)
-        </button>
       </div>
 
       <%!-- Chapter list --%>
@@ -208,43 +255,28 @@ defmodule ReadaloudWebWeb.BookLive do
           >
             <%= ch.title || "Chapter #{ch.number}" %>
           </.link>
-          <span :if={audio_duration(@audio_map, ch.id)} class="text-xs text-base-content/40">
-            <%= audio_duration(@audio_map, ch.id) %>
-          </span>
-          <.icon
-            :if={match?({:ready, _}, Map.get(@audio_map, ch.id))}
-            name="hero-speaker-wave"
-            class="w-4 h-4 text-success"
-          />
-          <.icon
-            :if={Map.get(@audio_map, ch.id) == :generating}
-            name="hero-arrow-path"
-            class="w-4 h-4 text-warning animate-spin"
-          />
-          <.icon
-            :if={Map.get(@audio_map, ch.id) == :failed}
-            name="hero-exclamation-triangle"
-            class="w-4 h-4 text-error"
-          />
-          <button
-            :if={Map.get(@audio_map, ch.id) == :failed}
-            phx-click="retry_chapter_audio"
-            phx-value-chapter-id={ch.id}
-            class="text-xs text-primary hover:underline"
-          >
-            Retry
-          </button>
+          <%= case Map.get(@audio_map, ch.id) do %>
+            <% {:ready, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:stale, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:generating, _} -> %>
+              <span class="text-xs text-base-content/40 animate-pulse"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:queued, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% :processing -> %>
+              <span class="text-xs text-base-content/40 animate-pulse">generating...</span>
+            <% :queued -> %>
+              <span class="text-xs text-base-content/40">queued</span>
+            <% :failed -> %>
+              <span class="text-xs text-error">failed</span>
+            <% :skipped -> %>
+              <span class="text-xs text-error">skipped</span>
+            <% _ -> %>
+          <% end %>
           <span :if={is_current?(ch, @progress)} class="badge badge-primary badge-xs">
             CURRENT
           </span>
-          <input
-            :if={@show_generate_panel && !match?({:ready, _}, Map.get(@audio_map, ch.id))}
-            type="checkbox"
-            checked={MapSet.member?(@selected_chapters, ch.id)}
-            phx-click="toggle_chapter"
-            phx-value-chapter-id={ch.id}
-            class="checkbox checkbox-xs checkbox-primary"
-          />
         </div>
       </div>
     </div>
