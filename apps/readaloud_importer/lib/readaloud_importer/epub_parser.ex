@@ -77,20 +77,36 @@ defmodule ReadaloudImporter.EpubParser do
   end
 
   defp parse_manifest(opf, opf_dir) do
-    items =
-      Regex.scan(~r/<item\s+[^>]*id="([^"]+)"[^>]*href="([^"]+)"[^>]*media-type="([^"]+)"[^>]*/>/s, opf)
-      |> Enum.map(fn [_, id, href, media_type] ->
-        # Resolve href relative to OPF location
-        full_path =
-          if opf_dir == "" or opf_dir == ".",
-            do: URI.decode(href),
-            else: Path.join(opf_dir, URI.decode(href))
+    # Match each <item .../> or <item ...></item> tag, then extract attributes
+    {:ok, item_regex} = Regex.compile(~S'<item\s+([^>]+)/>', "s")
 
-        {id, %{href: full_path, media_type: media_type}}
+    items =
+      Regex.scan(item_regex, opf)
+      |> Enum.map(fn [_, attrs] ->
+        id = extract_attr(attrs, "id")
+        href = extract_attr(attrs, "href")
+        media_type = extract_attr(attrs, "media-type")
+
+        if id && href && media_type do
+          full_path =
+            if opf_dir == "" or opf_dir == ".",
+              do: URI.decode(href),
+              else: Path.join(opf_dir, URI.decode(href))
+
+          {id, %{href: full_path, media_type: media_type}}
+        end
       end)
+      |> Enum.reject(&is_nil/1)
       |> Map.new()
 
     {:ok, items}
+  end
+
+  defp extract_attr(attrs_str, name) do
+    case Regex.run(~r/#{Regex.escape(name)}="([^"]+)"/, attrs_str) do
+      [_, value] -> value
+      _ -> nil
+    end
   end
 
   defp extract_chapters(files, spine_ids, manifest) do
