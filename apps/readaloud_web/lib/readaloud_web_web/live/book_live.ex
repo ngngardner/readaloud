@@ -13,6 +13,7 @@ defmodule ReadaloudWebWeb.BookLive do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
     end
 
     {:ok,
@@ -27,66 +28,8 @@ defmodule ReadaloudWebWeb.BookLive do
        models: models,
        selected_model: default_model(book, models),
        selected_voice: default_voice(book, models),
-       selected_chapters: MapSet.new(),
-       show_generate_panel: false,
        page_title: book.title
      )}
-  end
-
-  @impl true
-  def handle_event("generate_batch", _params, socket) do
-    selected = socket.assigns.selected_chapters
-    book = socket.assigns.book
-    model = socket.assigns.selected_model
-    voice = socket.assigns.selected_voice
-
-    ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => model, "voice" => voice}})
-
-    for chapter_id <- selected do
-      ReadaloudAudiobook.generate_for_chapter(book.id, chapter_id, model: model, voice: voice)
-    end
-
-    chapters = ReadaloudLibrary.list_chapters(book.id)
-
-    {:noreply,
-     socket
-     |> assign(
-       show_generate_panel: false,
-       selected_chapters: MapSet.new(),
-       audio_map: build_audio_map(chapters, book)
-     )}
-  end
-
-  @impl true
-  def handle_event("select_all_chapters", _params, socket) do
-    all_ids = socket.assigns.chapters |> Enum.map(& &1.id) |> MapSet.new()
-    {:noreply, assign(socket, selected_chapters: all_ids)}
-  end
-
-  @impl true
-  def handle_event("select_from_current", _params, socket) do
-    current_num = current_chapter_number(socket.assigns.progress, socket.assigns.chapters)
-
-    ids =
-      socket.assigns.chapters
-      |> Enum.filter(&(&1.number >= current_num))
-      |> Enum.map(& &1.id)
-      |> MapSet.new()
-
-    {:noreply, assign(socket, selected_chapters: ids)}
-  end
-
-  @impl true
-  def handle_event("toggle_chapter", %{"chapter-id" => ch_id}, socket) do
-    ch_id = String.to_integer(ch_id)
-    selected = socket.assigns.selected_chapters
-
-    updated =
-      if MapSet.member?(selected, ch_id),
-        do: MapSet.delete(selected, ch_id),
-        else: MapSet.put(selected, ch_id)
-
-    {:noreply, assign(socket, selected_chapters: updated)}
   end
 
   @impl true
@@ -96,22 +39,50 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("retry_chapter_audio", %{"chapter-id" => ch_id}, socket) do
+  def handle_event("activate_audio", _params, socket) do
     book = socket.assigns.book
     model = socket.assigns.selected_model
     voice = socket.assigns.selected_voice
-    ReadaloudAudiobook.generate_for_chapter(book.id, String.to_integer(ch_id), model: model, voice: voice)
-    {:noreply, socket}
+
+    {:ok, book} = ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    })
+
+    chapters = socket.assigns.chapters
+    ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+    {:noreply,
+     socket
+     |> assign(
+       book: book,
+       audio_map: build_audio_map(chapters, book)
+     )}
+  end
+
+  @impl true
+  def handle_event("update_audio_settings", %{"model" => model, "voice" => voice}, socket) do
+    book = socket.assigns.book
+
+    {:ok, book} = ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    })
+
+    chapters = socket.assigns.chapters
+    ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+    {:noreply,
+     socket
+     |> assign(
+       book: book,
+       selected_model: model,
+       selected_voice: voice,
+       audio_map: build_audio_map(chapters, book)
+     )}
   end
 
   @impl true
   def handle_event("set_theme", %{"theme" => theme}, socket) do
     {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
-  @impl true
-  def handle_event("toggle_generate_panel", _params, socket) do
-    {:noreply, assign(socket, show_generate_panel: !socket.assigns.show_generate_panel)}
   end
 
   @impl true
@@ -127,9 +98,15 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_info({:task_updated, _task}, socket) do
-    chapters = ReadaloudLibrary.list_chapters(socket.assigns.book.id)
-    {:noreply, assign(socket, audio_map: build_audio_map(chapters, socket.assigns.book))}
+  def handle_info({:task_updated, task}, socket) do
+    book = socket.assigns.book
+    chapters = socket.assigns.chapters
+
+    if task.status == "completed" do
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+    end
+
+    {:noreply, assign(socket, audio_map: build_audio_map(chapters, book))}
   end
 
   @impl true
