@@ -79,7 +79,7 @@ defmodule ReadaloudAudiobookTest do
       assert {:ok, 0} = ReadaloudAudiobook.ensure_audio_generated(book, chapters)
     end
 
-    test "queues chapters missing audio", %{book: book, ch1: ch1, ch2: ch2} do
+    test "queues chapters missing audio", %{book: book, ch1: _ch1, ch2: _ch2} do
       {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
       chapters = ReadaloudLibrary.list_chapters(book.id)
 
@@ -92,7 +92,7 @@ defmodule ReadaloudAudiobookTest do
       assert Enum.all?(tasks, &(&1.attempt_number == 1))
     end
 
-    test "skips chapters with existing matching audio", %{book: book, ch1: ch1, ch2: ch2} do
+    test "skips chapters with existing matching audio", %{book: book, ch1: ch1, ch2: _ch2} do
       {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
 
       # Insert matching audio for ch1
