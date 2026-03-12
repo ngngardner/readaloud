@@ -25,3 +25,9 @@ readaloud-*.tar
 # Phoenix assets
 /apps/readaloud_web/assets/node_modules/
 /apps/readaloud_web/priv/static/assets/
+
+# Git worktrees
+.worktrees/
+
+# Superpowers brainstorm sessions
+.superpowers/
