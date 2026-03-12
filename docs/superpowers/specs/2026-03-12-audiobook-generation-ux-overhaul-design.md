@@ -98,6 +98,8 @@ Signature changes from `build_audio_map(chapters)` to `build_audio_map(chapters,
 5. Failed task (matching current profile) with `attempt_number < 3` → `:failed`
 6. Otherwise → `nil`
 
+**Failed-task profile filtering:** `list_tasks_for_chapters/1` returns full `AudiobookTask` structs (including `model` and `voice` fields). The profile matching for `:failed`/`:skipped` determination is done in Elixir-level map-building logic by comparing `task.model == book.audio_preferences["model"]` and `task.voice == book.audio_preferences["voice"]`. Failed tasks from other profiles are ignored.
+
 ## BookLive Changes
 
 ### Mount
@@ -148,7 +150,7 @@ Gear icon next to book title. Clicking opens DaisyUI `dropdown` with:
 
 Changing model/voice saves immediately and triggers `ensure_audio_generated`.
 
-Below the book metadata, a summary line: "5/9 chapters ready · kokoro / af_heart"
+Below the book metadata, a summary line: "5/9 chapters ready · kokoro / af_heart". "Ready" means audio matches the current profile (only counts `:ready` state, not stale/generating/queued). This serves as a progress indicator for the current profile.
 
 ### Chapter List Rows
 
@@ -195,11 +197,20 @@ Pending/processing tasks with old voice complete and save `ChapterAudio` with ol
 
 `ensure_audio_generated` is idempotent. Existing pending tasks prevent duplicate creation.
 
+### Speed Not Tracked in Profiles
+
+`audio_preferences` stores only `model` and `voice`. Speed (`AudiobookTask.speed`) uses the default (1.0) and is not part of the staleness check. Speed changes are not a current requirement.
+
+### Task Accumulation
+
+Auto-retry creates up to 3 failed task rows per chapter per profile. For a single-user app with typical book sizes, this accumulation is negligible. The existing `clear_completed_tasks/0` (used by TasksLive) handles cleanup. No additional cleanup logic needed.
+
 ## Files to Modify
 
 1. `apps/readaloud_audiobook/lib/readaloud_audiobook/audiobook_task.ex` — add `attempt_number` field
 2. `apps/readaloud_audiobook/lib/readaloud_audiobook/chapter_audio.ex` — add `model`, `voice` fields
 3. `apps/readaloud_audiobook/lib/readaloud_audiobook.ex` — add `ensure_audio_generated/2`, modify `generate_for_chapter/3`
 4. `apps/readaloud_audiobook/lib/readaloud_audiobook/generate_job.ex` — persist model/voice to ChapterAudio on completion
-5. `apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex` — new mount flow, new event handlers, new template, updated `build_audio_map/2`
-6. New migration file for schema changes
+5. `apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex` — new mount flow, new event handlers, new template, updated `build_audio_map/2`, updated `audio_duration/2` helper to pattern-match all duration-carrying states (`{:ready, _}`, `{:stale, _}`, `{:generating, _}`, `{:queued, _}`)
+6. `apps/readaloud_audiobook/lib/readaloud_audiobook.ex` — remove `generate_for_book/2` (replaced by `ensure_audio_generated/2`)
+7. New migration file for schema changes
