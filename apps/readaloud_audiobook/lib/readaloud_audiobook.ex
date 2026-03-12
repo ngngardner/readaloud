@@ -24,18 +24,6 @@ defmodule ReadaloudAudiobook do
     end
   end
 
-  def generate_for_book(book_id, opts \\ []) do
-    chapters = ReadaloudLibrary.list_chapters(book_id)
-
-    tasks =
-      Enum.map(chapters, fn chapter ->
-        {:ok, task} = generate_for_chapter(book_id, chapter.id, opts)
-        task
-      end)
-
-    {:ok, tasks}
-  end
-
   @max_attempts 3
 
   def ensure_audio_generated(%{audio_preferences: nil}, _chapters), do: {:ok, 0}

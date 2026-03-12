@@ -25,14 +25,6 @@ defmodule ReadaloudAudiobookTest do
     end
   end
 
-  describe "generate_for_book/1" do
-    test "creates one task per chapter", %{book: book} do
-      assert {:ok, tasks} = ReadaloudAudiobook.generate_for_book(book.id)
-      assert length(tasks) == 2
-      assert Enum.all?(tasks, &(&1.scope == "chapter"))
-    end
-  end
-
   describe "list_tasks/0" do
     test "returns all tasks", %{book: book, ch1: ch1} do
       {:ok, _} = ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id)
