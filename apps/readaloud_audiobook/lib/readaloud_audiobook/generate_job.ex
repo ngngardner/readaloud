@@ -138,34 +138,49 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   defp fix_wav_header(wav) do
     case wav do
-      <<"RIFF", _old_riff_size::little-32, "WAVE", after_wave::binary>> ->
-        # Fix RIFF size
-        new_riff_size = byte_size(after_wave) + 4
-        # Fix data subchunk size by finding and patching it
-        fixed_after_wave = fix_data_chunk_size(after_wave)
-        <<"RIFF", new_riff_size::little-32, "WAVE", fixed_after_wave::binary>>
+      <<"RIFF", _::little-32, "WAVE", after_wave::binary>> ->
+        # Extract all PCM data after the "data" chunk header
+        case extract_pcm_data(after_wave, 0) do
+          {:ok, pcm_data} -> build_wav(pcm_data)
+          :error -> wav
+        end
 
       _ ->
         wav
     end
   end
 
-  defp fix_data_chunk_size(binary), do: fix_data_chunk_size(binary, 0)
+  defp extract_pcm_data(binary, offset) when offset + 8 > byte_size(binary), do: :error
 
-  defp fix_data_chunk_size(binary, offset) when offset + 8 > byte_size(binary), do: binary
-
-  defp fix_data_chunk_size(binary, offset) do
-    <<before::binary-size(offset), chunk_id::binary-size(4), _chunk_size::little-32,
-      rest::binary>> = binary
+  defp extract_pcm_data(binary, offset) do
+    <<_::binary-size(offset), chunk_id::binary-size(4), chunk_size::little-32, _::binary>> =
+      binary
 
     if chunk_id == "data" do
-      # All remaining bytes after "data" + size field are PCM data
-      new_data_size = byte_size(rest)
-      <<before::binary, "data", new_data_size::little-32, rest::binary>>
+      # All bytes after this header are PCM (including appended chunks)
+      data_start = offset + 8
+      {:ok, binary_part(binary, data_start, byte_size(binary) - data_start)}
     else
-      <<_::binary-size(offset), _::binary-size(4), chunk_size::little-32, _::binary>> = binary
-      fix_data_chunk_size(binary, offset + 8 + chunk_size)
+      extract_pcm_data(binary, offset + 8 + chunk_size)
     end
+  end
+
+  # Build a complete WAV file from raw PCM data (24kHz, 16-bit, mono)
+  defp build_wav(pcm_data) do
+    data_size = byte_size(pcm_data)
+
+    <<
+      "RIFF", (36 + data_size)::little-32, "WAVE",
+      "fmt ", 16::little-32,
+      1::little-16,
+      1::little-16,
+      24000::little-32,
+      48000::little-32,
+      2::little-16,
+      16::little-16,
+      "data", data_size::little-32,
+      pcm_data::binary
+    >>
   end
 
   defp strip_html(html) do
