@@ -1,0 +1,27 @@
+# Build artifacts
+/_build/
+/deps/
+
+# Database files
+/*.db
+*.db-*
+
+# Generated docs and coverage
+/cover/
+/doc/
+
+# Misc
+.fetch
+erl_crash.dump
+*.ez
+readaloud-*.tar
+/tmp/
+
+# Nix dev shell local state
+.mix/
+.hex/
+.direnv/
+
+# Phoenix assets
+/apps/readaloud_web/assets/node_modules/
+/apps/readaloud_web/priv/static/assets/
