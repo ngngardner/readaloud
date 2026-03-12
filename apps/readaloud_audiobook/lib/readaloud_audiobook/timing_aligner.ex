@@ -94,7 +94,7 @@ defmodule ReadaloudAudiobook.TimingAligner do
     do_interpolate(preliminary, 0, audio_start, audio_end)
   end
 
-  defp do_interpolate(preliminary, idx, audio_start, audio_end) when idx >= length(preliminary),
+  defp do_interpolate(preliminary, idx, _audio_start, _audio_end) when idx >= length(preliminary),
     do: []
 
   defp do_interpolate(preliminary, idx, audio_start, audio_end) do
