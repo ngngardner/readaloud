@@ -136,37 +136,38 @@ defmodule ReadaloudImporter.EpubParser do
   end
 
   defp extract_chapter_title(html, href) do
-    # Try h1, h2, h3 (skip <title> — often just the book title, not the chapter)
-    for tag <- ["h1", "h2", "h3"], reduce: nil do
-      nil ->
-        case Regex.run(~r/<#{tag}[^>]*>(.*?)<\/#{tag}>/s, html) do
-          [_, raw_title] ->
-            clean = strip_html(raw_title)
+    # Strategy 1: h1, h2, h3 tags
+    heading_title =
+      for tag <- ["h1", "h2", "h3"], reduce: nil do
+        nil ->
+          case Regex.run(~r/<#{tag}[^>]*>(.*?)<\/#{tag}>/s, html) do
+            [_, raw] ->
+              clean = strip_html(raw)
+              if clean != "" and String.length(clean) < @max_title_length, do: clean, else: nil
+            _ -> nil
+          end
+        found -> found
+      end
 
-            if clean != "" and String.length(clean) < @max_title_length,
-              do: clean,
-              else: nil
-
-          _ ->
-            nil
+    # Strategy 2: bold text matching "Chapter N" or similar patterns
+    bold_title =
+      if heading_title == nil do
+        case Regex.run(~r/<b[^>]*>(.*?)<\/b>/s, html) do
+          [_, raw] ->
+            clean = strip_html(raw)
+            if clean != "" and String.length(clean) < @max_title_length, do: clean, else: nil
+          _ -> nil
         end
+      end
 
-      found ->
-        found
-    end
-    |> case do
-      nil ->
-        # Fallback to filename
-        href
-        |> Path.basename()
-        |> Path.rootname()
-        |> String.replace(~r/[-_]/, " ")
-        |> String.trim()
-        |> then(fn name -> if name == "", do: "Untitled", else: name end)
-
-      title ->
-        title
-    end
+    # Strategy 3: filename fallback
+    heading_title || bold_title ||
+      (href
+       |> Path.basename()
+       |> Path.rootname()
+       |> String.replace(~r/[-_]/, " ")
+       |> String.trim()
+       |> then(fn name -> if name == "", do: "Untitled", else: name end))
   end
 
   defp strip_html(html) do
