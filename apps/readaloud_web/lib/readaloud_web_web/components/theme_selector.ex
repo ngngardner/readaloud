@@ -1,8 +1,8 @@
 defmodule ReadaloudWebWeb.ThemeSelector do
   use Phoenix.Component
 
-  @dark_themes ~w(dark dracula night coffee dim sunset abyss vampire blood)
-  @light_themes ~w(light cupcake bumblebee emerald corporate retro cyberpunk valentine garden lofi pastel fantasy wireframe cmyk autumn acid lemonade nord silk)
+  @dark_themes ~w(abyss blood coffee dark dim dracula night sunset vampire)
+  @light_themes ~w(acid autumn bumblebee cmyk corporate cupcake cyberpunk emerald fantasy garden lemonade light lofi nord pastel retro silk valentine wireframe)
 
   def theme_modal(assigns) do
     assigns =
@@ -23,11 +23,11 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button :for={theme <- @dark_themes} phx-click="set_theme" phx-value-theme={theme}
               class="btn btn-sm btn-ghost justify-start gap-2">
-              <div class="flex gap-0.5">
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-base-100)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-primary)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-secondary)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-accent)"></div>
+              <div class="flex gap-0.5" data-theme={theme}>
+                <div class="w-2 h-2 rounded-full bg-base-100"></div>
+                <div class="w-2 h-2 rounded-full bg-primary"></div>
+                <div class="w-2 h-2 rounded-full bg-secondary"></div>
+                <div class="w-2 h-2 rounded-full bg-accent"></div>
               </div>
               <span class="text-xs capitalize"><%= theme %></span>
             </button>
@@ -39,11 +39,11 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button :for={theme <- @light_themes} phx-click="set_theme" phx-value-theme={theme}
               class="btn btn-sm btn-ghost justify-start gap-2">
-              <div class="flex gap-0.5">
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-base-100)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-primary)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-secondary)"></div>
-                <div class="w-2 h-2 rounded-full" data-theme={theme} style="background: var(--color-accent)"></div>
+              <div class="flex gap-0.5" data-theme={theme}>
+                <div class="w-2 h-2 rounded-full bg-base-100"></div>
+                <div class="w-2 h-2 rounded-full bg-primary"></div>
+                <div class="w-2 h-2 rounded-full bg-secondary"></div>
+                <div class="w-2 h-2 rounded-full bg-accent"></div>
               </div>
               <span class="text-xs capitalize"><%= theme %></span>
             </button>
