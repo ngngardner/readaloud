@@ -54,4 +54,4 @@ ENV STORAGE_PATH=/data/files
 
 EXPOSE 4000
 
-CMD ["bin/readaloud", "start"]
+CMD bin/readaloud eval "ReadaloudLibrary.Release.migrate()" && bin/readaloud start
