@@ -6,8 +6,10 @@
 
 @plugin "../vendor/heroicons";
 
-/* Enable all DaisyUI built-in themes (default behavior) */
-@plugin "../vendor/daisyui";
+/* Enable all DaisyUI built-in themes */
+@plugin "../vendor/daisyui" {
+  themes: all;
+}
 
 /* Custom theme: Vampire (dark, blue-light-filter friendly, orange/amber accents) */
 @plugin "../vendor/daisyui-theme" {
