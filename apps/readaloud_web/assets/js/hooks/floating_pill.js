@@ -21,6 +21,9 @@ const FloatingPillHook = {
       this.pill.addEventListener("mouseleave", () => this.resetTimer(3000));
     }
 
+    // Listen for toggle-pill CustomEvent from AudioPlayer (Escape key)
+    window.addEventListener("toggle-pill", () => this.toggle());
+
     this.hide();
   },
 

@@ -198,8 +198,8 @@ export const AudioPlayer = {
       this.setSpeed(next)
     })
     this.handleEvent("toggle_pill", () => {
-      const isCollapsed = this.el.classList.toggle("collapsed")
-      localStorage.setItem("readaloud-player-collapsed", isCollapsed)
+      // Delegate to FloatingPillHook via CustomEvent
+      window.dispatchEvent(new CustomEvent("toggle-pill"))
     })
 
     // Set up IntersectionObserver for auto-restore of re-sync state
