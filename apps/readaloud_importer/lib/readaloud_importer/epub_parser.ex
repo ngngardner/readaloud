@@ -136,8 +136,8 @@ defmodule ReadaloudImporter.EpubParser do
   end
 
   defp extract_chapter_title(html, href) do
-    # Try h1, h2, h3, then title tag
-    for tag <- ["h1", "h2", "h3", "title"], reduce: nil do
+    # Try h1, h2, h3 (skip <title> — often just the book title, not the chapter)
+    for tag <- ["h1", "h2", "h3"], reduce: nil do
       nil ->
         case Regex.run(~r/<#{tag}[^>]*>(.*?)<\/#{tag}>/s, html) do
           [_, raw_title] ->
