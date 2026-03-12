@@ -98,4 +98,28 @@ defmodule ReadaloudTTS.LocalAIProvider do
         {:error, reason}
     end
   end
+
+  def list_models_and_voices(opts \\ []) do
+    config = Keyword.get(opts, :config, Config.from_env())
+
+    case Req.get("#{config.base_url}/v1/models") do
+      {:ok, %{status: 200, body: %{"data" => models}}} ->
+        tts_models =
+          models
+          |> Enum.filter(fn m -> String.contains?(m["id"] || "", ["tts", "kokoro", "piper"]) end)
+          |> Enum.map(fn m ->
+            model_id = m["id"]
+            voices = Map.get(Config.known_voices(), model_id, [])
+            %{id: model_id, voices: voices}
+          end)
+
+        {:ok, tts_models}
+
+      {:ok, %{status: status}} ->
+        {:error, "LocalAI returned #{status}"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end
