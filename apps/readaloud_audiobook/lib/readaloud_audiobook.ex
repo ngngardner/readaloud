@@ -41,6 +41,11 @@ defmodule ReadaloudAudiobook do
 
   def get_task(id), do: Repo.get(AudiobookTask, id)
 
+  def clear_completed_tasks do
+    from(t in AudiobookTask, where: t.status in ["completed", "failed"])
+    |> Repo.delete_all()
+  end
+
   def get_chapter_audio(chapter_id) do
     ChapterAudio |> where(chapter_id: ^chapter_id) |> Repo.one()
   end

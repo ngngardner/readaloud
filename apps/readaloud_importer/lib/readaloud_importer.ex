@@ -27,4 +27,9 @@ defmodule ReadaloudImporter do
   end
 
   def get_task(id), do: Repo.get(ImportTask, id)
+
+  def clear_completed_tasks do
+    from(t in ImportTask, where: t.status in ["completed", "failed"])
+    |> Repo.delete_all()
+  end
 end
