@@ -83,7 +83,9 @@ defmodule ReadaloudImporter.PdfParser do
         cover_file = Path.join(storage_dir, "cover-1.jpg")
 
         if File.exists?(cover_file) do
-          {:ok, File.read!(cover_file)}
+          bytes = File.read!(cover_file)
+          File.rm(cover_file)
+          {:ok, bytes}
         else
           {:error, :thumbnail_failed}
         end

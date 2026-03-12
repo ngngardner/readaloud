@@ -29,7 +29,9 @@ defmodule ReadaloudWebWeb.AudioController do
     case book.cover_path do
       path when is_binary(path) and path != "" ->
         if File.exists?(path) do
-          send_file(conn, 200, path)
+          conn
+          |> put_resp_content_type("image/jpeg")
+          |> send_file(200, path)
         else
           send_resp(conn, 404, "Cover not found")
         end

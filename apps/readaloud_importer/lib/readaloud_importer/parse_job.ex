@@ -44,10 +44,16 @@ defmodule ReadaloudImporter.ParseJob do
         # Handle cover image: save embedded cover or enqueue Open Library lookup
         case Map.get(result, :cover_image) do
           bytes when is_binary(bytes) ->
-            CoverResolver.save_cover(book.id, bytes)
+            case CoverResolver.save_cover(book.id, bytes) do
+              {:ok, _path} ->
+                Ecto.Changeset.change(book, %{cover_path: CoverResolver.cover_path(book.id)})
+                |> Repo.update!()
 
-            Ecto.Changeset.change(book, %{cover_path: CoverResolver.cover_path(book.id)})
-            |> Repo.update!()
+              {:error, _reason} ->
+                %{"book_id" => book.id, "title" => book.title, "author" => book.author}
+                |> CoverJob.new()
+                |> Oban.insert()
+            end
 
           _ ->
             %{"book_id" => book.id, "title" => book.title, "author" => book.author}
