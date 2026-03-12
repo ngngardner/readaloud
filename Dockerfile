@@ -36,11 +36,12 @@ RUN mix compile
 RUN mix release readaloud
 
 # Runtime stage
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache \
-    libstdc++ openssl ncurses-libs \
-    calibre poppler-utils
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libstdc++6 openssl libncurses6 \
+    calibre poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
