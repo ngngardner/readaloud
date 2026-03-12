@@ -29,7 +29,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
         chapter_id: chapter.id,
         audio_path: audio_path,
         duration_seconds: calculate_duration(audio),
-        word_timings: Jason.encode!(timings)
+        word_timings: Jason.encode!(timings),
+        model: task.model,
+        voice: task.voice
       })
       |> Repo.insert!(on_conflict: :replace_all, conflict_target: :chapter_id)
 
