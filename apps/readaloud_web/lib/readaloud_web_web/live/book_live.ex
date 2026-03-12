@@ -43,41 +43,49 @@ defmodule ReadaloudWebWeb.BookLive do
     book = socket.assigns.book
     model = socket.assigns.selected_model
     voice = socket.assigns.selected_voice
-
-    {:ok, book} = ReadaloudLibrary.update_book(book, %{
-      audio_preferences: %{"model" => model, "voice" => voice}
-    })
-
     chapters = socket.assigns.chapters
-    ReadaloudAudiobook.ensure_audio_generated(book, chapters)
 
-    {:noreply,
-     socket
-     |> assign(
-       book: book,
-       audio_map: build_audio_map(chapters, book)
-     )}
+    case ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    }) do
+      {:ok, book} ->
+        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+        {:noreply,
+         socket
+         |> assign(
+           book: book,
+           audio_map: build_audio_map(chapters, book)
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to activate audio")}
+    end
   end
 
   @impl true
   def handle_event("update_audio_settings", %{"model" => model, "voice" => voice}, socket) do
     book = socket.assigns.book
-
-    {:ok, book} = ReadaloudLibrary.update_book(book, %{
-      audio_preferences: %{"model" => model, "voice" => voice}
-    })
-
     chapters = socket.assigns.chapters
-    ReadaloudAudiobook.ensure_audio_generated(book, chapters)
 
-    {:noreply,
-     socket
-     |> assign(
-       book: book,
-       selected_model: model,
-       selected_voice: voice,
-       audio_map: build_audio_map(chapters, book)
-     )}
+    case ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    }) do
+      {:ok, book} ->
+        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+        {:noreply,
+         socket
+         |> assign(
+           book: book,
+           selected_model: model,
+           selected_voice: voice,
+           audio_map: build_audio_map(chapters, book)
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update audio settings")}
+    end
   end
 
   @impl true
@@ -174,7 +182,7 @@ defmodule ReadaloudWebWeb.BookLive do
           <div class="flex flex-wrap gap-2 mt-3">
             <span class="badge badge-outline"><%= length(@chapters) %> chapters</span>
             <span class="badge badge-outline">
-              <%= progress_count(@progress, @book) %>/<%= length(@chapters) %> read
+              <%= progress_count(@progress, @book, @chapters) %>/<%= length(@chapters) %> read
             </span>
             <%= if @book.audio_preferences do %>
               <span class="badge badge-outline">
@@ -188,7 +196,7 @@ defmodule ReadaloudWebWeb.BookLive do
             </p>
           <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
-            <.link navigate={resume_path(@book, @progress)} class="btn btn-primary btn-sm">
+            <.link navigate={resume_path(@book, @progress, @chapters)} class="btn btn-primary btn-sm">
               Continue Reading
             </.link>
             <%= if !@book.audio_preferences do %>
@@ -301,15 +309,7 @@ defmodule ReadaloudWebWeb.BookLive do
       |> Enum.filter(&(&1.status in ["pending", "processing"]))
       |> Map.new(&{&1.chapter_id, &1})
 
-    # Most recent failed task per chapter matching current profile
-    failed_by_chapter =
-      tasks
-      |> Enum.filter(&(&1.status == "failed" && &1.model == model && &1.voice == voice))
-      |> Enum.group_by(& &1.chapter_id)
-      |> Enum.map(fn {ch_id, ch_tasks} ->
-        {ch_id, Enum.max_by(ch_tasks, & &1.updated_at, NaiveDateTime)}
-      end)
-      |> Map.new()
+    failed_by_chapter = ReadaloudAudiobook.failed_tasks_by_chapter(tasks, model, voice)
 
     Map.new(chapter_ids, fn id ->
       audio = Map.get(audio_by_chapter, id)
@@ -365,22 +365,20 @@ defmodule ReadaloudWebWeb.BookLive do
   defp is_current?(_chapter, nil), do: false
   defp is_current?(chapter, progress), do: chapter.id == progress.current_chapter_id
 
-  defp resume_path(book, nil) do
-    chapters = ReadaloudLibrary.list_chapters(book.id)
-
+  defp resume_path(book, nil, chapters) do
     case chapters do
       [first | _] -> ~p"/books/#{book.id}/read/#{first.id}"
       [] -> ~p"/books/#{book.id}"
     end
   end
 
-  defp resume_path(book, %{current_chapter_id: nil}), do: ~p"/books/#{book.id}"
-  defp resume_path(book, progress), do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
+  defp resume_path(book, %{current_chapter_id: nil}, _chapters), do: ~p"/books/#{book.id}"
+  defp resume_path(book, progress, _chapters), do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
 
-  defp progress_count(nil, _book), do: 0
+  defp progress_count(nil, _book, _chapters), do: 0
 
-  defp progress_count(progress, book) do
-    current_chapter_number(progress, ReadaloudLibrary.list_chapters(book.id))
+  defp progress_count(progress, _book, chapters) do
+    current_chapter_number(progress, chapters)
   end
 
   defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> match?({:ready, _}, v) end)

@@ -3,6 +3,8 @@ defmodule ReadaloudAudiobook do
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob}
   import Ecto.Query
 
+  @max_attempts 3
+
   def generate_for_chapter(book_id, chapter_id, opts \\ []) do
     attrs =
       %{book_id: book_id, chapter_id: chapter_id, scope: "chapter"}
@@ -24,8 +26,6 @@ defmodule ReadaloudAudiobook do
     end
   end
 
-  @max_attempts 3
-
   def ensure_audio_generated(%{audio_preferences: nil}, _chapters), do: {:ok, 0}
   def ensure_audio_generated(%{audio_preferences: prefs}, _chapters) when map_size(prefs) == 0, do: {:ok, 0}
 
@@ -46,16 +46,7 @@ defmodule ReadaloudAudiobook do
       |> Enum.map(& &1.chapter_id)
       |> MapSet.new()
 
-    # Most recent failed task per chapter matching current profile
-    failed_by_chapter =
-      tasks
-      |> Enum.filter(&(&1.status == "failed" && &1.model == model && &1.voice == voice))
-      |> Enum.group_by(& &1.chapter_id)
-      |> Enum.map(fn {ch_id, ch_tasks} ->
-        most_recent = Enum.max_by(ch_tasks, & &1.updated_at, NaiveDateTime)
-        {ch_id, most_recent}
-      end)
-      |> Map.new()
+    failed_by_chapter = failed_tasks_by_chapter(tasks, model, voice)
 
     # Determine which chapters need generation
     to_generate =
@@ -71,12 +62,12 @@ defmodule ReadaloudAudiobook do
         needs_audio && not_in_flight && not_exhausted
       end)
 
-    # Queue generation for each
-    for ch <- to_generate do
+    # Queue generation for each (fire-and-forget)
+    Enum.each(to_generate, fn ch ->
       failed_task = Map.get(failed_by_chapter, ch.id)
       attempt = if failed_task, do: failed_task.attempt_number + 1, else: 1
       generate_for_chapter(book.id, ch.id, model: model, voice: voice, attempt_number: attempt)
-    end
+    end)
 
     {:ok, length(to_generate)}
   end
@@ -112,6 +103,15 @@ defmodule ReadaloudAudiobook do
     |> select([t], {t.status, count(t.id)})
     |> Repo.all()
     |> Map.new()
+  end
+
+  def failed_tasks_by_chapter(tasks, model, voice) do
+    tasks
+    |> Enum.filter(&(&1.status == "failed" && &1.model == model && &1.voice == voice))
+    |> Enum.group_by(& &1.chapter_id)
+    |> Map.new(fn {ch_id, ch_tasks} ->
+      {ch_id, Enum.max_by(ch_tasks, & &1.updated_at)}
+    end)
   end
 
   defp maybe_put(map, _key, nil), do: map
