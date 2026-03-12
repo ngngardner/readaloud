@@ -1,18 +1,30 @@
 defmodule ReadaloudImporter do
-  @moduledoc """
-  Documentation for `ReadaloudImporter`.
-  """
+  alias ReadaloudLibrary.Repo
+  alias ReadaloudImporter.{ImportTask, ParseJob}
+  import Ecto.Query
 
-  @doc """
-  Hello world.
+  def import_file(file_path, file_type) do
+    file_size =
+      case File.stat(file_path) do
+        {:ok, %{size: size}} -> size
+        _ -> nil
+      end
 
-  ## Examples
+    attrs = %{file_path: file_path, file_type: file_type, file_size: file_size}
 
-      iex> ReadaloudImporter.hello()
-      :world
+    case %ImportTask{} |> ImportTask.changeset(attrs) |> Repo.insert() do
+      {:ok, task} ->
+        %{task_id: task.id} |> ParseJob.new() |> Oban.insert()
+        {:ok, task}
 
-  """
-  def hello do
-    :world
+      error ->
+        error
+    end
   end
+
+  def list_tasks do
+    ImportTask |> order_by(desc: :inserted_at) |> Repo.all()
+  end
+
+  def get_task(id), do: Repo.get(ImportTask, id)
 end
