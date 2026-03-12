@@ -2,7 +2,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
   alias ReadaloudLibrary.Repo
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio}
+  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
   alias ReadaloudTTS.{Config, TextChunker}
 
   require Logger
@@ -63,12 +63,13 @@ defmodule ReadaloudAudiobook.GenerateJob do
         {:ok, %{audio: chunk_audio}} ->
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 
-          # Transcribe this chunk for timings
+          # Transcribe and align to source text
           chunk_timings =
             case ReadaloudTTS.transcribe(chunk_audio) do
               {:ok, t} ->
+                aligned = TimingAligner.align(t, chunk)
                 # Offset timings by accumulated audio duration
-                Enum.map(t, fn w ->
+                Enum.map(aligned, fn w ->
                   %{w | start_ms: w.start_ms + offset_ms, end_ms: w.end_ms + offset_ms}
                 end)
 
