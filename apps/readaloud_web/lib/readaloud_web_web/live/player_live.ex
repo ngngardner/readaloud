@@ -87,32 +87,29 @@ defmodule ReadaloudWebWeb.PlayerLive do
   end
 
   defp prepare_text_with_spans(html) do
-    # Split on whitespace boundaries while preserving HTML tags
-    # Wrap each word in a span with data-word-index
-    {_idx, parts} =
-      Regex.split(~r/(<[^>]+>)/, html, include_captures: true)
-      |> Enum.reduce({0, []}, fn segment, {idx, acc} ->
+    segments = Regex.split(~r/(<[^>]+>)/, html, include_captures: true)
+
+    {_idx, io} =
+      Enum.reduce(segments, {0, []}, fn segment, {idx, acc} ->
         if String.starts_with?(segment, "<") do
-          # HTML tag - pass through
-          {idx, [segment | acc]}
+          {idx, [acc, segment]}
         else
-          # Text - wrap each word
           words = String.split(segment, ~r/(\s+)/, include_captures: true)
 
-          {new_idx, wrapped} =
+          {new_idx, parts} =
             Enum.reduce(words, {idx, []}, fn word, {i, wacc} ->
               if String.match?(word, ~r/^\s*$/) do
-                {i, [word | wacc]}
+                {i, [wacc, word]}
               else
-                {i + 1,
-                 ["<span class=\"word\" data-word-index=\"#{i}\">#{word}</span>" | wacc]}
+                span = "<span class=\"word\" data-word-index=\"#{i}\">#{word}</span>"
+                {i + 1, [wacc, span]}
               end
             end)
 
-          {new_idx, Enum.reverse(wrapped) ++ acc}
+          {new_idx, [acc, parts]}
         end
       end)
 
-    parts |> Enum.reverse() |> Enum.join()
+    IO.iodata_to_binary(io)
   end
 end
