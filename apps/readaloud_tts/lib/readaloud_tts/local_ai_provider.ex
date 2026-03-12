@@ -33,7 +33,7 @@ defmodule ReadaloudTTS.LocalAIProvider do
 
     case Req.post("#{config.base_url}/v1/audio/transcriptions",
            form_multipart: [
-             file: {"audio.wav", audio, content_type: "audio/wav"},
+             file: {audio, filename: "audio.wav", content_type: "audio/wav"},
              model: config.stt_model,
              response_format: "vtt"
            ]
