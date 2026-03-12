@@ -30,8 +30,14 @@ import {AudioPlayer} from "./hooks/audio_player"
 import ThemeHook from "./hooks/theme"
 import SidebarHook from "./hooks/sidebar"
 import DragDropHook from "./hooks/drag_drop"
+import FloatingPillHook from "./hooks/floating_pill"
+import ReaderSettingsHook from "./hooks/reader_settings"
+import KeyboardShortcutsHook from "./hooks/keyboard_shortcuts"
 
-const Hooks = {...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook, DragDropHook}
+const Hooks = {
+  ...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook,
+  DragDropHook, FloatingPillHook, ReaderSettingsHook, KeyboardShortcutsHook
+}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

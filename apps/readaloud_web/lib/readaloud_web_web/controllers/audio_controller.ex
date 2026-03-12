@@ -23,6 +23,12 @@ defmodule ReadaloudWebWeb.AudioController do
     end
   end
 
+  def listen_redirect(conn, %{"id" => id, "chapter_id" => chapter_id}) do
+    conn
+    |> put_status(301)
+    |> redirect(to: ~p"/books/#{id}/read/#{chapter_id}")
+  end
+
   def cover(conn, %{"book_id" => book_id}) do
     book = ReadaloudLibrary.get_book!(book_id)
 

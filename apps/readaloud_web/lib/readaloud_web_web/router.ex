@@ -20,7 +20,7 @@ defmodule ReadaloudWebWeb.Router do
     live "/", LibraryLive
     live "/books/:id", BookLive
     live "/books/:id/read/:chapter_id", ReaderLive
-    live "/books/:id/listen/:chapter_id", PlayerLive
+    get "/books/:id/listen/:chapter_id", AudioController, :listen_redirect
     live "/tasks", TasksLive
   end
 
