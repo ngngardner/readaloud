@@ -3,7 +3,8 @@ const SidebarHook = {
     const sidebar = this.el;
     const toggle = document.getElementById("sidebar-toggle");
     const backdrop = document.getElementById("sidebar-backdrop");
-    const labels = sidebar.querySelectorAll("span:not(.badge)");
+    // Only hide text labels on collapse, not icon spans
+    const labels = sidebar.querySelectorAll("span.whitespace-nowrap");
 
     // Desktop: show labels when sidebar is hovered (expand on hover)
     sidebar.addEventListener("mouseenter", () => {

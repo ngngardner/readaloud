@@ -138,12 +138,33 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   defp fix_wav_header(wav) do
     case wav do
-      <<"RIFF", _old_size::little-32, rest::binary>> ->
-        new_size = byte_size(rest)
-        <<"RIFF", new_size::little-32, rest::binary>>
+      <<"RIFF", _old_riff_size::little-32, "WAVE", after_wave::binary>> ->
+        # Fix RIFF size
+        new_riff_size = byte_size(after_wave) + 4
+        # Fix data subchunk size by finding and patching it
+        fixed_after_wave = fix_data_chunk_size(after_wave)
+        <<"RIFF", new_riff_size::little-32, "WAVE", fixed_after_wave::binary>>
 
       _ ->
         wav
+    end
+  end
+
+  defp fix_data_chunk_size(binary), do: fix_data_chunk_size(binary, 0)
+
+  defp fix_data_chunk_size(binary, offset) when offset + 8 > byte_size(binary), do: binary
+
+  defp fix_data_chunk_size(binary, offset) do
+    <<before::binary-size(offset), chunk_id::binary-size(4), _chunk_size::little-32,
+      rest::binary>> = binary
+
+    if chunk_id == "data" do
+      # All remaining bytes after "data" + size field are PCM data
+      new_data_size = byte_size(rest)
+      <<before::binary, "data", new_data_size::little-32, rest::binary>>
+    else
+      <<_::binary-size(offset), _::binary-size(4), chunk_size::little-32, _::binary>> = binary
+      fix_data_chunk_size(binary, offset + 8 + chunk_size)
     end
   end
 

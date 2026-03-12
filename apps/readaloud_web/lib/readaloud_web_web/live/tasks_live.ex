@@ -136,18 +136,10 @@ defmodule ReadaloudWebWeb.TasksLive do
                     <%= task_type_label(task) %>
                   </span>
                 </div>
-                <div :if={book_name(task) != nil} class="text-xs text-base-content/50 mb-1 truncate">
+                <div :if={book_name(task) != nil} class="text-xs text-base-content/50 truncate">
                   <%= book_name(task) %>
                 </div>
-                <progress
-                  class="progress progress-warning w-full"
-                  value={task.progress * 100}
-                  max="100"
-                />
               </div>
-              <span class="text-sm text-base-content/50 shrink-0">
-                <%= round(task.progress * 100) %>%
-              </span>
               <button
                 phx-click="cancel_task"
                 phx-value-task-id={task.id}

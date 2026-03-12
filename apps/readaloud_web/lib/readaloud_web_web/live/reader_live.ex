@@ -332,7 +332,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         :if={@audio_state == :none}
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 px-4 py-3"
       >
-        <div class="max-w-4xl mx-auto flex items-center gap-4">
+        <div class="max-w-2xl mx-auto flex items-center gap-4">
           <.icon name="hero-speaker-wave" class="w-6 h-6 text-base-content/40" />
           <div class="flex-1">
             <div class="text-sm font-medium">Listen to Audiobook</div>
@@ -359,12 +359,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
         :if={@audio_state == :generating}
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 px-4 py-3"
       >
-        <div class="max-w-4xl mx-auto flex items-center gap-4">
+        <div class="max-w-2xl mx-auto flex items-center gap-4">
           <.icon name="hero-arrow-path" class="w-6 h-6 animate-spin text-primary" />
           <div class="flex-1">
             <div class="text-sm font-medium">Generating Audio...</div>
             <div class="text-xs text-base-content/50">You can keep reading while this runs</div>
-            <progress class="progress progress-primary w-full mt-1" value={@generation_progress} max="100" />
           </div>
           <button phx-click="cancel_generation" class="btn btn-ghost btn-sm">Cancel</button>
         </div>
@@ -381,7 +380,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 transition-all duration-300"
       >
         <audio id="audio-element" preload="auto"></audio>
-        <div class="max-w-4xl mx-auto px-4 py-2 space-y-1.5">
+        <div class="max-w-2xl mx-auto px-4 py-3 space-y-3">
           <%!-- Scrubber (hidden when collapsed) --%>
           <div
             data-scrubber
@@ -467,6 +466,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
                 class="range range-xs w-20"
               />
             </div>
+
+            <%!-- Regenerate audio --%>
+            <button
+              phx-click="generate_audio"
+              class="btn btn-ghost btn-xs btn-circle [.collapsed_&]:hidden"
+              title="Regenerate audio"
+            >
+              <.icon name="hero-arrow-path" class="w-4 h-4" />
+            </button>
 
             <%!-- Collapse toggle --%>
             <button data-collapse-toggle class="btn btn-ghost btn-xs btn-circle" title="Toggle player">
