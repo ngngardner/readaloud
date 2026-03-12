@@ -7,19 +7,17 @@ export const AudioPlayer = {
     this.timeDisplay = document.getElementById("time-display")
     this.textContainer = document.getElementById("chapter-text")
     this.timings = []
-    this.segments = []
     this.currentWordIndex = -1
     this.positionReportInterval = null
 
     // Load audio
     this.audio.src = this.el.dataset.audioUrl
 
-    // Load timings and build segment map
+    // Load word-level timings
     fetch(this.el.dataset.timingsUrl)
       .then(r => r.json())
       .then(data => {
         this.timings = data.timings || []
-        this.segments = this.buildSegments(this.timings)
       })
 
     // Restore position
@@ -77,38 +75,6 @@ export const AudioPlayer = {
     })
   },
 
-  // Group consecutive words with same start_ms/end_ms into segments.
-  // Each segment gets its time range divided evenly among its words.
-  buildSegments(timings) {
-    if (!timings.length) return []
-
-    const segments = []
-    let segStart = 0
-
-    for (let i = 1; i <= timings.length; i++) {
-      // New segment when start_ms/end_ms changes or we reach the end
-      if (i === timings.length ||
-          timings[i].start_ms !== timings[segStart].start_ms ||
-          timings[i].end_ms !== timings[segStart].end_ms) {
-        const count = i - segStart
-        const startMs = timings[segStart].start_ms
-        const endMs = timings[segStart].end_ms
-        const duration = endMs - startMs
-
-        for (let j = 0; j < count; j++) {
-          segments.push({
-            index: segStart + j,
-            start_ms: startMs + (duration * j / count),
-            end_ms: startMs + (duration * (j + 1) / count)
-          })
-        }
-        segStart = i
-      }
-    }
-
-    return segments
-  },
-
   startHighlighting() {
     const tick = () => {
       if (this.audio.paused) return
@@ -125,10 +91,20 @@ export const AudioPlayer = {
   },
 
   highlightWord(ms) {
+    // Binary search for the active word using real per-word timestamps
     let idx = -1
-    for (let i = 0; i < this.segments.length; i++) {
-      if (ms >= this.segments[i].start_ms && ms < this.segments[i].end_ms) {
-        idx = this.segments[i].index
+    let lo = 0
+    let hi = this.timings.length - 1
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1
+      const t = this.timings[mid]
+      if (ms < t.start_ms) {
+        hi = mid - 1
+      } else if (ms >= t.end_ms) {
+        lo = mid + 1
+      } else {
+        idx = mid
         break
       }
     }
