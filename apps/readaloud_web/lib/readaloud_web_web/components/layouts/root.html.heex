@@ -4,44 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="Readaloud">
-      {assigns[:page_title]}
-    </.live_title>
-    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
-    </script>
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/images/icon-192.png" />
+    <link rel="apple-touch-icon" href="/images/icon-192.png" />
+    <.live_title><%= assigns[:page_title] || "Readaloud" %></.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}></script>
     <script>
-      (() => {
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+      // Restore theme before first paint to prevent flash
+      (function() {
+        var theme = localStorage.getItem("phx:theme");
+        if (theme) document.documentElement.setAttribute("data-theme", theme);
       })();
+      // Listen for LiveView theme-change push events (phx-hook can't be on <html>)
+      window.addEventListener("phx:set_theme", (e) => {
+        document.documentElement.setAttribute("data-theme", e.detail.theme);
+        localStorage.setItem("phx:theme", e.detail.theme);
+      });
     </script>
   </head>
-  <body class="bg-base-100 text-base-content min-h-screen">
-    <nav class="navbar bg-base-200 border-b border-base-300 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="btn btn-ghost text-xl font-bold">Readaloud</a>
-      </div>
-      <div class="flex-none">
-        <ul class="menu menu-horizontal px-1 gap-1">
-          <li><a href="/" class="btn btn-ghost btn-sm">Library</a></li>
-          <li><a href="/tasks" class="btn btn-ghost btn-sm">Tasks</a></li>
-        </ul>
-      </div>
-    </nav>
-    {@inner_content}
+  <body class="antialiased">
+    <%= @inner_content %>
   </body>
 </html>
