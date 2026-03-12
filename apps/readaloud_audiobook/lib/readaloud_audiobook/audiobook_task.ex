@@ -12,12 +12,13 @@ defmodule ReadaloudAudiobook.AudiobookTask do
     field :status, :string, default: "pending"
     field :progress, :float, default: 0.0
     field :error_message, :string
+    field :attempt_number, :integer, default: 1
     timestamps()
   end
 
   def changeset(task, attrs) do
     task
-    |> cast(attrs, [:book_id, :chapter_id, :scope, :voice, :speed, :model, :status, :progress, :error_message])
+    |> cast(attrs, [:book_id, :chapter_id, :scope, :voice, :speed, :model, :status, :progress, :error_message, :attempt_number])
     |> validate_required([:book_id, :scope])
     |> validate_inclusion(:scope, ["chapter", "book"])
     |> validate_inclusion(:status, ["pending", "processing", "completed", "failed"])

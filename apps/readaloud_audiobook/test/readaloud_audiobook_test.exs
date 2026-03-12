@@ -39,4 +39,22 @@ defmodule ReadaloudAudiobookTest do
       assert length(ReadaloudAudiobook.list_tasks()) == 1
     end
   end
+
+  describe "AudiobookTask.changeset/2" do
+    test "casts attempt_number" do
+      changeset = ReadaloudAudiobook.AudiobookTask.changeset(
+        %ReadaloudAudiobook.AudiobookTask{},
+        %{book_id: 1, scope: "chapter", attempt_number: 2}
+      )
+      assert changeset.changes[:attempt_number] == 2
+    end
+
+    test "attempt_number not cast when not in cast list" do
+      changeset = ReadaloudAudiobook.AudiobookTask.changeset(
+        %ReadaloudAudiobook.AudiobookTask{},
+        %{book_id: 1, scope: "chapter", attempt_number: 5}
+      )
+      assert changeset.changes[:attempt_number] == 5
+    end
+  end
 end
