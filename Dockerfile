@@ -1,7 +1,9 @@
 # Build stage
-FROM elixir:1.17-alpine AS build
+FROM elixir:1.17 AS build
 
-RUN apk add --no-cache build-base git nodejs npm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
