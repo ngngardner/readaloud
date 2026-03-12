@@ -321,7 +321,7 @@ export const AudioPlayer = {
   highlightWord(ms) {
     if (!this.textContainer || this.timings.length === 0) return
 
-    // Binary search for active word
+    // Binary search for active word (matches ln-reader approach)
     let idx = -1
     let lo = 0
     let hi = this.timings.length - 1
@@ -329,13 +329,23 @@ export const AudioPlayer = {
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1
       const t = this.timings[mid]
-      if (ms < t.start_ms) {
-        hi = mid - 1
-      } else if (ms >= t.end_ms) {
-        lo = mid + 1
-      } else {
+      if (ms >= t.start_ms && ms < t.end_ms) {
         idx = mid
         break
+      } else if (ms < t.start_ms) {
+        hi = mid - 1
+      } else {
+        // ms >= t.end_ms — keep track of the last word we passed
+        idx = mid
+        lo = mid + 1
+      }
+    }
+
+    // If we landed past a word, check if we're actually in the next one
+    if (idx >= 0 && idx < this.timings.length - 1) {
+      const next = this.timings[idx + 1]
+      if (ms >= next.start_ms) {
+        idx = idx + 1
       }
     }
 
