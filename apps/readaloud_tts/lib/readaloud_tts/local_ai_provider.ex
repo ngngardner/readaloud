@@ -14,7 +14,8 @@ defmodule ReadaloudTTS.LocalAIProvider do
              voice: config.voice,
              speed: config.speed,
              response_format: config.response_format
-           }
+           },
+           receive_timeout: 300_000
          ) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, %{audio: body}}
@@ -36,7 +37,8 @@ defmodule ReadaloudTTS.LocalAIProvider do
              file: {audio, filename: "audio.wav", content_type: "audio/wav"},
              model: config.stt_model,
              response_format: "vtt"
-           ]
+           ],
+           receive_timeout: 300_000
          ) do
       {:ok, %{status: 200, body: body}} when is_binary(body) ->
         {:ok, parse_vtt_timings(body)}

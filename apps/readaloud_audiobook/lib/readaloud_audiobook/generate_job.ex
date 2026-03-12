@@ -3,6 +3,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio}
+  alias ReadaloudTTS.TextChunker
+
+  require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"task_id" => task_id}}) do
@@ -13,8 +16,8 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
-         {:ok, %{audio: audio}} <- ReadaloudTTS.synthesize(clean_text, voice: task.voice, speed: task.speed),
-         {:ok, timings} <- ReadaloudTTS.transcribe(audio) do
+         chunks = TextChunker.chunk(clean_text),
+         {:ok, audio, timings} <- synthesize_chunks(chunks, task) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
       File.write!(audio_path, audio)
@@ -37,9 +40,107 @@ defmodule ReadaloudAudiobook.GenerateJob do
     end
   end
 
+  defp synthesize_chunks(chunks, task) do
+    total = length(chunks)
+    Logger.info("Synthesizing #{total} chunks for task #{task.id}")
+
+    chunks
+    |> Enum.with_index(1)
+    |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx}, {:ok, audio_acc, timings_acc, offset_ms} ->
+      Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
+
+      case ReadaloudTTS.synthesize(chunk, voice: task.voice, speed: task.speed) do
+        {:ok, %{audio: chunk_audio}} ->
+          chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
+
+          # Transcribe this chunk for timings
+          chunk_timings =
+            case ReadaloudTTS.transcribe(chunk_audio) do
+              {:ok, t} ->
+                # Offset timings by accumulated audio duration
+                Enum.map(t, fn w ->
+                  %{w | start_ms: w.start_ms + offset_ms, end_ms: w.end_ms + offset_ms}
+                end)
+
+              {:error, reason} ->
+                Logger.warning("Transcription failed for chunk #{idx}: #{inspect(reason)}")
+                []
+            end
+
+          # Strip WAV header from subsequent chunks before concatenation
+          raw_audio =
+            if audio_acc == <<>> do
+              chunk_audio
+            else
+              strip_wav_header(chunk_audio)
+            end
+
+          new_audio = audio_acc <> raw_audio
+
+          {:cont, {:ok, new_audio, timings_acc ++ chunk_timings, offset_ms + chunk_duration_ms}}
+
+        {:error, reason} ->
+          {:halt, {:error, "TTS failed on chunk #{idx}/#{total}: #{inspect(reason)}"}}
+      end
+    end)
+    |> case do
+      {:ok, audio, timings, _offset} ->
+        # Fix the WAV header to reflect total size
+        fixed_audio = fix_wav_header(audio)
+        {:ok, fixed_audio, timings}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp strip_wav_header(wav) do
+    # Standard WAV header is 44 bytes
+    case wav do
+      <<"RIFF", _::binary-size(4), "WAVE", _rest::binary>> ->
+        # Find "data" chunk
+        find_data_chunk(wav, 12)
+
+      _ ->
+        wav
+    end
+  end
+
+  defp find_data_chunk(wav, offset) when offset >= byte_size(wav), do: wav
+
+  defp find_data_chunk(wav, offset) do
+    case binary_part(wav, offset, min(4, byte_size(wav) - offset)) do
+      "data" ->
+        # Skip chunk ID (4) + chunk size (4) = 8 bytes
+        data_start = offset + 8
+        binary_part(wav, data_start, byte_size(wav) - data_start)
+
+      _ ->
+        # Skip chunk ID (4), read chunk size (4), skip to next chunk
+        if offset + 8 <= byte_size(wav) do
+          <<_::binary-size(offset), _id::binary-size(4), size::little-32, _::binary>> = wav
+          find_data_chunk(wav, offset + 8 + size)
+        else
+          wav
+        end
+    end
+  end
+
+  defp fix_wav_header(wav) do
+    case wav do
+      <<"RIFF", _old_size::little-32, rest::binary>> ->
+        new_size = byte_size(rest)
+        <<"RIFF", new_size::little-32, rest::binary>>
+
+      _ ->
+        wav
+    end
+  end
+
   defp strip_html(html) do
     html
     |> String.replace(~r/<[^>]+>/, " ")
+    |> String.replace(~r/&[^;]+;/, " ")
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end
@@ -55,6 +156,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
   end
 
   defp calculate_duration(wav_bytes) do
-    byte_size(wav_bytes) / (22050 * 2)
+    # 24kHz, 16-bit mono
+    byte_size(wav_bytes) / (24000 * 2)
   end
 end
