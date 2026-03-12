@@ -8,6 +8,7 @@ defmodule ReadaloudAudiobook.AudiobookTask do
     field :scope, :string, default: "chapter"
     field :voice, :string
     field :speed, :float, default: 1.0
+    field :model, :string
     field :status, :string, default: "pending"
     field :progress, :float, default: 0.0
     field :error_message, :string
@@ -16,7 +17,7 @@ defmodule ReadaloudAudiobook.AudiobookTask do
 
   def changeset(task, attrs) do
     task
-    |> cast(attrs, [:book_id, :chapter_id, :scope, :voice, :speed, :status, :progress, :error_message])
+    |> cast(attrs, [:book_id, :chapter_id, :scope, :voice, :speed, :model, :status, :progress, :error_message])
     |> validate_required([:book_id, :scope])
     |> validate_inclusion(:scope, ["chapter", "book"])
     |> validate_inclusion(:status, ["pending", "processing", "completed", "failed"])

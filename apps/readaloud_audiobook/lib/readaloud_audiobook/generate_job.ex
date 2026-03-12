@@ -3,7 +3,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio}
-  alias ReadaloudTTS.TextChunker
+  alias ReadaloudTTS.{Config, TextChunker}
 
   require Logger
 
@@ -14,10 +14,12 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
 
+    config = Config.from_env()
+
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
          chunks = TextChunker.chunk(clean_text),
-         {:ok, audio, timings} <- synthesize_chunks(chunks, task) do
+         {:ok, audio, timings} <- synthesize_chunks(chunks, task, config) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
       File.write!(audio_path, audio)
@@ -40,16 +42,22 @@ defmodule ReadaloudAudiobook.GenerateJob do
     end
   end
 
-  defp synthesize_chunks(chunks, task) do
+  defp synthesize_chunks(chunks, task, config) do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
+
+    tts_opts = [
+      voice: task.voice || config.voice,
+      speed: task.speed || config.speed,
+      model: task.model || config.tts_model
+    ]
 
     chunks
     |> Enum.with_index(1)
     |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx}, {:ok, audio_acc, timings_acc, offset_ms} ->
       Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
 
-      case ReadaloudTTS.synthesize(chunk, voice: task.voice, speed: task.speed) do
+      case ReadaloudTTS.synthesize(chunk, tts_opts) do
         {:ok, %{audio: chunk_audio}} ->
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 
