@@ -8,7 +8,7 @@ defmodule ReadaloudWebWeb.BookLive do
     book = ReadaloudLibrary.get_book!(String.to_integer(id))
     chapters = ReadaloudLibrary.list_chapters(book.id)
     progress = ReadaloudReader.get_progress(book.id)
-    audio_map = build_audio_map(chapters)
+    audio_map = build_audio_map(chapters, book)
     models = fetch_models()
 
     if connected?(socket) do
@@ -53,7 +53,7 @@ defmodule ReadaloudWebWeb.BookLive do
      |> assign(
        show_generate_panel: false,
        selected_chapters: MapSet.new(),
-       audio_map: build_audio_map(chapters)
+       audio_map: build_audio_map(chapters, book)
      )}
   end
 
@@ -129,7 +129,7 @@ defmodule ReadaloudWebWeb.BookLive do
   @impl true
   def handle_info({:task_updated, _task}, socket) do
     chapters = ReadaloudLibrary.list_chapters(socket.assigns.book.id)
-    {:noreply, assign(socket, audio_map: build_audio_map(chapters))}
+    {:noreply, assign(socket, audio_map: build_audio_map(chapters, socket.assigns.book))}
   end
 
   @impl true
@@ -276,29 +276,72 @@ defmodule ReadaloudWebWeb.BookLive do
 
   # --- Private helpers ---
 
-  defp build_audio_map(chapters) do
+  defp build_audio_map(chapters, book) do
     chapter_ids = Enum.map(chapters, & &1.id)
     audios = ReadaloudAudiobook.list_chapter_audio_for_chapters(chapter_ids)
     tasks = ReadaloudAudiobook.list_tasks_for_chapters(chapter_ids)
 
-    Enum.map(chapter_ids, fn id ->
-      audio = Enum.find(audios, &(&1.chapter_id == id))
+    model = get_in(book.audio_preferences || %{}, ["model"])
+    voice = get_in(book.audio_preferences || %{}, ["voice"])
+
+    audio_by_chapter = Map.new(audios, &{&1.chapter_id, &1})
+
+    # Active tasks indexed by chapter
+    active_by_chapter =
+      tasks
+      |> Enum.filter(&(&1.status in ["pending", "processing"]))
+      |> Map.new(&{&1.chapter_id, &1})
+
+    # Most recent failed task per chapter matching current profile
+    failed_by_chapter =
+      tasks
+      |> Enum.filter(&(&1.status == "failed" && &1.model == model && &1.voice == voice))
+      |> Enum.group_by(& &1.chapter_id)
+      |> Enum.map(fn {ch_id, ch_tasks} ->
+        {ch_id, Enum.max_by(ch_tasks, & &1.updated_at, NaiveDateTime)}
+      end)
+      |> Map.new()
+
+    Map.new(chapter_ids, fn id ->
+      audio = Map.get(audio_by_chapter, id)
+      active_task = Map.get(active_by_chapter, id)
+      failed_task = Map.get(failed_by_chapter, id)
+      audio_matches = audio != nil && audio.model == model && audio.voice == voice
 
       cond do
-        audio != nil ->
+        # Priority 1: Active task exists
+        active_task != nil && active_task.status == "processing" && audio != nil && !audio_matches ->
+          {id, {:generating, audio.duration_seconds}}
+
+        active_task != nil && active_task.status == "pending" && audio != nil && !audio_matches ->
+          {id, {:queued, audio.duration_seconds}}
+
+        active_task != nil && active_task.status == "processing" ->
+          {id, :processing}
+
+        active_task != nil && active_task.status == "pending" ->
+          {id, :queued}
+
+        # Priority 2: Audio matches profile
+        audio_matches ->
           {id, {:ready, audio.duration_seconds}}
 
-        Enum.any?(tasks, &(&1.chapter_id == id && &1.status == "failed")) ->
+        # Priority 3: Stale audio, no active task
+        audio != nil && !audio_matches ->
+          {id, {:stale, audio.duration_seconds}}
+
+        # Priority 4-5: Failed tasks (matching profile only)
+        failed_task != nil && failed_task.attempt_number >= 3 ->
+          {id, :skipped}
+
+        failed_task != nil ->
           {id, :failed}
 
-        Enum.any?(tasks, &(&1.chapter_id == id && &1.status in ["pending", "processing"])) ->
-          {id, :generating}
-
+        # Priority 6: Nothing
         true ->
           {id, nil}
       end
     end)
-    |> Map.new()
   end
 
   defp current_chapter_number(nil, _chapters), do: 1
