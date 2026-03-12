@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="ReadaloudWeb" suffix=" · Phoenix Framework">
+    <.live_title default="Readaloud">
       {assigns[:page_title]}
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
@@ -25,12 +25,23 @@
           setTheme(localStorage.getItem("phx:theme") || "system");
         }
         window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
+
         window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
       })();
     </script>
   </head>
-  <body>
+  <body class="bg-base-100 text-base-content min-h-screen">
+    <nav class="navbar bg-base-200 border-b border-base-300 px-4 sm:px-6 lg:px-8">
+      <div class="flex-1">
+        <a href="/" class="btn btn-ghost text-xl font-bold">Readaloud</a>
+      </div>
+      <div class="flex-none">
+        <ul class="menu menu-horizontal px-1 gap-1">
+          <li><a href="/" class="btn btn-ghost btn-sm">Library</a></li>
+          <li><a href="/tasks" class="btn btn-ghost btn-sm">Tasks</a></li>
+        </ul>
+      </div>
+    </nav>
     {@inner_content}
   </body>
 </html>

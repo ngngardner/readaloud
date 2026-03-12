@@ -103,3 +103,11 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Word highlighting for audio player sync */
+.word.active {
+  background-color: rgba(99, 102, 241, 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+  transition: background-color 100ms ease;
+}

@@ -17,11 +17,17 @@ defmodule ReadaloudWebWeb.Router do
   scope "/", ReadaloudWebWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", LibraryLive
+    live "/books/:id", BookLive
+    live "/books/:id/read/:chapter_id", ReaderLive
+    live "/books/:id/listen/:chapter_id", PlayerLive
+    live "/tasks", TasksLive
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", ReadaloudWebWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", ReadaloudWebWeb do
+    pipe_through :api
+
+    get "/books/:book_id/chapters/:chapter_id/audio", AudioController, :stream
+    get "/books/:book_id/chapters/:chapter_id/timings", AudioController, :timings
+  end
 end

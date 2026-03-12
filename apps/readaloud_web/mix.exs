@@ -63,7 +63,11 @@ defmodule ReadaloudWeb.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:readaloud_library, in_umbrella: true},
+      {:readaloud_reader, in_umbrella: true},
+      {:readaloud_importer, in_umbrella: true},
+      {:readaloud_audiobook, in_umbrella: true}
     ]
   end
 
