@@ -273,7 +273,7 @@ defmodule ReadaloudWebWeb.LibraryLive do
 
     cond do
       read > 0 and read >= total -> :done
-      read == 0 and DateTime.compare(book.inserted_at, new_cutoff) == :gt -> :new
+      read == 0 and NaiveDateTime.compare(book.inserted_at, DateTime.to_naive(new_cutoff)) == :gt -> :new
       read > 0 -> {:progress, read, total}
       true -> nil
     end
