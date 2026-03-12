@@ -5,6 +5,8 @@ defmodule ReadaloudWebWeb.Layouts do
   """
   use ReadaloudWebWeb, :html
 
+  import ReadaloudWebWeb.Sidebar
+
   # Embed all files in layouts/* within this module.
   embed_templates "layouts/*"
 
@@ -17,15 +19,22 @@ defmodule ReadaloudWebWeb.Layouts do
     default: nil,
     doc: "the current scope"
 
+  attr :active_nav, :atom, default: :library, doc: "the active navigation item"
+  attr :task_count, :integer, default: 0, doc: "number of active tasks"
+
   slot :inner_block, required: true
 
   def app(assigns) do
     ~H"""
-    <main>
-      {render_slot(@inner_block)}
-    </main>
+    <div id="app-shell" phx-hook="ThemeHook">
+      <.sidebar :if={@active_nav != :reader} active={@active_nav} task_count={@task_count} />
+      <ReadaloudWebWeb.ThemeSelector.theme_modal />
 
-    <.flash_group flash={@flash} />
+      <main class={[@active_nav != :reader && "sm:ml-14", "min-h-screen p-4 sm:p-6 lg:p-8"]}>
+        <.flash_group flash={@flash} />
+        {render_slot(@inner_block)}
+      </main>
+    </div>
     """
   end
 

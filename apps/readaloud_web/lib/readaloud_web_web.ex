@@ -52,6 +52,8 @@ defmodule ReadaloudWebWeb do
     quote do
       use Phoenix.LiveView
 
+      import ReadaloudWebWeb.LiveHelpers
+
       unquote(html_helpers())
     end
   end

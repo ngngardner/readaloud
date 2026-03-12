@@ -28,8 +28,9 @@ import topbar from "../vendor/topbar"
 import {ScrollTracker} from "./hooks/scroll_tracker"
 import {AudioPlayer} from "./hooks/audio_player"
 import ThemeHook from "./hooks/theme"
+import SidebarHook from "./hooks/sidebar"
 
-const Hooks = {...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook}
+const Hooks = {...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
