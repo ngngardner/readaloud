@@ -22,8 +22,6 @@ defmodule ReadaloudWebWeb.Layouts do
   attr :active_nav, :atom, default: :library, doc: "the active navigation item"
   attr :task_count, :integer, default: 0, doc: "number of active tasks"
 
-  slot :inner_block, required: true
-
   def app(assigns) do
     ~H"""
     <div id="app-shell" phx-hook="ThemeHook">
@@ -32,7 +30,7 @@ defmodule ReadaloudWebWeb.Layouts do
 
       <main class={[@active_nav != :reader && "sm:ml-14", "min-h-screen p-4 sm:p-6 lg:p-8"]}>
         <.flash_group flash={@flash} />
-        {render_slot(@inner_block)}
+        <%= @inner_content %>
       </main>
     </div>
     """
