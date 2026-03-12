@@ -3,7 +3,7 @@ defmodule ReadaloudTTS.Config do
             tts_model: "kokoro",
             voice: "af_heart",
             speed: 1.0,
-            stt_model: "whisper-large-v3",
+            stt_model: "whisper-large",
             response_format: "wav"
 
   def from_env do
@@ -12,7 +12,7 @@ defmodule ReadaloudTTS.Config do
       tts_model: System.get_env("TTS_MODEL", "kokoro"),
       voice: System.get_env("TTS_VOICE", "af_heart"),
       speed: System.get_env("TTS_SPEED", "1.0") |> String.to_float(),
-      stt_model: System.get_env("STT_MODEL", "whisper-large-v3")
+      stt_model: System.get_env("STT_MODEL", "whisper-large")
     }
   end
 end
