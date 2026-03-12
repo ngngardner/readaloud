@@ -18,7 +18,7 @@ defmodule ReadaloudWebWeb.Sidebar do
       <div class="flex items-center gap-2.5 px-[9px] pt-3.5 pb-5 min-h-[60px]">
         <div class="w-9 h-9 min-w-9 rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-500
                     flex items-center justify-center">
-          <.icon name="hero-headphones-solid" class="w-[18px] h-[18px] text-white" />
+          <.icon name="hero-speaker-wave-solid" class="w-[18px] h-[18px] text-white" />
         </div>
         <span class="text-base font-bold tracking-tight whitespace-nowrap opacity-0
                      transition-opacity">Readaloud</span>

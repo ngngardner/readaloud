@@ -33,11 +33,13 @@ defmodule ReadaloudAudiobook.GenerateJob do
       })
       |> Repo.insert!(on_conflict: :replace_all, conflict_target: :chapter_id)
 
-      update_task(task, %{status: "completed", progress: 1.0})
+      task = update_task(task, %{status: "completed", progress: 1.0})
+      broadcast_task_update(task)
       :ok
     else
       {:error, reason} ->
-        update_task(task, %{status: "failed", error_message: "#{inspect(reason)}"})
+        task = update_task(task, %{status: "failed", error_message: "#{inspect(reason)}"})
+        broadcast_task_update(task)
         {:error, reason}
     end
   end
@@ -155,6 +157,11 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   defp update_task(task, attrs) do
     task |> AudiobookTask.changeset(attrs) |> Repo.update!()
+  end
+
+  defp broadcast_task_update(task) do
+    Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:audiobook:#{task.book_id}", {:task_updated, task})
+    Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:audiobook", {:task_updated, task})
   end
 
   defp audio_storage_path(chapter) do

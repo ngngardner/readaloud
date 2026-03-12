@@ -62,10 +62,12 @@ defmodule ReadaloudImporter.ParseJob do
         end
 
         update_status(task, "completed", book.id)
+        Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:import", {:import_completed, book.id})
         :ok
 
       {:error, reason} ->
         update_status(task, "failed", nil, "#{reason}")
+        Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:import", {:import_failed, task.id})
         {:error, reason}
     end
   end

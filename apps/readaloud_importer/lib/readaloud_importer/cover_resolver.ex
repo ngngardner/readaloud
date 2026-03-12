@@ -23,7 +23,7 @@ defmodule ReadaloudImporter.CoverResolver do
     hash = :erlang.phash2(title, 360)
     h1 = hash
     h2 = rem(hash + 120, 360)
-    "linear-gradient(145deg, oklch(30% 0.15 #{h1}), oklch(15% 0.10 #{h2}))"
+    "background: linear-gradient(145deg, oklch(30% 0.15 #{h1}), oklch(15% 0.10 #{h2}))"
   end
 
   @doc "Fetch cover from Open Library by title and author. Returns {:ok, image_bytes} or {:error, reason}."

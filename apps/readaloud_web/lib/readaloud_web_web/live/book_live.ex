@@ -127,7 +127,7 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_info({:task_updated, _task_id}, socket) do
+  def handle_info({:task_updated, _task}, socket) do
     chapters = ReadaloudLibrary.list_chapters(socket.assigns.book.id)
     {:noreply, assign(socket, audio_map: build_audio_map(chapters))}
   end
