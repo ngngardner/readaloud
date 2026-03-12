@@ -6,23 +6,26 @@ const FloatingPillHook = {
     const isMobile = window.innerWidth < 640;
 
     if (isMobile) {
-      document.addEventListener("click", (e) => {
+      this._docClickHandler = (e) => {
         if (e.clientY < 80 && !this.pill.contains(e.target)) {
           this.toggle();
         }
-      });
+      };
+      document.addEventListener("click", this._docClickHandler);
       this.pill.addEventListener("click", () => this.resetTimer(5000));
     } else {
-      document.addEventListener("mousemove", () => {
+      this._docMouseMoveHandler = () => {
         this.show();
         this.resetTimer(3000);
-      });
+      };
+      document.addEventListener("mousemove", this._docMouseMoveHandler);
       this.pill.addEventListener("mouseenter", () => clearTimeout(this.hideTimeout));
       this.pill.addEventListener("mouseleave", () => this.resetTimer(3000));
     }
 
     // Listen for toggle-pill CustomEvent from AudioPlayer (Escape key)
-    window.addEventListener("toggle-pill", () => this.toggle());
+    this._togglePillHandler = () => this.toggle();
+    window.addEventListener("toggle-pill", this._togglePillHandler);
 
     this.hide();
   },
@@ -47,6 +50,13 @@ const FloatingPillHook = {
   resetTimer(ms) {
     clearTimeout(this.hideTimeout);
     this.hideTimeout = setTimeout(() => this.hide(), ms);
+  },
+
+  destroyed() {
+    clearTimeout(this.hideTimeout);
+    if (this._docClickHandler) document.removeEventListener("click", this._docClickHandler);
+    if (this._docMouseMoveHandler) document.removeEventListener("mousemove", this._docMouseMoveHandler);
+    if (this._togglePillHandler) window.removeEventListener("toggle-pill", this._togglePillHandler);
   }
 };
 

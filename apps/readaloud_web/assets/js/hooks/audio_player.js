@@ -82,7 +82,8 @@ export const AudioPlayer = {
       })
     }
 
-    // Scrubber: main + mini
+    // Scrubber: main + mini (store window listeners for cleanup)
+    this._scrubberCleanups = []
     const scrubber = this.el.querySelector("[data-scrubber]")
     if (scrubber) {
       this.setupScrubber(scrubber)
@@ -224,10 +225,13 @@ export const AudioPlayer = {
       isDragging = true
       seek(e.clientX)
     })
-    window.addEventListener("mousemove", (e) => {
-      if (isDragging) seek(e.clientX)
-    })
-    window.addEventListener("mouseup", () => { isDragging = false })
+    const onMouseMove = (e) => { if (isDragging) seek(e.clientX) }
+    const onMouseUp = () => { isDragging = false }
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onMouseUp)
+    this._scrubberCleanups.push(
+      () => { window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseUp) }
+    )
 
     // Touch events
     scrubber.addEventListener("touchstart", (e) => {
@@ -333,8 +337,9 @@ export const AudioPlayer = {
         if (!this.autoScrollPaused) {
           window.dispatchEvent(new CustomEvent("auto-scroll-start"))
           newActive.scrollIntoView({ behavior: "smooth", block: "center" })
-          // Give the smooth scroll time to complete
-          setTimeout(() => window.dispatchEvent(new CustomEvent("auto-scroll-end")), 800)
+          // Clear previous timeout to prevent overlap at high playback speeds
+          clearTimeout(this._autoScrollEndTimer)
+          this._autoScrollEndTimer = setTimeout(() => window.dispatchEvent(new CustomEvent("auto-scroll-end")), 800)
 
           // IntersectionObserver: watch the active word
           if (this._intersectionObserver) {
@@ -355,7 +360,7 @@ export const AudioPlayer = {
           el.classList.add("word-spoken")
         }
       }
-    } else if (idx < this.currentWordIndex) {
+    } else if (idx >= 0 && idx < this.currentWordIndex) {
       // Seeked backwards: remove spoken from words after new index
       for (let i = idx + 1; i <= this.currentWordIndex; i++) {
         const el = this.textContainer.querySelector(`[data-word-index="${i}"]`)
@@ -389,5 +394,7 @@ export const AudioPlayer = {
     if (this._autoScrollStartHandler) window.removeEventListener("auto-scroll-start", this._autoScrollStartHandler)
     if (this._autoScrollEndHandler) window.removeEventListener("auto-scroll-end", this._autoScrollEndHandler)
     if (this._intersectionObserver) this._intersectionObserver.disconnect()
+    if (this._scrubberCleanups) this._scrubberCleanups.forEach(fn => fn())
+    clearTimeout(this._autoScrollEndTimer)
   }
 }

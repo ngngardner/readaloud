@@ -16,11 +16,12 @@ export const ScrollTracker = {
     window.addEventListener("auto-scroll-end", this._autoScrollEndHandler)
 
     // Debounced scroll tracking
-    let timeout
+    this._scrollTimeout = null
     this.el.addEventListener("scroll", () => {
-      clearTimeout(timeout)
-      timeout = setTimeout(() => {
-        const position = this.el.scrollTop / (this.el.scrollHeight - this.el.clientHeight)
+      clearTimeout(this._scrollTimeout)
+      this._scrollTimeout = setTimeout(() => {
+        const scrollable = this.el.scrollHeight - this.el.clientHeight
+        const position = scrollable > 0 ? this.el.scrollTop / scrollable : 0
         this.pushEvent("scroll", { position: Math.min(1, Math.max(0, position)) })
 
         // Detect manual scroll during audio playback
@@ -33,6 +34,7 @@ export const ScrollTracker = {
   },
 
   destroyed() {
+    clearTimeout(this._scrollTimeout)
     if (this._autoScrollStartHandler) window.removeEventListener("auto-scroll-start", this._autoScrollStartHandler)
     if (this._autoScrollEndHandler) window.removeEventListener("auto-scroll-end", this._autoScrollEndHandler)
   }
