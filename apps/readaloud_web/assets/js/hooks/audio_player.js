@@ -104,7 +104,7 @@ export const AudioPlayer = {
       })
     }
 
-    // Time update: progress + highlighting + position reporting
+    // Time update: progress + time display + position reporting (low frequency)
     this.audio.addEventListener("timeupdate", () => {
       if (this.audio.duration) {
         const pct = (this.audio.currentTime / this.audio.duration) * 100
@@ -120,11 +120,6 @@ export const AudioPlayer = {
             this.formatTime(this.audio.currentTime) + " / " + this.formatTime(this.audio.duration)
         }
 
-        // Word highlighting
-        if (!this.audio.paused) {
-          this.highlightWord(this.audio.currentTime * 1000)
-        }
-
         // Report position (throttled: every ~5s of audio time)
         const nowMs = Math.round(this.audio.currentTime * 1000)
         if (!this._lastReportedMs || Math.abs(nowMs - this._lastReportedMs) >= 5000) {
@@ -133,6 +128,27 @@ export const AudioPlayer = {
         }
       }
     })
+
+    // High-frequency word highlighting via requestAnimationFrame (60fps)
+    this._rafId = null
+    this._startHighlightLoop = () => {
+      const tick = () => {
+        if (this.audio && !this.audio.paused) {
+          this.highlightWord(this.audio.currentTime * 1000)
+          this._rafId = requestAnimationFrame(tick)
+        }
+      }
+      this._rafId = requestAnimationFrame(tick)
+    }
+    this._stopHighlightLoop = () => {
+      if (this._rafId) {
+        cancelAnimationFrame(this._rafId)
+        this._rafId = null
+      }
+    }
+    this.audio.addEventListener("play", this._startHighlightLoop)
+    this.audio.addEventListener("pause", this._stopHighlightLoop)
+    this.audio.addEventListener("ended", this._stopHighlightLoop)
 
     // Play/pause state
     this.audio.addEventListener("play", () => {
@@ -210,20 +226,28 @@ export const AudioPlayer = {
   setupScrubber(scrubber) {
     const getPercent = (clientX) => {
       const rect = scrubber.getBoundingClientRect()
+      if (rect.width === 0) return 0
       return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
     }
 
     const seek = (clientX) => {
-      if (this.audio.duration) {
-        this.audio.currentTime = getPercent(clientX) * this.audio.duration
+      if (this.audio.duration && isFinite(this.audio.duration)) {
+        const pct = getPercent(clientX)
+        this.audio.currentTime = pct * this.audio.duration
       }
     }
 
-    // Mouse events
+    // Click handler (simple single-click seek)
+    scrubber.addEventListener("click", (e) => {
+      seek(e.clientX)
+    })
+
+    // Mouse drag events
     let isDragging = false
     scrubber.addEventListener("mousedown", (e) => {
       isDragging = true
       seek(e.clientX)
+      e.preventDefault()
     })
     const onMouseMove = (e) => { if (isDragging) seek(e.clientX) }
     const onMouseUp = () => { isDragging = false }
@@ -389,6 +413,7 @@ export const AudioPlayer = {
   },
 
   destroyed() {
+    if (this._stopHighlightLoop) this._stopHighlightLoop()
     if (this.audio) this.audio.pause()
     if (this._manualScrollHandler) window.removeEventListener("manual-scroll", this._manualScrollHandler)
     if (this._autoScrollStartHandler) window.removeEventListener("auto-scroll-start", this._autoScrollStartHandler)

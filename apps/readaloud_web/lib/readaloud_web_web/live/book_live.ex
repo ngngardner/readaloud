@@ -231,10 +231,11 @@ defmodule ReadaloudWebWeb.BookLive do
           >
             <%= ch.title || "Chapter #{ch.number}" %>
           </.link>
-          <span class="text-xs text-base-content/40"><%= format_word_count(ch.word_count) %></span>
-          <span class="text-xs text-base-content/40"><%= estimate_reading_time(ch.word_count) %></span>
+          <span :if={audio_duration(@audio_map, ch.id)} class="text-xs text-base-content/40">
+            <%= audio_duration(@audio_map, ch.id) %>
+          </span>
           <.icon
-            :if={Map.get(@audio_map, ch.id) == :ready}
+            :if={match?({:ready, _}, Map.get(@audio_map, ch.id))}
             name="hero-speaker-wave"
             class="w-4 h-4 text-success"
           />
@@ -260,7 +261,7 @@ defmodule ReadaloudWebWeb.BookLive do
             CURRENT
           </span>
           <input
-            :if={@show_generate_panel && Map.get(@audio_map, ch.id) != :ready}
+            :if={@show_generate_panel && !match?({:ready, _}, Map.get(@audio_map, ch.id))}
             type="checkbox"
             checked={MapSet.member?(@selected_chapters, ch.id)}
             phx-click="toggle_chapter"
@@ -281,9 +282,11 @@ defmodule ReadaloudWebWeb.BookLive do
     tasks = ReadaloudAudiobook.list_tasks_for_chapters(chapter_ids)
 
     Enum.map(chapter_ids, fn id ->
+      audio = Enum.find(audios, &(&1.chapter_id == id))
+
       cond do
-        Enum.any?(audios, &(&1.chapter_id == id)) ->
-          {id, :ready}
+        audio != nil ->
+          {id, {:ready, audio.duration_seconds}}
 
         Enum.any?(tasks, &(&1.chapter_id == id && &1.status == "failed")) ->
           {id, :failed}
@@ -328,15 +331,19 @@ defmodule ReadaloudWebWeb.BookLive do
     current_chapter_number(progress, ReadaloudLibrary.list_chapters(book.id))
   end
 
-  defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> v == :ready end)
+  defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> match?({:ready, _}, v) end)
 
-  defp format_word_count(nil), do: ""
-  defp format_word_count(0), do: ""
-  defp format_word_count(count), do: "~#{div(count, 100) * 100} words"
+  defp audio_duration(audio_map, chapter_id) do
+    case Map.get(audio_map, chapter_id) do
+      {:ready, seconds} when is_number(seconds) and seconds > 0 ->
+        mins = trunc(seconds / 60)
+        secs = trunc(rem(trunc(seconds), 60))
+        "#{mins}:#{String.pad_leading("#{secs}", 2, "0")}"
 
-  defp estimate_reading_time(nil), do: ""
-  defp estimate_reading_time(0), do: ""
-  defp estimate_reading_time(count), do: "#{max(1, div(count, 250))} min"
+      _ ->
+        nil
+    end
+  end
 
   defp cover_url(book) do
     if book.cover_path && book.cover_path != "" && File.exists?(book.cover_path) do
