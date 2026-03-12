@@ -378,7 +378,7 @@ defmodule ReadaloudWebWeb.BookLive do
 
   defp audio_duration(audio_map, chapter_id) do
     case Map.get(audio_map, chapter_id) do
-      {:ready, seconds} when is_number(seconds) and seconds > 0 ->
+      {state, seconds} when state in [:ready, :stale, :generating, :queued] and is_number(seconds) and seconds > 0 ->
         mins = trunc(seconds / 60)
         secs = trunc(rem(trunc(seconds), 60))
         "#{mins}:#{String.pad_leading("#{secs}", 2, "0")}"
