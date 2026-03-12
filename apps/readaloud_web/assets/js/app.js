@@ -29,8 +29,9 @@ import {ScrollTracker} from "./hooks/scroll_tracker"
 import {AudioPlayer} from "./hooks/audio_player"
 import ThemeHook from "./hooks/theme"
 import SidebarHook from "./hooks/sidebar"
+import DragDropHook from "./hooks/drag_drop"
 
-const Hooks = {...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook}
+const Hooks = {...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook, DragDropHook}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -43,6 +44,11 @@ const liveSocket = new LiveSocket("/live", Socket, {
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+
+// Sort preference persistence
+window.addEventListener("phx:persist_sort", (e) => {
+  localStorage.setItem("readaloud-library-sort", e.detail.sort);
+});
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
