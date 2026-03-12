@@ -17,11 +17,14 @@ defmodule ReadaloudWebWeb.Router do
   scope "/", ReadaloudWebWeb do
     pipe_through :browser
 
-    live "/", LibraryLive
-    live "/books/:id", BookLive
-    live "/books/:id/read/:chapter_id", ReaderLive
+    live_session :default, layout: {ReadaloudWebWeb.Layouts, :app} do
+      live "/", LibraryLive
+      live "/books/:id", BookLive
+      live "/books/:id/read/:chapter_id", ReaderLive
+      live "/tasks", TasksLive
+    end
+
     get "/books/:id/listen/:chapter_id", AudioController, :listen_redirect
-    live "/tasks", TasksLive
   end
 
   scope "/api", ReadaloudWebWeb do
