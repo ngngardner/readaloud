@@ -125,7 +125,7 @@ defmodule ReadaloudImporter.EpubParser do
     end)
     |> Enum.filter(fn ch -> ch.text_length >= @min_content_length end)
     |> Enum.with_index(1)
-    |> Enum.map(fn {ch, idx} -> %{ch | number: idx} |> Map.delete(:text_length) end)
+    |> Enum.map(fn {ch, idx} -> ch |> Map.put(:number, idx) |> Map.delete(:text_length) end)
   end
 
   defp extract_body(html) do
