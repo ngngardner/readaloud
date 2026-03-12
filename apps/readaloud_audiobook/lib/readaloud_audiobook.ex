@@ -45,6 +45,16 @@ defmodule ReadaloudAudiobook do
     ChapterAudio |> where(chapter_id: ^chapter_id) |> Repo.one()
   end
 
+  def list_chapter_audio_for_chapters(chapter_ids) when is_list(chapter_ids) do
+    ChapterAudio |> where([a], a.chapter_id in ^chapter_ids) |> Repo.all()
+  end
+
+  def list_tasks_for_chapters(chapter_ids) when is_list(chapter_ids) do
+    AudiobookTask
+    |> where([t], t.chapter_id in ^chapter_ids and t.status in ["pending", "processing", "failed"])
+    |> Repo.all()
+  end
+
   def task_stats do
     AudiobookTask
     |> group_by(:status)
