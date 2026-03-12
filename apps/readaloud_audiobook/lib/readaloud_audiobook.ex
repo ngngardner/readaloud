@@ -9,6 +9,7 @@ defmodule ReadaloudAudiobook do
       |> maybe_put(:voice, Keyword.get(opts, :voice))
       |> maybe_put(:speed, Keyword.get(opts, :speed))
       |> maybe_put(:model, Keyword.get(opts, :model))
+      |> maybe_put(:attempt_number, Keyword.get(opts, :attempt_number))
 
     case %AudiobookTask{} |> AudiobookTask.changeset(attrs) |> Repo.insert() do
       {:ok, task} ->

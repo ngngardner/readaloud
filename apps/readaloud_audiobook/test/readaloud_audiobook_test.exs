@@ -68,4 +68,16 @@ defmodule ReadaloudAudiobookTest do
       assert changeset.changes[:voice] == "af_heart"
     end
   end
+
+  describe "generate_for_chapter/3 with attempt_number" do
+    test "passes attempt_number to task", %{book: book, ch1: ch1} do
+      assert {:ok, task} = ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id, attempt_number: 2)
+      assert task.attempt_number == 2
+    end
+
+    test "defaults attempt_number to 1", %{book: book, ch1: ch1} do
+      assert {:ok, task} = ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id)
+      assert task.attempt_number == 1
+    end
+  end
 end
