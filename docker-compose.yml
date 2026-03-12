@@ -1,0 +1,36 @@
+services:
+  readaloud:
+    build: .
+    ports:
+      - "4000:4000"
+    volumes:
+      - readaloud_data:/data
+    environment:
+      - DATABASE_PATH=/data/readaloud.db
+      - STORAGE_PATH=/data/files
+      - LOCALAI_URL=http://localai:8080
+      - SECRET_KEY_BASE=change-me-to-a-real-secret-at-least-64-bytes-long-use-mix-phx-gen-secret
+      - PHX_HOST=localhost
+    depends_on:
+      - localai
+
+  localai:
+    image: localai/localai:latest-gpu-nvidia-cuda-12
+    ports:
+      - "8080:8080"
+    volumes:
+      - localai_models:/models
+    environment:
+      - MODELS_PATH=/models
+      - THREADS=4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  readaloud_data:
+  localai_models:

@@ -6,7 +6,19 @@ defmodule Readaloud.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      releases: [
+        readaloud: [
+          applications: [
+            readaloud_library: :permanent,
+            readaloud_reader: :permanent,
+            readaloud_tts: :permanent,
+            readaloud_importer: :permanent,
+            readaloud_audiobook: :permanent,
+            readaloud_web: :permanent
+          ]
+        ]
+      ]
     ]
   end
 
