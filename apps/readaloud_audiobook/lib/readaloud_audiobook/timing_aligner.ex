@@ -37,7 +37,7 @@ defmodule ReadaloudAudiobook.TimingAligner do
 
   defp tokenize(text) do
     text
-    |> String.replace(~r/[\x{2014}\x{2013}]/, " ")
+    |> String.replace(~r/[\u2014\u2013]/u, " ")
     |> String.split(~r/\s+/, trim: true)
   end
 
