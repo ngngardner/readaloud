@@ -303,6 +303,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
           id="chapter-text"
           phx-hook="ScrollTracker"
           data-initial-scroll={@initial_scroll}
+          data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
           <%= raw(prepare_text_with_spans(@content)) %>
@@ -312,6 +313,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
           id="chapter-text"
           phx-hook="ScrollTracker"
           data-initial-scroll={@initial_scroll}
+          data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
           <%= raw(@content) %>
@@ -376,23 +378,100 @@ defmodule ReadaloudWebWeb.ReaderLive do
         data-audio-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/audio"}
         data-timings-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/timings"}
         data-initial-position={@initial_position_ms}
-        class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6"
+        class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 transition-all duration-300"
       >
-        <div class="max-w-4xl mx-auto px-4 py-3">
-          <audio id="audio-element" preload="auto"></audio>
-          <div class="flex items-center gap-4">
-            <button id="play-pause-btn" class="btn btn-circle btn-primary btn-sm">
+        <audio id="audio-element" preload="auto"></audio>
+        <div class="max-w-4xl mx-auto px-4 py-2 space-y-1.5">
+          <%!-- Scrubber (hidden when collapsed) --%>
+          <div
+            data-scrubber
+            class="w-full h-2 bg-base-300 rounded cursor-pointer relative select-none [.collapsed_&]:hidden"
+          >
+            <div
+              data-progress-fill
+              class="h-full bg-primary rounded pointer-events-none"
+              style="width: 0%"
+            >
+            </div>
+          </div>
+
+          <%!-- Controls row --%>
+          <div class="flex items-center gap-2">
+            <%!-- Skip back (hidden when collapsed) --%>
+            <button
+              data-skip-back
+              class="btn btn-ghost btn-circle btn-sm [.collapsed_&]:hidden"
+              title="Skip back 10s"
+            >
+              <.icon name="hero-arrow-uturn-left" class="w-4 h-4" />
+            </button>
+
+            <%!-- Play/pause --%>
+            <button id="play-pause-btn" class="btn btn-circle btn-primary btn-sm shrink-0">
               &#9654;
             </button>
-            <div id="progress-bar" class="flex-1 h-2 bg-base-300 rounded cursor-pointer relative">
+
+            <%!-- Skip forward (hidden when collapsed) --%>
+            <button
+              data-skip-forward
+              class="btn btn-ghost btn-circle btn-sm [.collapsed_&]:hidden"
+              title="Skip forward 10s"
+            >
+              <.icon name="hero-arrow-uturn-right" class="w-4 h-4" />
+            </button>
+
+            <%!-- Collapsed-only mini scrubber --%>
+            <div
+              data-scrubber-mini
+              class="hidden [.collapsed_&]:flex flex-1 h-1.5 bg-base-300 rounded cursor-pointer relative select-none"
+            >
               <div
-                id="progress-fill"
-                class="h-full bg-primary rounded transition-all"
+                data-progress-fill-mini
+                class="h-full bg-primary rounded pointer-events-none"
                 style="width: 0%"
               >
               </div>
             </div>
-            <span id="time-display" class="text-sm font-mono opacity-60">0:00 / 0:00</span>
+
+            <%!-- Time display --%>
+            <span id="time-display" class="text-sm font-mono opacity-60 shrink-0 [.collapsed_&]:text-xs">
+              0:00 / 0:00
+            </span>
+
+            <div class="flex-1 [.collapsed_&]:hidden"></div>
+
+            <%!-- Speed dropdown (hidden when collapsed) --%>
+            <div class="dropdown dropdown-top dropdown-end [.collapsed_&]:hidden">
+              <button tabindex="0" class="btn btn-ghost btn-xs">Speed</button>
+              <div tabindex="0" class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]">
+                <button
+                  :for={speed <- ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"]}
+                  data-speed={speed}
+                  class="btn btn-ghost btn-xs w-full justify-center"
+                >
+                  <%= speed %>x
+                </button>
+              </div>
+            </div>
+
+            <%!-- Volume slider (hidden when collapsed, hidden on mobile) --%>
+            <div class="hidden sm:flex items-center gap-1 [.collapsed_&]:!hidden">
+              <.icon name="hero-speaker-wave" class="w-4 h-4 opacity-50 shrink-0" />
+              <input
+                type="range"
+                data-volume-slider
+                min="0"
+                max="1"
+                step="0.05"
+                value="1"
+                class="range range-xs w-20"
+              />
+            </div>
+
+            <%!-- Collapse toggle --%>
+            <button data-collapse-toggle class="btn btn-ghost btn-xs btn-circle" title="Toggle player">
+              <.icon name="hero-chevron-down" class="w-4 h-4 [.collapsed_&]:rotate-180 transition-transform" />
+            </button>
           </div>
         </div>
       </div>
