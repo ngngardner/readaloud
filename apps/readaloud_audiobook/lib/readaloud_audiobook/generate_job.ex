@@ -46,18 +46,18 @@ defmodule ReadaloudAudiobook.GenerateJob do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
 
-    tts_opts = [
+    tts_config = %{config |
       voice: task.voice || config.voice,
       speed: task.speed || config.speed,
-      model: task.model || config.tts_model
-    ]
+      tts_model: task.model || config.tts_model
+    }
 
     chunks
     |> Enum.with_index(1)
     |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx}, {:ok, audio_acc, timings_acc, offset_ms} ->
       Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
 
-      case ReadaloudTTS.synthesize(chunk, tts_opts) do
+      case ReadaloudTTS.synthesize(chunk, config: tts_config) do
         {:ok, %{audio: chunk_audio}} ->
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 

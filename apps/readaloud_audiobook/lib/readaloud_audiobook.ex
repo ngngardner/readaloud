@@ -4,22 +4,23 @@ defmodule ReadaloudAudiobook do
   import Ecto.Query
 
   def generate_for_chapter(book_id, chapter_id, opts \\ []) do
-    voice = Keyword.get(opts, :voice)
-    speed = Keyword.get(opts, :speed)
-    model = Keyword.get(opts, :model)
+    attrs =
+      %{book_id: book_id, chapter_id: chapter_id, scope: "chapter"}
+      |> maybe_put(:voice, Keyword.get(opts, :voice))
+      |> maybe_put(:speed, Keyword.get(opts, :speed))
+      |> maybe_put(:model, Keyword.get(opts, :model))
 
-    attrs = %{book_id: book_id, chapter_id: chapter_id, scope: "chapter", voice: voice, speed: speed, model: model}
+    case %AudiobookTask{} |> AudiobookTask.changeset(attrs) |> Repo.insert() do
+      {:ok, task} ->
+        %{"task_id" => task.id}
+        |> GenerateJob.new()
+        |> Oban.insert()
 
-    {:ok, task} =
-      %AudiobookTask{}
-      |> AudiobookTask.changeset(attrs)
-      |> Repo.insert()
+        {:ok, task}
 
-    %{"task_id" => task.id}
-    |> GenerateJob.new()
-    |> Oban.insert()
-
-    {:ok, task}
+      error ->
+        error
+    end
   end
 
   def generate_for_book(book_id, opts \\ []) do
@@ -51,4 +52,7 @@ defmodule ReadaloudAudiobook do
     |> Repo.all()
     |> Map.new()
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
