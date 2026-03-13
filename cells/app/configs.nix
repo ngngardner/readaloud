@@ -3,7 +3,7 @@ let
   inherit (inputs) nixpkgs;
   inherit (inputs.std.lib.dev) mkNixago;
   l = nixpkgs.lib;
-  lintGrep = import ./lint-grep.nix { inherit nixpkgs; };
+  lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
 {
   treefmt = mkNixago {

@@ -5,7 +5,7 @@ let
   inherit (inputs) std;
   l = nixpkgs.lib;
   beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
-  lintGrep = import ./lint-grep.nix { inherit nixpkgs; };
+  lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
 {
   default = lib.dev.mkShell {
