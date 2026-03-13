@@ -40,6 +40,12 @@ const FloatingPillHook = {
     this.pill.classList.add("opacity-0", "pointer-events-none");
     this.pill.classList.remove("opacity-100");
     this.visible = false;
+    // Also collapse the chapter bar via its CSS transition classes
+    const chapterBar = document.getElementById("chapter-bar");
+    if (chapterBar) {
+      chapterBar.classList.add("scale-y-0", "opacity-0", "pointer-events-none");
+      chapterBar.classList.remove("scale-y-100", "opacity-100");
+    }
   },
 
   toggle() {

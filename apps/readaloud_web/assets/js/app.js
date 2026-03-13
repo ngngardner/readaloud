@@ -33,10 +33,11 @@ import DragDropHook from "./hooks/drag_drop"
 import FloatingPillHook from "./hooks/floating_pill"
 import ReaderSettingsHook from "./hooks/reader_settings"
 import KeyboardShortcutsHook from "./hooks/keyboard_shortcuts"
+import ChapterBarHook from "./hooks/chapter_bar"
 
 const Hooks = {
   ...colocatedHooks, ScrollTracker, AudioPlayer, ThemeHook, SidebarHook,
-  DragDropHook, FloatingPillHook, ReaderSettingsHook, KeyboardShortcutsHook
+  DragDropHook, FloatingPillHook, ReaderSettingsHook, KeyboardShortcutsHook, ChapterBarHook
 }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")

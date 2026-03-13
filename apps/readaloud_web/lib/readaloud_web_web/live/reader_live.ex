@@ -109,6 +109,12 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
+  def handle_event("jump_to_chapter", %{"chapter_id" => chapter_id}, socket) do
+    chapter_id = if is_binary(chapter_id), do: String.to_integer(chapter_id), else: chapter_id
+    {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}" <> "?nav=internal")}
+  end
+
+  @impl true
   def handle_event("change_speed", %{"direction" => dir}, socket) do
     {:noreply, push_event(socket, "change_speed", %{direction: dir})}
   end
@@ -284,6 +290,45 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <button phx-click={JS.toggle(to: "#reader-settings")} class="btn btn-ghost btn-xs btn-circle">
           <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
         </button>
+      </div>
+
+      <%!-- Slide-down chapter bar --%>
+      <div
+        id="chapter-bar"
+        phx-hook="ChapterBarHook"
+        data-current-index={chapter_index(@chapter, @chapters)}
+        data-total-chapters={length(@chapters)}
+        data-chapters={Jason.encode!(Enum.map(@chapters, fn ch -> %{id: ch.id, number: ch.number, title: ch.title} end))}
+        data-book-id={@book.id}
+        class="fixed top-16 left-1/2 -translate-x-1/2 z-[49]
+               bg-base-200/95 backdrop-blur-xl rounded-xl px-4 py-3 shadow-lg border border-base-content/6
+               w-[min(90vw,500px)] space-y-2
+               transition-all duration-200 ease-out origin-top
+               scale-y-0 opacity-0 pointer-events-none"
+      >
+        <%!-- Row 1: Progress scrubber --%>
+        <div data-chapter-scrubber class="relative h-5 cursor-pointer select-none group">
+          <div class="absolute top-2 left-0 right-0 h-1.5 bg-base-300 rounded-full">
+            <div data-scrubber-fill class="h-full bg-primary rounded-full" style="width: 0%"></div>
+          </div>
+          <div data-scrubber-thumb class="absolute top-0.5 w-4 h-4 bg-primary rounded-full shadow -translate-x-1/2" style="left: 0%"></div>
+          <div data-scrubber-tooltip class="absolute -top-7 bg-base-300 text-xs px-2 py-0.5 rounded shadow hidden -translate-x-1/2 whitespace-nowrap"></div>
+        </div>
+
+        <%!-- Row 2: Nearby chapter strip --%>
+        <div data-chapter-strip class="flex gap-1 overflow-x-auto py-1 scrollbar-hide">
+          <button
+            :for={{ch, idx} <- Enum.with_index(@chapters)}
+            data-chapter-pill={idx}
+            data-chapter-id={ch.id}
+            class={"shrink-0 w-8 h-8 rounded-full text-xs flex items-center justify-center cursor-pointer transition-colors " <>
+              if(idx == chapter_index(@chapter, @chapters),
+                do: "bg-primary text-primary-content font-bold",
+                else: "bg-base-300/50 text-base-content/60 hover:bg-base-300")}
+          >
+            <%= idx + 1 %>
+          </button>
+        </div>
       </div>
 
       <%!-- Reader settings popover --%>
