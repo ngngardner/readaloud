@@ -27,6 +27,10 @@ const ChapterBarHook = {
       indicator.addEventListener("click", () => this.toggle())
     }
 
+    // Sync isOpen when floating pill hides the bar
+    this._pillHideHandler = () => { this.isOpen = false }
+    window.addEventListener("chapter-bar-close", this._pillHideHandler)
+
     // Click outside to close
     this._outsideClickHandler = (e) => {
       if (this.isOpen && !this.el.contains(e.target) && e.target.id !== "chapter-indicator") {
@@ -40,7 +44,7 @@ const ChapterBarHook = {
       pill.addEventListener("click", () => {
         const idx = parseInt(pill.dataset.chapterPill)
         const ch = this.chapters[idx]
-        if (ch) {
+        if (ch && ch.id !== this.chapters[this.currentIndex]?.id) {
           this.pushEvent("jump_to_chapter", { chapter_id: ch.id })
         }
       })
@@ -133,7 +137,7 @@ const ChapterBarHook = {
       hideTooltip()
       const idx = indexFromClientX(e.clientX)
       const ch = this.chapters[idx]
-      if (ch) {
+      if (ch && ch.id !== this.chapters[this.currentIndex]?.id) {
         this.pushEvent("jump_to_chapter", { chapter_id: ch.id })
       }
     }
@@ -170,7 +174,7 @@ const ChapterBarHook = {
       if (touch) {
         const idx = indexFromClientX(touch.clientX)
         const ch = this.chapters[idx]
-        if (ch) {
+        if (ch && ch.id !== this.chapters[this.currentIndex]?.id) {
           this.pushEvent("jump_to_chapter", { chapter_id: ch.id })
         }
       }
@@ -181,6 +185,7 @@ const ChapterBarHook = {
     if (this._onMouseMove) window.removeEventListener("mousemove", this._onMouseMove)
     if (this._onMouseUp) window.removeEventListener("mouseup", this._onMouseUp)
     if (this._outsideClickHandler) document.removeEventListener("click", this._outsideClickHandler)
+    if (this._pillHideHandler) window.removeEventListener("chapter-bar-close", this._pillHideHandler)
   }
 }
 

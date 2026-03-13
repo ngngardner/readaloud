@@ -218,11 +218,16 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_event("go_to_conflict_chapter", _params, socket) do
-    ch = socket.assigns.conflict_chapter
-    {:noreply,
-     socket
-     |> assign(show_conflict_modal: false, conflict_chapter: nil)
-     |> push_navigate(to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
+    case socket.assigns.conflict_chapter do
+      nil ->
+        {:noreply, assign(socket, show_conflict_modal: false)}
+
+      ch ->
+        {:noreply,
+         socket
+         |> assign(show_conflict_modal: false, conflict_chapter: nil)
+         |> push_navigate(to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
+    end
   end
 
   # -- PubSub handler: audio generation completed --
