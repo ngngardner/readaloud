@@ -10,6 +10,10 @@
 /cover/
 /doc/
 
+# Nix build result symlinks
+/result
+/result-*
+
 # Misc
 .fetch
 erl_crash.dump

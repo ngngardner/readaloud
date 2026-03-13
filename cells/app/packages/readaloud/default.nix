@@ -12,6 +12,7 @@ let
     src = inputs.self;
     hash = "sha256-Gm3SnOma94LqRyfGnCqg1bs15yzbNCisp2836aiI2Fo=";
   };
+
 in
 beamPackages.mixRelease {
   pname = "readaloud";
@@ -19,6 +20,7 @@ beamPackages.mixRelease {
   src = inputs.self;
 
   inherit mixFodDeps;
+  passthru = { inherit mixFodDeps; };
 
   nativeBuildInputs = with nixpkgs; [
     nodejs_22

@@ -1,194 +1,43 @@
-{
-  inputs,
-  cell,
-}:
+{ inputs, cell }:
 let
   inherit (inputs) nixpkgs;
   inherit (inputs.std) lib;
   inherit (inputs) std;
-
   l = nixpkgs.lib;
-
-  # Note: treefmt-nix evalModule in flake.nix only checks nixfmt (CI-safe subset).
-  # Full formatting (biome, eclint, mix format) runs here via nixago.
-  treefmtConfig = {
-    data = {
-      formatter = {
-        nixfmt = {
-          command = l.getExe nixpkgs.nixfmt;
-          includes = [ "*.nix" ];
-        };
-        biome = {
-          command = l.getExe nixpkgs.biome;
-          options = [
-            "format"
-            "--write"
-          ];
-          includes = [
-            "*.js"
-          ];
-        };
-        mix-format = {
-          command = "mix";
-          options = [ "format" ];
-          includes = [
-            "*.ex"
-            "*.exs"
-          ];
-        };
-        eclint = {
-          command = l.getExe nixpkgs.eclint;
-          options = [ "-fix" ];
-          includes = [
-            "*.nix"
-            "*.ex"
-            "*.exs"
-            "*.js"
-            "*.css"
-            "*.heex"
-            "*.md"
-            "*.yml"
-            "*.yaml"
-            "*.json"
-          ];
-        };
-      };
-    };
-    output = "treefmt.toml";
-    format = "toml";
-  };
-
-  lefthookConfig = {
-    data = {
-      pre-commit = {
-        commands = {
-          treefmt = {
-            run = "${l.getExe nixpkgs.treefmt} --fail-on-change";
-          };
-          credo = {
-            run = "mix credo --strict";
-            glob = "*.{ex,exs}";
-          };
-        };
-      };
-      commit-msg = {
-        commands = {
-          conform = {
-            run = "${l.getExe nixpkgs.conform} enforce --commit-msg-file {1}";
-          };
-        };
-      };
-    };
-    output = "lefthook.yml";
-    format = "yaml";
-    hook.extra = _: ''
-      ${l.getExe nixpkgs.lefthook} install
-    '';
-  };
-
-  conformConfig = {
-    data = {
-      policies = [
-        {
-          type = "commit";
-          spec = {
-            header = {
-              length = 72;
-              imperative = true;
-              case = "lower";
-              invalidLastCharacters = ".";
-            };
-            body = {
-              required = false;
-            };
-            conventional = {
-              types = [
-                "feat"
-                "fix"
-                "chore"
-                "docs"
-                "refactor"
-                "test"
-                "ci"
-                "style"
-                "perf"
-              ];
-              scopes = [ ".*" ];
-            };
-          };
-        }
-      ];
-    };
-    output = ".conform.yaml";
-    format = "yaml";
-  };
-
-  editorconfigConfig = {
-    data = {
-      root = true;
-      "*" = {
-        end_of_line = "lf";
-        insert_final_newline = true;
-        trim_trailing_whitespace = true;
-        charset = "utf-8";
-      };
-      "*.{nix,ex,exs,js,css,heex}" = {
-        indent_style = "space";
-        indent_size = 2;
-      };
-    };
-    output = ".editorconfig";
-    engine =
-      request:
-      let
-        inherit (request) data output;
-        name = l.baseNameOf output;
-        value = {
-          globalSection = {
-            root = data.root or true;
-          };
-          sections = l.removeAttrs data [ "root" ];
-        };
-      in
-      nixpkgs.writeText name (l.generators.toINIWithGlobalSection { } value);
-  };
+  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
 in
 {
   default = lib.dev.mkShell {
     name = "readaloud-dev";
 
-    imports = [
-      std.std.devshellProfiles.default
-    ];
+    imports = [ std.std.devshellProfiles.default ];
 
     nixago = [
-      (lib.dev.mkNixago treefmtConfig)
-      (lib.dev.mkNixago lefthookConfig)
-      (lib.dev.mkNixago conformConfig)
-      (lib.dev.mkNixago editorconfigConfig)
+      cell.configs.treefmt
+      cell.configs.lefthook
+      cell.configs.conform
+      cell.configs.editorconfig
     ];
 
-    packages = with nixpkgs; [
-      # Existing deps
-      elixir_1_17
-      erlang_27
-      nodejs_22
-      sqlite
-      calibre
-      poppler-utils
-      inotify-tools
+    packages = [
+      # App deps — use same beamPackages as package build for version consistency
+      beamPackages.elixir
+      beamPackages.erlang
+      nixpkgs.nodejs_22
+      nixpkgs.sqlite
+      nixpkgs.calibre
+      nixpkgs.poppler-utils
+      nixpkgs.inotify-tools
 
-      # Formatting and linting
-      treefmt
-      nixfmt
-      biome
-      eclint
-      statix
-      deadnix
-
-      # Git hooks
-      lefthook
-      conform
+      # Dev tools — nixago generates config files and runs hooks,
+      # but does NOT add tool binaries to PATH. Must be explicit.
+      nixpkgs.treefmt
+      nixpkgs.nixfmt
+      nixpkgs.biome
+      nixpkgs.statix
+      nixpkgs.deadnix
+      nixpkgs.lefthook
+      nixpkgs.conform
     ];
 
     env = [
