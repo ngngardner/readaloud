@@ -10,8 +10,11 @@ defmodule ReadaloudAudiobookTest do
     content_path = Path.join(System.tmp_dir!(), "test_chapter.html")
     File.write!(content_path, "<p>Hello world this is test content.</p>")
 
-    {:ok, ch1} = ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 1, content_path: content_path})
-    {:ok, ch2} = ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 2, content_path: content_path})
+    {:ok, ch1} =
+      ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 1, content_path: content_path})
+
+    {:ok, ch2} =
+      ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 2, content_path: content_path})
 
     %{book: book, ch1: ch1, ch2: ch2}
   end
@@ -34,28 +37,34 @@ defmodule ReadaloudAudiobookTest do
 
   describe "AudiobookTask.changeset/2" do
     test "casts attempt_number" do
-      changeset = ReadaloudAudiobook.AudiobookTask.changeset(
-        %ReadaloudAudiobook.AudiobookTask{},
-        %{book_id: 1, scope: "chapter", attempt_number: 2}
-      )
+      changeset =
+        ReadaloudAudiobook.AudiobookTask.changeset(
+          %ReadaloudAudiobook.AudiobookTask{},
+          %{book_id: 1, scope: "chapter", attempt_number: 2}
+        )
+
       assert changeset.changes[:attempt_number] == 2
     end
 
     test "attempt_number not cast when not in cast list" do
-      changeset = ReadaloudAudiobook.AudiobookTask.changeset(
-        %ReadaloudAudiobook.AudiobookTask{},
-        %{book_id: 1, scope: "chapter", attempt_number: 5}
-      )
+      changeset =
+        ReadaloudAudiobook.AudiobookTask.changeset(
+          %ReadaloudAudiobook.AudiobookTask{},
+          %{book_id: 1, scope: "chapter", attempt_number: 5}
+        )
+
       assert changeset.changes[:attempt_number] == 5
     end
   end
 
   describe "ChapterAudio.changeset/2" do
     test "casts model and voice" do
-      changeset = ReadaloudAudiobook.ChapterAudio.changeset(
-        %ReadaloudAudiobook.ChapterAudio{},
-        %{chapter_id: 1, audio_path: "/tmp/test.wav", model: "kokoro", voice: "af_heart"}
-      )
+      changeset =
+        ReadaloudAudiobook.ChapterAudio.changeset(
+          %ReadaloudAudiobook.ChapterAudio{},
+          %{chapter_id: 1, audio_path: "/tmp/test.wav", model: "kokoro", voice: "af_heart"}
+        )
+
       assert changeset.changes[:model] == "kokoro"
       assert changeset.changes[:voice] == "af_heart"
     end
@@ -63,7 +72,9 @@ defmodule ReadaloudAudiobookTest do
 
   describe "generate_for_chapter/3 with attempt_number" do
     test "passes attempt_number to task", %{book: book, ch1: ch1} do
-      assert {:ok, task} = ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id, attempt_number: 2)
+      assert {:ok, task} =
+               ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id, attempt_number: 2)
+
       assert task.attempt_number == 2
     end
 
@@ -80,7 +91,11 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "queues chapters missing audio", %{book: book, ch1: _ch1, ch2: _ch2} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
+
       chapters = ReadaloudLibrary.list_chapters(book.id)
 
       assert {:ok, 2} = ReadaloudAudiobook.ensure_audio_generated(book, chapters)
@@ -93,13 +108,19 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "skips chapters with existing matching audio", %{book: book, ch1: ch1, ch2: _ch2} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       # Insert matching audio for ch1
       %ReadaloudAudiobook.ChapterAudio{}
       |> ReadaloudAudiobook.ChapterAudio.changeset(%{
-        chapter_id: ch1.id, audio_path: "/tmp/test.wav",
-        duration_seconds: 60.0, model: "kokoro", voice: "af_heart"
+        chapter_id: ch1.id,
+        audio_path: "/tmp/test.wav",
+        duration_seconds: 60.0,
+        model: "kokoro",
+        voice: "af_heart"
       })
       |> ReadaloudLibrary.Repo.insert!()
 
@@ -108,13 +129,19 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "queues chapters with stale audio (different model/voice)", %{book: book, ch1: ch1} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       # Insert audio with old voice
       %ReadaloudAudiobook.ChapterAudio{}
       |> ReadaloudAudiobook.ChapterAudio.changeset(%{
-        chapter_id: ch1.id, audio_path: "/tmp/test.wav",
-        duration_seconds: 60.0, model: "kokoro", voice: "bf_emma"
+        chapter_id: ch1.id,
+        audio_path: "/tmp/test.wav",
+        duration_seconds: 60.0,
+        model: "kokoro",
+        voice: "bf_emma"
       })
       |> ReadaloudLibrary.Repo.insert!()
 
@@ -123,7 +150,10 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "skips chapters with pending/processing tasks", %{book: book, ch1: ch1} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       # Create pending task for ch1
       ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id, model: "kokoro", voice: "af_heart")
@@ -134,14 +164,22 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "skips chapters that exceeded failure threshold", %{book: book, ch1: ch1} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       # Insert a failed task at attempt_number 3 for ch1 with matching profile
       %ReadaloudAudiobook.AudiobookTask{}
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
-        book_id: book.id, chapter_id: ch1.id, scope: "chapter",
-        model: "kokoro", voice: "af_heart", status: "failed",
-        attempt_number: 3, error_message: "permanent failure"
+        book_id: book.id,
+        chapter_id: ch1.id,
+        scope: "chapter",
+        model: "kokoro",
+        voice: "af_heart",
+        status: "failed",
+        attempt_number: 3,
+        error_message: "permanent failure"
       })
       |> ReadaloudLibrary.Repo.insert!()
 
@@ -154,14 +192,22 @@ defmodule ReadaloudAudiobookTest do
       # Failed with old voice
       %ReadaloudAudiobook.AudiobookTask{}
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
-        book_id: book.id, chapter_id: ch1.id, scope: "chapter",
-        model: "kokoro", voice: "bf_emma", status: "failed",
-        attempt_number: 3, error_message: "permanent failure"
+        book_id: book.id,
+        chapter_id: ch1.id,
+        scope: "chapter",
+        model: "kokoro",
+        voice: "bf_emma",
+        status: "failed",
+        attempt_number: 3,
+        error_message: "permanent failure"
       })
       |> ReadaloudLibrary.Repo.insert!()
 
       # Switch to different voice
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       chapters = ReadaloudLibrary.list_chapters(book.id)
       # Both should be queued — old failures don't count for new profile
@@ -169,7 +215,11 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "is idempotent", %{book: book} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
+
       chapters = ReadaloudLibrary.list_chapters(book.id)
 
       assert {:ok, 2} = ReadaloudAudiobook.ensure_audio_generated(book, chapters)
@@ -178,14 +228,22 @@ defmodule ReadaloudAudiobookTest do
     end
 
     test "increments attempt_number on retry", %{book: book, ch1: ch1} do
-      {:ok, book} = ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}})
+      {:ok, book} =
+        ReadaloudLibrary.update_book(book, %{
+          audio_preferences: %{"model" => "kokoro", "voice" => "af_heart"}
+        })
 
       # Insert a failed task at attempt_number 1
       %ReadaloudAudiobook.AudiobookTask{}
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
-        book_id: book.id, chapter_id: ch1.id, scope: "chapter",
-        model: "kokoro", voice: "af_heart", status: "failed",
-        attempt_number: 1, error_message: "transient error"
+        book_id: book.id,
+        chapter_id: ch1.id,
+        scope: "chapter",
+        model: "kokoro",
+        voice: "af_heart",
+        status: "failed",
+        attempt_number: 1,
+        error_message: "transient error"
       })
       |> ReadaloudLibrary.Repo.insert!()
 

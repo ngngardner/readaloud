@@ -28,6 +28,10 @@ defmodule Readaloud.MixProject do
   #
   # Run "mix help deps" for examples and options.
   defp deps do
-    []
+    [
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:deps_nix, "~> 0.4", only: :dev, runtime: false}
+    ]
   end
 end

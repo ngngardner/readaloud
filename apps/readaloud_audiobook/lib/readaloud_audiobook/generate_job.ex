@@ -1,8 +1,8 @@
 defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
-  alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
+  alias ReadaloudLibrary.Repo
   alias ReadaloudTTS.{Config, TextChunker}
 
   require Logger
@@ -16,6 +16,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
     # real attempts — only genuine TTS failures should count.
     if task.status == "processing" do
       import Ecto.Query
+
       from(j in "oban_jobs", where: j.id == ^job.id)
       |> Repo.update_all(inc: [max_attempts: 1])
     end
@@ -63,15 +64,17 @@ defmodule ReadaloudAudiobook.GenerateJob do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
 
-    tts_config = %{config |
-      voice: task.voice || config.voice,
-      speed: task.speed || config.speed,
-      tts_model: task.model || config.tts_model
+    tts_config = %{
+      config
+      | voice: task.voice || config.voice,
+        speed: task.speed || config.speed,
+        tts_model: task.model || config.tts_model
     }
 
     chunks
     |> Enum.with_index(1)
-    |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx}, {:ok, audio_acc, timings_acc, offset_ms} ->
+    |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx},
+                                                {:ok, audio_acc, timings_acc, offset_ms} ->
       Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
 
       case ReadaloudTTS.synthesize(chunk, config: tts_config) do
@@ -186,15 +189,19 @@ defmodule ReadaloudAudiobook.GenerateJob do
     data_size = byte_size(pcm_data)
 
     <<
-      "RIFF", (36 + data_size)::little-32, "WAVE",
-      "fmt ", 16::little-32,
+      "RIFF",
+      36 + data_size::little-32,
+      "WAVE",
+      "fmt ",
+      16::little-32,
       1::little-16,
       1::little-16,
-      24000::little-32,
-      48000::little-32,
+      24_000::little-32,
+      48_000::little-32,
       2::little-16,
       16::little-16,
-      "data", data_size::little-32,
+      "data",
+      data_size::little-32,
       pcm_data::binary
     >>
   end
@@ -214,7 +221,12 @@ defmodule ReadaloudAudiobook.GenerateJob do
   end
 
   defp broadcast_task_update(task) do
-    Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:audiobook:#{task.book_id}", {:task_updated, task})
+    Phoenix.PubSub.broadcast(
+      ReadaloudWeb.PubSub,
+      "tasks:audiobook:#{task.book_id}",
+      {:task_updated, task}
+    )
+
     Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:audiobook", {:task_updated, task})
   end
 
@@ -226,6 +238,6 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   defp calculate_duration(wav_bytes) do
     # 24kHz, 16-bit mono
-    byte_size(wav_bytes) / (24000 * 2)
+    byte_size(wav_bytes) / (24_000 * 2)
   end
 end

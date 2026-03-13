@@ -10,6 +10,10 @@
 /cover/
 /doc/
 
+# Nix build result symlinks
+/result
+/result-*
+
 # Misc
 .fetch
 erl_crash.dump
@@ -34,3 +38,9 @@ readaloud-*.tar
 
 # E2E test dependencies
 /e2e/node_modules/
+
+# nixago: ignore-linked-files
+/.editorconfig
+/.conform.yaml
+/lefthook.yml
+/treefmt.toml

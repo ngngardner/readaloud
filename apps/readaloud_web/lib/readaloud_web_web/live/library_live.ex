@@ -23,7 +23,11 @@ defmodule ReadaloudWebWeb.LibraryLive do
        sort: "recent",
        page_title: "Library"
      )
-     |> allow_upload(:book_file, accept: ~w(.epub .pdf), max_entries: 1, max_file_size: 100_000_000)}
+     |> allow_upload(:book_file,
+       accept: ~w(.epub .pdf),
+       max_entries: 1,
+       max_file_size: 100_000_000
+     )}
   end
 
   @impl true
@@ -35,7 +39,8 @@ defmodule ReadaloudWebWeb.LibraryLive do
         ReadaloudLibrary.search_books(query)
       end
 
-    {:noreply, assign(socket, books: books, search: query, progress_map: build_progress_map(books))}
+    {:noreply,
+     assign(socket, books: books, search: query, progress_map: build_progress_map(books))}
   end
 
   @impl true
@@ -144,11 +149,14 @@ defmodule ReadaloudWebWeb.LibraryLive do
             <%!-- Upload progress --%>
             <div :for={entry <- @uploads.book_file.entries} class="mt-2">
               <div class="flex items-center gap-2 justify-center text-sm">
-                <span class="truncate max-w-xs"><%= entry.client_name %></span>
+                <span class="truncate max-w-xs">{entry.client_name}</span>
                 <progress class="progress progress-primary w-24" value={entry.progress} max="100" />
               </div>
-              <p :for={err <- upload_errors(@uploads.book_file, entry)} class="text-error text-xs mt-1">
-                <%= humanize_upload_error(err) %>
+              <p
+                :for={err <- upload_errors(@uploads.book_file, entry)}
+                class="text-error text-xs mt-1"
+              >
+                {humanize_upload_error(err)}
               </p>
             </div>
           </div>
@@ -201,7 +209,7 @@ defmodule ReadaloudWebWeb.LibraryLive do
                 <span class="badge badge-xs badge-info absolute top-2 right-2">New</span>
               <% {:progress, read, total} -> %>
                 <span class="badge badge-xs badge-warning absolute top-2 right-2">
-                  <%= read %>/<%= total %>
+                  {read}/{total}
                 </span>
               <% _ -> %>
             <% end %>
@@ -209,10 +217,10 @@ defmodule ReadaloudWebWeb.LibraryLive do
             <%!-- Title and author --%>
             <div class="absolute bottom-0 inset-x-0 p-3">
               <h3 class="text-white text-sm font-semibold leading-tight line-clamp-2">
-                <%= book.title %>
+                {book.title}
               </h3>
               <p :if={book.author} class="text-white/70 text-xs mt-0.5 line-clamp-1">
-                <%= book.author %>
+                {book.author}
               </p>
             </div>
           </.link>
@@ -272,10 +280,17 @@ defmodule ReadaloudWebWeb.LibraryLive do
     new_cutoff = DateTime.add(DateTime.utc_now(), -7, :day)
 
     cond do
-      read > 0 and read >= total -> :done
-      read == 0 and NaiveDateTime.compare(book.inserted_at, DateTime.to_naive(new_cutoff)) == :gt -> :new
-      read > 0 -> {:progress, read, total}
-      true -> nil
+      read > 0 and read >= total ->
+        :done
+
+      read == 0 and NaiveDateTime.compare(book.inserted_at, DateTime.to_naive(new_cutoff)) == :gt ->
+        :new
+
+      read > 0 ->
+        {:progress, read, total}
+
+      true ->
+        nil
     end
   end
 

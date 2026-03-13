@@ -9,9 +9,10 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" href="/images/icon-192.png" />
     <link rel="apple-touch-icon" href="/images/icon-192.png" />
-    <.live_title><%= assigns[:page_title] || "Readaloud" %></.live_title>
+    <.live_title>{assigns[:page_title] || "Readaloud"}</.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}></script>
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    </script>
     <script>
       // Restore theme before first paint to prevent flash
       (function() {
@@ -26,7 +27,7 @@
     </script>
   </head>
   <body class="antialiased">
-    <%= @inner_content %>
+    {@inner_content}
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("/sw.js");

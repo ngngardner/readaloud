@@ -186,7 +186,13 @@ defmodule ReadaloudImporter.EpubParser do
       body = extract_body(html)
       text = strip_html(body)
       title = extract_chapter_title(html, href)
-      %{title: title, content: body, text_length: String.length(text), word_count: word_count(text)}
+
+      %{
+        title: title,
+        content: body,
+        text_length: String.length(text),
+        word_count: word_count(text)
+      }
     end)
     |> Enum.filter(fn ch -> ch.text_length >= @min_content_length end)
     |> Enum.with_index(1)
@@ -209,9 +215,13 @@ defmodule ReadaloudImporter.EpubParser do
             [_, raw] ->
               clean = strip_html(raw)
               if clean != "" and String.length(clean) < @max_title_length, do: clean, else: nil
-            _ -> nil
+
+            _ ->
+              nil
           end
-        found -> found
+
+        found ->
+          found
       end
 
     # Strategy 2: bold text matching "Chapter N" or similar patterns
@@ -221,18 +231,20 @@ defmodule ReadaloudImporter.EpubParser do
           [_, raw] ->
             clean = strip_html(raw)
             if clean != "" and String.length(clean) < @max_title_length, do: clean, else: nil
-          _ -> nil
+
+          _ ->
+            nil
         end
       end
 
     # Strategy 3: filename fallback
     heading_title || bold_title ||
-      (href
-       |> Path.basename()
-       |> Path.rootname()
-       |> String.replace(~r/[-_]/, " ")
-       |> String.trim()
-       |> then(fn name -> if name == "", do: "Untitled", else: name end))
+      href
+      |> Path.basename()
+      |> Path.rootname()
+      |> String.replace(~r/[-_]/, " ")
+      |> String.trim()
+      |> then(fn name -> if name == "", do: "Untitled", else: name end)
   end
 
   defp strip_html(html) do
