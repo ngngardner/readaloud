@@ -60,6 +60,7 @@
             PORT = toString cfg.port;
             LOCALAI_URL = cfg.localaiUrl;
             RELEASE_TMP = "/tmp/readaloud";
+            RELEASE_COOKIE = "readaloud";
             ELIXIR_ERL_OPTIONS = "+fnu";
             PHX_CHECK_ORIGIN = "false";
           };
