@@ -23,7 +23,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
-      ReadaloudReader.upsert_progress(%{book_id: book_id, current_chapter_id: chapter_id})
     end
 
     {:ok,
@@ -43,11 +42,47 @@ defmodule ReadaloudWebWeb.ReaderLive do
        selected_voice: default_voice(book, models),
        player_collapsed: false,
        show_settings: false,
+       show_conflict_modal: false,
+       conflict_chapter: nil,
        generation_progress: 0,
        initial_scroll: (progress && progress.scroll_position) || 0.0,
        initial_position_ms: (progress && progress.audio_position_ms) || 0,
        page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
      )}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    if connected?(socket) do
+      progress = socket.assigns.progress
+      is_internal = params["nav"] == "internal"
+
+      if !is_internal && progress && progress.current_chapter_id &&
+           progress.current_chapter_id != socket.assigns.chapter.id do
+        conflict_chapter =
+          Enum.find(socket.assigns.chapters, &(&1.id == progress.current_chapter_id))
+
+        if conflict_chapter do
+          {:noreply, assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
+        else
+          ReadaloudReader.upsert_progress(%{
+            book_id: socket.assigns.book.id,
+            current_chapter_id: socket.assigns.chapter.id
+          })
+
+          {:noreply, socket}
+        end
+      else
+        ReadaloudReader.upsert_progress(%{
+          book_id: socket.assigns.book.id,
+          current_chapter_id: socket.assigns.chapter.id
+        })
+
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   # -- Audio states: :none, :generating, :ready --
@@ -74,7 +109,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+        {:noreply,
+         push_navigate(socket,
+           to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
+         )}
     end
   end
 
@@ -85,7 +123,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+        {:noreply,
+         push_navigate(socket,
+           to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
+         )}
     end
   end
 
@@ -152,6 +193,36 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
+  def handle_event("dismiss_conflict", _params, socket) do
+    ReadaloudReader.upsert_progress(%{
+      book_id: socket.assigns.book.id,
+      current_chapter_id: socket.assigns.chapter.id
+    })
+
+    {:noreply, assign(socket, show_conflict_modal: false, conflict_chapter: nil)}
+  end
+
+  @impl true
+  def handle_event("go_to_conflict_chapter", _params, socket) do
+    chapter = socket.assigns.conflict_chapter
+
+    {:noreply,
+     socket
+     |> assign(show_conflict_modal: false, conflict_chapter: nil)
+     |> push_navigate(
+       to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter.id}?nav=internal"
+     )}
+  end
+
+  @impl true
+  def handle_event("jump_to_chapter", %{"chapter_id" => chapter_id}, socket) do
+    {:noreply,
+     push_navigate(socket,
+       to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}?nav=internal"
+     )}
+  end
+
+  @impl true
   def handle_event("update_reader_setting", params, socket) do
     # Relay setting changes to the client-side ReaderSettingsHook
     {key, value} =
@@ -168,6 +239,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
     else
       {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("toggle_settings", _params, socket) do
+    {:noreply, assign(socket, show_settings: !socket.assigns.show_settings)}
   end
 
   @impl true
@@ -204,22 +280,82 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div
         id="floating-pill"
         phx-hook="FloatingPillHook"
-        class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3
-               bg-base-200/90 backdrop-blur-xl rounded-full px-4 py-2 shadow-lg border border-base-content/6
+        class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5
+               bg-base-200/90 backdrop-blur-xl rounded-full px-3 py-2 shadow-lg border border-base-content/6
                opacity-0 pointer-events-none transition-opacity duration-200"
       >
-        <.link navigate={~p"/books/#{@book.id}"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-arrow-left" class="w-4 h-4" />
+        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle" title="Library">
+          <.icon name="hero-home" class="w-4 h-4" />
         </.link>
-        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-book-open" class="w-4 h-4" />
-        </.link>
-        <span class="text-xs text-base-content/60">
+        <button
+          phx-click="prev_chapter"
+          class="btn btn-ghost btn-xs btn-circle"
+          title="Previous chapter"
+          disabled={prev_chapter(@chapter, @chapters) == nil}
+        >
+          <.icon name="hero-chevron-left" class="w-4 h-4" />
+        </button>
+        <button
+          id="chapter-indicator"
+          class="btn btn-ghost btn-xs text-xs text-base-content/60 tabular-nums"
+          title="Show chapters"
+        >
           Ch {chapter_index(@chapter, @chapters) + 1} / {length(@chapters)}
-        </span>
+        </button>
+        <button
+          phx-click="next_chapter"
+          class="btn btn-ghost btn-xs btn-circle"
+          title="Next chapter"
+          disabled={next_chapter(@chapter, @chapters) == nil}
+        >
+          <.icon name="hero-chevron-right" class="w-4 h-4" />
+        </button>
         <button phx-click={JS.toggle(to: "#reader-settings")} class="btn btn-ghost btn-xs btn-circle">
           <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
         </button>
+      </div>
+
+      <%!-- Chapter bar (slide-down from pill) --%>
+      <div
+        id="chapter-bar"
+        phx-hook="ChapterBarHook"
+        data-current-index={chapter_index(@chapter, @chapters)}
+        data-total-chapters={length(@chapters)}
+        data-chapters={Jason.encode!(Enum.map(@chapters, fn c -> %{id: c.id, number: c.number, title: c.title} end))}
+        data-book-id={@book.id}
+        class="fixed top-14 left-1/2 -translate-x-1/2 z-49
+               w-[90vw] max-w-xl bg-base-200/90 backdrop-blur-xl rounded-2xl
+               shadow-lg border border-base-content/6 p-3 origin-top
+               transition-all duration-200 scale-y-0 opacity-0 pointer-events-none"
+      >
+        <%!-- Scrubber row --%>
+        <div class="relative mb-2">
+          <div data-chapter-scrubber class="w-full h-2 bg-base-300 rounded-full cursor-pointer relative">
+            <div data-scrubber-fill class="h-full bg-primary rounded-full pointer-events-none" style="width: 0%" />
+            <div
+              data-scrubber-thumb
+              class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-primary rounded-full shadow"
+              style="left: 0%"
+            />
+          </div>
+          <div
+            data-scrubber-tooltip
+            class="hidden absolute -top-8 -translate-x-1/2 bg-base-300 text-xs px-2 py-1 rounded whitespace-nowrap"
+          />
+        </div>
+        <%!-- Chapter strip --%>
+        <div data-chapter-strip class="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+          <button
+            :for={{ch, idx} <- Enum.with_index(@chapters)}
+            data-chapter-pill={idx}
+            class={[
+              "btn btn-xs shrink-0",
+              if(ch.id == @chapter.id, do: "btn-primary", else: "btn-ghost")
+            ]}
+          >
+            {idx + 1}
+          </button>
+        </div>
       </div>
 
       <%!-- Reader settings popover --%>
@@ -285,6 +421,60 @@ defmodule ReadaloudWebWeb.ReaderLive do
               name="maxWidth"
               class="range range-xs w-full"
             />
+          </div>
+
+          <div class="divider my-1"></div>
+
+          <%!-- Auto-next chapter toggle --%>
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-xs text-base-content/60">Auto next chapter</span>
+            <input
+              id="auto-next-chapter-toggle"
+              type="checkbox"
+              phx-click={JS.push("update_reader_setting", value: %{key: "autoNextChapter", value: "toggle"})}
+              class="toggle toggle-sm toggle-primary"
+            />
+          </label>
+
+          <div class="divider my-1"></div>
+
+          <%!-- Theme selector --%>
+          <div>
+            <div class="text-xs text-base-content/60 mb-2">Theme</div>
+            <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">Dark</div>
+            <div class="flex flex-wrap gap-1 mb-2">
+              <button
+                :for={theme <- ~w(abyss dark dim dracula night sunset vampire)}
+                phx-click="set_theme"
+                phx-value-theme={theme}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5" data-theme={theme}>
+                  <div class="w-2 h-2 rounded-full bg-base-100"></div>
+                  <div class="w-2 h-2 rounded-full bg-primary"></div>
+                  <div class="w-2 h-2 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
+            <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">Light</div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                :for={theme <- ~w(autumn bumblebee corporate cupcake emerald garden lemonade light lofi nord pastel retro)}
+                phx-click="set_theme"
+                phx-value-theme={theme}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5" data-theme={theme}>
+                  <div class="w-2 h-2 rounded-full bg-base-100"></div>
+                  <div class="w-2 h-2 rounded-full bg-primary"></div>
+                  <div class="w-2 h-2 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -460,22 +650,16 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
             <div class="flex-1 [.collapsed_&]:hidden"></div>
 
-            <%!-- Speed dropdown (hidden when collapsed) --%>
-            <div class="dropdown dropdown-top dropdown-end [.collapsed_&]:hidden">
-              <button tabindex="0" class="btn btn-ghost btn-xs">Speed</button>
-              <div
-                tabindex="0"
-                class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]"
-              >
-                <button
-                  :for={speed <- ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"]}
-                  data-speed={speed}
-                  class="btn btn-ghost btn-xs w-full justify-center"
-                >
-                  {speed}x
-                </button>
-              </div>
-            </div>
+            <%!-- Speed badge (click to cycle) --%>
+            <button
+              id="speed-badge"
+              phx-click="change_speed"
+              phx-value-direction="up"
+              class="btn btn-ghost btn-xs font-mono tabular-nums [.collapsed_&]:hidden"
+              title="Click to change speed"
+            >
+              1x
+            </button>
 
             <%!-- Volume slider (hidden when collapsed, hidden on mobile) --%>
             <div class="hidden sm:flex items-center gap-1 [.collapsed_&]:!hidden">
@@ -515,18 +699,49 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div :if={@audio_state == :none} class="max-w-[700px] mx-auto px-4 pb-24">
         <div class="flex justify-between mt-6">
           <%= if prev = prev_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}"} class="btn btn-ghost btn-sm">
+            <.link
+              navigate={~p"/books/#{@book.id}/read/#{prev.id}?nav=internal"}
+              class="btn btn-ghost btn-sm"
+            >
               &larr; Previous
             </.link>
           <% else %>
             <div></div>
           <% end %>
           <%= if nxt = next_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}"} class="btn btn-ghost btn-sm">
+            <.link
+              navigate={~p"/books/#{@book.id}/read/#{nxt.id}?nav=internal"}
+              class="btn btn-ghost btn-sm"
+            >
               Next &rarr;
             </.link>
           <% end %>
         </div>
+      </div>
+
+      <%!-- Accidental navigation conflict modal --%>
+      <div :if={@show_conflict_modal} class="modal modal-open">
+        <div class="modal-box">
+          <h3 class="font-bold text-lg">Continue reading?</h3>
+          <p class="py-4">
+            Your last position was on
+            <strong>
+              {if @conflict_chapter,
+                do: @conflict_chapter.title || "Chapter #{@conflict_chapter.number}",
+                else: "another chapter"}
+            </strong>.
+            Would you like to go back there or stay here?
+          </p>
+          <div class="modal-action">
+            <button phx-click="dismiss_conflict" class="btn btn-ghost">Stay here</button>
+            <button phx-click="go_to_conflict_chapter" class="btn btn-primary">
+              Go to {if @conflict_chapter,
+                do: "Ch #{Enum.find_index(@chapters, &(&1.id == @conflict_chapter.id)) |> then(&((&1 || 0) + 1))}",
+                else: "last position"}
+            </button>
+          </div>
+        </div>
+        <div class="modal-backdrop" phx-click="dismiss_conflict"></div>
       </div>
     </div>
     """

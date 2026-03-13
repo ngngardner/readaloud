@@ -364,6 +364,12 @@ export const AudioPlayer = {
 	},
 
 	updateSpeedButtons(speed) {
+		// Update speed badge display
+		const badge = document.getElementById("speed-badge");
+		if (badge) {
+			badge.textContent = speed === 1 ? "1x" : `${speed}x`;
+		}
+		// Update legacy dropdown buttons if present
 		this.el.querySelectorAll("[data-speed]").forEach((btn) => {
 			const btnSpeed = parseFloat(btn.dataset.speed);
 			btn.classList.toggle("btn-active", Math.abs(btnSpeed - speed) < 0.01);

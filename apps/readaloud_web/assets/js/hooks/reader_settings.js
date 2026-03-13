@@ -16,12 +16,23 @@ const ReaderSettingsHook = {
 			...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"),
 		};
 		this.applySettings();
+		this.syncAutoNextToggle();
 
 		this.handleEvent("update_reader_setting", ({ key, value }) => {
-			this.settings[key] = value;
+			if (key === "autoNextChapter" && value === "toggle") {
+				this.settings[key] = !this.settings[key];
+			} else {
+				this.settings[key] = value;
+			}
 			localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
 			this.applySettings();
+			if (key === "autoNextChapter") this.syncAutoNextToggle();
 		});
+	},
+
+	syncAutoNextToggle() {
+		const toggle = document.getElementById("auto-next-chapter-toggle");
+		if (toggle) toggle.checked = !!this.settings.autoNextChapter;
 	},
 
 	applySettings() {
