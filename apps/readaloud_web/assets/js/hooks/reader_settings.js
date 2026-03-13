@@ -19,6 +19,16 @@ const ReaderSettingsHook = {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
       this.applySettings();
     });
+
+    // Auto-next-chapter toggle: bind once in mounted (not applySettings)
+    const autoNextToggle = document.getElementById("auto-next-chapter-toggle");
+    if (autoNextToggle) {
+      autoNextToggle.checked = !!this.settings.autoNextChapter;
+      autoNextToggle.addEventListener("change", () => {
+        this.settings.autoNextChapter = autoNextToggle.checked;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
+      });
+    }
   },
 
   applySettings() {

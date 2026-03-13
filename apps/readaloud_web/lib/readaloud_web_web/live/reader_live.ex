@@ -277,6 +277,18 @@ defmodule ReadaloudWebWeb.ReaderLive do
               class="range range-xs w-full"
             />
           </div>
+
+          <%!-- Toggles --%>
+          <div class="divider my-1"></div>
+
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-xs text-base-content/60">Auto next chapter</span>
+            <input
+              type="checkbox"
+              id="auto-next-chapter-toggle"
+              class="toggle toggle-sm toggle-primary"
+            />
+          </label>
         </div>
       </div>
 
