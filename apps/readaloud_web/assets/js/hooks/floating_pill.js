@@ -40,6 +40,13 @@ const FloatingPillHook = {
     this.pill.classList.add("opacity-0", "pointer-events-none");
     this.pill.classList.remove("opacity-100");
     this.visible = false;
+    // Collapse the chapter bar and sync its isOpen state
+    const chapterBar = document.getElementById("chapter-bar");
+    if (chapterBar) {
+      chapterBar.classList.add("scale-y-0", "opacity-0", "pointer-events-none");
+      chapterBar.classList.remove("scale-y-100", "opacity-100");
+    }
+    window.dispatchEvent(new CustomEvent("chapter-bar-close"));
   },
 
   toggle() {

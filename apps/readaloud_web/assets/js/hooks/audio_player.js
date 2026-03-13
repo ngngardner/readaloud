@@ -24,9 +24,6 @@ export const AudioPlayer = {
     const volSlider = this.el.querySelector("[data-volume-slider]")
     if (volSlider) volSlider.value = savedVolume
 
-    // Update speed button active state
-    this.updateSpeedButtons(savedSpeed)
-
     // Load audio
     this.audio.src = this.el.dataset.audioUrl
 
@@ -65,13 +62,18 @@ export const AudioPlayer = {
       })
     }
 
-    // Speed buttons
-    this.el.querySelectorAll("[data-speed]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const speed = parseFloat(btn.dataset.speed)
-        this.setSpeed(speed)
+    // Speed badge: click to cycle forward
+    this.speedBadge = document.getElementById("speed-badge")
+    if (this.speedBadge) {
+      this.speedBadge.textContent = this.formatSpeed(savedSpeed)
+      this.speedBadge.addEventListener("click", () => {
+        const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+        const cur = this.audio.playbackRate
+        const idx = speeds.findIndex(s => Math.abs(s - cur) < 0.01)
+        const next = speeds[(idx + 1) % speeds.length]
+        this.setSpeed(next)
       })
-    })
+    }
 
     // Volume slider
     if (volSlider) {
@@ -308,14 +310,17 @@ export const AudioPlayer = {
   setSpeed(speed) {
     this.audio.playbackRate = speed
     localStorage.setItem("readaloud-playback-speed", speed)
-    this.updateSpeedButtons(speed)
+    this.updateSpeedBadge(speed)
   },
 
-  updateSpeedButtons(speed) {
-    this.el.querySelectorAll("[data-speed]").forEach(btn => {
-      const btnSpeed = parseFloat(btn.dataset.speed)
-      btn.classList.toggle("btn-active", Math.abs(btnSpeed - speed) < 0.01)
-    })
+  updateSpeedBadge(speed) {
+    if (this.speedBadge) {
+      this.speedBadge.textContent = this.formatSpeed(speed)
+    }
+  },
+
+  formatSpeed(speed) {
+    return speed + "x"
   },
 
   highlightWord(ms) {

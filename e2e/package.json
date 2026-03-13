@@ -1,0 +1,12 @@
+{
+  "name": "readaloud-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:headed": "HEADLESS=false node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}

@@ -31,3 +31,6 @@ readaloud-*.tar
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# E2E test dependencies
+/e2e/node_modules/

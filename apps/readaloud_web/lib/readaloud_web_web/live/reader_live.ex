@@ -2,9 +2,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
   use ReadaloudWebWeb, :live_view
 
   @impl true
-  def mount(%{"id" => book_id, "chapter_id" => chapter_id}, _session, socket) do
+  def mount(%{"id" => book_id, "chapter_id" => chapter_id} = params, _session, socket) do
     book_id = String.to_integer(book_id)
     chapter_id = String.to_integer(chapter_id)
+    is_internal_nav = params["nav"] == "internal"
 
     book = ReadaloudLibrary.get_book!(book_id)
     chapter = ReadaloudLibrary.get_chapter!(chapter_id)
@@ -21,9 +22,29 @@ defmodule ReadaloudWebWeb.ReaderLive do
     models = fetch_models()
     audio_state = determine_audio_state(chapter_id, audio)
 
+    # Conflict detection: only on external navigation (no ?nav=internal)
+    {show_conflict, conflict_chapter} =
+      if connected?(socket) && !is_internal_nav && progress &&
+           progress.current_chapter_id != chapter_id do
+        current_idx = Enum.find_index(chapters, &(&1.id == chapter_id)) || 0
+        last_read_idx = Enum.find_index(chapters, &(&1.id == progress.current_chapter_id))
+
+        if last_read_idx && last_read_idx > current_idx do
+          conflict_ch = Enum.at(chapters, last_read_idx)
+          {true, conflict_ch}
+        else
+          {false, nil}
+        end
+      else
+        {false, nil}
+      end
+
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
-      ReadaloudReader.upsert_progress(%{book_id: book_id, current_chapter_id: chapter_id})
+      # Only update progress if no conflict detected
+      unless show_conflict do
+        ReadaloudReader.upsert_progress(%{book_id: book_id, current_chapter_id: chapter_id})
+      end
     end
 
     {:ok,
@@ -46,7 +67,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
        generation_progress: 0,
        initial_scroll: (progress && progress.scroll_position) || 0.0,
        initial_position_ms: (progress && progress.audio_position_ms) || 0,
-       page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
+       page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}",
+       dark_themes: ReadaloudWebWeb.ThemeSelector.dark_themes(),
+       light_themes: ReadaloudWebWeb.ThemeSelector.light_themes(),
+       show_conflict_modal: show_conflict,
+       conflict_chapter: conflict_chapter
      )}
   end
 
@@ -71,7 +96,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   def handle_event("prev_chapter", _params, socket) do
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
     end
   end
 
@@ -79,8 +104,14 @@ defmodule ReadaloudWebWeb.ReaderLive do
   def handle_event("next_chapter", _params, socket) do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
     end
+  end
+
+  @impl true
+  def handle_event("jump_to_chapter", %{"chapter_id" => chapter_id}, socket) do
+    chapter_id = if is_binary(chapter_id), do: String.to_integer(chapter_id), else: chapter_id
+    {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}" <> "?nav=internal")}
   end
 
   @impl true
@@ -175,6 +206,30 @@ defmodule ReadaloudWebWeb.ReaderLive do
     {:noreply, assign(socket, selected_voice: voice)}
   end
 
+  @impl true
+  def handle_event("dismiss_conflict", _params, socket) do
+    # User chose "Stay" — update progress to current chapter
+    ReadaloudReader.upsert_progress(%{
+      book_id: socket.assigns.book.id,
+      current_chapter_id: socket.assigns.chapter.id
+    })
+    {:noreply, assign(socket, show_conflict_modal: false, conflict_chapter: nil)}
+  end
+
+  @impl true
+  def handle_event("go_to_conflict_chapter", _params, socket) do
+    case socket.assigns.conflict_chapter do
+      nil ->
+        {:noreply, assign(socket, show_conflict_modal: false)}
+
+      ch ->
+        {:noreply,
+         socket
+         |> assign(show_conflict_modal: false, conflict_chapter: nil)
+         |> push_navigate(to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
+    end
+  end
+
   # -- PubSub handler: audio generation completed --
 
   @impl true
@@ -201,25 +256,92 @@ defmodule ReadaloudWebWeb.ReaderLive do
                bg-base-200/90 backdrop-blur-xl rounded-full px-4 py-2 shadow-lg border border-base-content/6
                opacity-0 pointer-events-none transition-opacity duration-200"
       >
-        <.link navigate={~p"/books/#{@book.id}"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-arrow-left" class="w-4 h-4" />
+        <%!-- Home --%>
+        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle" title="Library">
+          <.icon name="hero-home" class="w-4 h-4" />
         </.link>
-        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-book-open" class="w-4 h-4" />
-        </.link>
-        <span class="text-xs text-base-content/60">
+
+        <%!-- Prev chapter --%>
+        <%= if prev = prev_chapter(@chapter, @chapters) do %>
+          <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}" <> "?nav=internal"} class="btn btn-ghost btn-xs btn-circle">
+            <.icon name="hero-chevron-left" class="w-4 h-4" />
+          </.link>
+        <% else %>
+          <button class="btn btn-ghost btn-xs btn-circle opacity-30" disabled>
+            <.icon name="hero-chevron-left" class="w-4 h-4" />
+          </button>
+        <% end %>
+
+        <%!-- Chapter indicator (tappable - toggles chapter bar) --%>
+        <button
+          id="chapter-indicator"
+          class="text-xs text-base-content/60 hover:text-base-content cursor-pointer px-1"
+        >
           Ch <%= chapter_index(@chapter, @chapters) + 1 %> / <%= length(@chapters) %>
-        </span>
+        </button>
+
+        <%!-- Next chapter --%>
+        <%= if nxt = next_chapter(@chapter, @chapters) do %>
+          <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}" <> "?nav=internal"} class="btn btn-ghost btn-xs btn-circle">
+            <.icon name="hero-chevron-right" class="w-4 h-4" />
+          </.link>
+        <% else %>
+          <button class="btn btn-ghost btn-xs btn-circle opacity-30" disabled>
+            <.icon name="hero-chevron-right" class="w-4 h-4" />
+          </button>
+        <% end %>
+
+        <%!-- Settings --%>
         <button phx-click={JS.toggle(to: "#reader-settings")} class="btn btn-ghost btn-xs btn-circle">
           <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
         </button>
+      </div>
+
+      <%!-- Slide-down chapter bar --%>
+      <div
+        id="chapter-bar"
+        phx-hook="ChapterBarHook"
+        data-current-index={chapter_index(@chapter, @chapters)}
+        data-total-chapters={length(@chapters)}
+        data-chapters={Jason.encode!(Enum.map(@chapters, fn ch -> %{id: ch.id, number: ch.number, title: ch.title} end))}
+        data-book-id={@book.id}
+        class="fixed top-16 left-1/2 -translate-x-1/2 z-[49]
+               bg-base-200/95 backdrop-blur-xl rounded-xl px-4 py-3 shadow-lg border border-base-content/6
+               w-[min(90vw,500px)] space-y-2
+               transition-all duration-200 ease-out origin-top
+               scale-y-0 opacity-0 pointer-events-none"
+      >
+        <%!-- Row 1: Progress scrubber --%>
+        <div data-chapter-scrubber class="relative h-5 cursor-pointer select-none group">
+          <div class="absolute top-2 left-0 right-0 h-1.5 bg-base-300 rounded-full">
+            <div data-scrubber-fill class="h-full bg-primary rounded-full" style="width: 0%"></div>
+          </div>
+          <div data-scrubber-thumb class="absolute top-0.5 w-4 h-4 bg-primary rounded-full shadow -translate-x-1/2" style="left: 0%"></div>
+          <div data-scrubber-tooltip class="absolute -top-7 bg-base-300 text-xs px-2 py-0.5 rounded shadow hidden -translate-x-1/2 whitespace-nowrap"></div>
+        </div>
+
+        <%!-- Row 2: Nearby chapter strip --%>
+        <div data-chapter-strip class="flex gap-1 overflow-x-auto py-1 scrollbar-hide">
+          <button
+            :for={{ch, idx} <- Enum.with_index(@chapters)}
+            data-chapter-pill={idx}
+            data-chapter-id={ch.id}
+            class={"shrink-0 w-8 h-8 rounded-full text-xs flex items-center justify-center cursor-pointer transition-colors " <>
+              if(idx == chapter_index(@chapter, @chapters),
+                do: "bg-primary text-primary-content font-bold",
+                else: "bg-base-300/50 text-base-content/60 hover:bg-base-300")}
+          >
+            <%= idx + 1 %>
+          </button>
+        </div>
       </div>
 
       <%!-- Reader settings popover --%>
       <div
         id="reader-settings"
         class="fixed top-16 right-4 z-50 hidden
-               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72"
+               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72
+               max-h-[calc(100vh-5rem)] overflow-y-auto"
       >
         <h3 class="text-sm font-semibold mb-3">Reading Settings</h3>
 
@@ -277,6 +399,58 @@ defmodule ReadaloudWebWeb.ReaderLive do
               class="range range-xs w-full"
             />
           </div>
+
+          <%!-- Toggles --%>
+          <div class="divider my-1"></div>
+
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-xs text-base-content/60">Auto next chapter</span>
+            <input
+              type="checkbox"
+              id="auto-next-chapter-toggle"
+              class="toggle toggle-sm toggle-primary"
+            />
+          </label>
+
+          <%!-- Theme --%>
+          <div class="divider my-1"></div>
+          <label class="text-xs text-base-content/60 mb-2 block">Theme</label>
+
+          <div class="mb-2">
+            <div class="text-[10px] uppercase tracking-widest text-base-content/40 mb-1">Dark</div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                :for={theme <- @dark_themes}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
+                  <div class="w-1.5 h-1.5 rounded-full bg-base-100"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-base-content/40 mb-1">Light</div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                :for={theme <- @light_themes}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
+                  <div class="w-1.5 h-1.5 rounded-full bg-base-100"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -324,6 +498,33 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <button id="resync-btn" class="fixed bottom-24 right-4 z-40 btn btn-sm btn-primary shadow-lg hidden">
         <.icon name="hero-arrow-down" class="w-4 h-4" /> Re-sync
       </button>
+
+      <%!-- Accidental navigation conflict modal --%>
+      <div
+        :if={@show_conflict_modal}
+        class="modal modal-open"
+      >
+        <div class="modal-box">
+          <h3 class="font-bold text-lg mb-2">Continue reading?</h3>
+          <p class="text-base-content/70">
+            Your last reading position is
+            <span class="font-semibold text-base-content">
+              <%= if @conflict_chapter do %>
+                Chapter <%= @conflict_chapter.title || @conflict_chapter.number %>
+              <% end %>
+            </span>.
+          </p>
+          <div class="modal-action">
+            <button phx-click="dismiss_conflict" class="btn btn-ghost">
+              Stay on <%= @chapter.title || "Chapter #{@chapter.number}" %>
+            </button>
+            <button phx-click="go_to_conflict_chapter" class="btn btn-primary">
+              Go to <%= if @conflict_chapter, do: @conflict_chapter.title || "Chapter #{@conflict_chapter.number}" %>
+            </button>
+          </div>
+        </div>
+        <div class="modal-backdrop"><button phx-click="dismiss_conflict">close</button></div>
+      </div>
 
       <%!-- 3. Bottom bar: three states --%>
 
@@ -439,19 +640,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
             <div class="flex-1 [.collapsed_&]:hidden"></div>
 
-            <%!-- Speed dropdown (hidden when collapsed) --%>
-            <div class="dropdown dropdown-top dropdown-end [.collapsed_&]:hidden">
-              <button tabindex="0" class="btn btn-ghost btn-xs">Speed</button>
-              <div tabindex="0" class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]">
-                <button
-                  :for={speed <- ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"]}
-                  data-speed={speed}
-                  class="btn btn-ghost btn-xs w-full justify-center"
-                >
-                  <%= speed %>x
-                </button>
-              </div>
-            </div>
+            <%!-- Speed badge (hidden when collapsed) --%>
+            <button
+              id="speed-badge"
+              class="btn btn-ghost btn-xs [.collapsed_&]:hidden font-mono"
+              style="font-variant-numeric: tabular-nums;"
+              title="Playback speed (click to cycle)"
+            >
+              1x
+            </button>
 
             <%!-- Volume slider (hidden when collapsed, hidden on mobile) --%>
             <div class="hidden sm:flex items-center gap-1 [.collapsed_&]:!hidden">
@@ -488,14 +685,14 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div :if={@audio_state == :none} class="max-w-[700px] mx-auto px-4 pb-24">
         <div class="flex justify-between mt-6">
           <%= if prev = prev_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}" <> "?nav=internal"} class="btn btn-ghost btn-sm">
               &larr; Previous
             </.link>
           <% else %>
             <div></div>
           <% end %>
           <%= if nxt = next_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}" <> "?nav=internal"} class="btn btn-ghost btn-sm">
               Next &rarr;
             </.link>
           <% end %>
