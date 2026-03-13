@@ -1,0 +1,6 @@
+id: no-form-for
+language: elixir
+severity: error
+rule:
+  pattern: Phoenix.HTML.form_for($$$)
+message: Phoenix.HTML.form_for is deprecated. Use to_form/2 + <.form for={@form}>.

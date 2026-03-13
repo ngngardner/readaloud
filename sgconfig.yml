@@ -1,0 +1,6 @@
+ruleDirs:
+  - rules/elixir
+  - rules/heex
+languageGlobs:
+  html:
+    - "**/*.heex"

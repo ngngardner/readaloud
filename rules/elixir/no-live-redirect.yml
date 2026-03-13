@@ -1,0 +1,6 @@
+id: no-live-redirect
+language: elixir
+severity: error
+rule:
+  pattern: live_redirect($$$)
+message: live_redirect is deprecated. Use <.link navigate={href}> or push_navigate/2.

@@ -1,0 +1,6 @@
+id: no-inputs-for
+language: elixir
+severity: error
+rule:
+  pattern: Phoenix.HTML.inputs_for($$$)
+message: Phoenix.HTML.inputs_for is deprecated. Use Phoenix.Component.inputs_for/1.
