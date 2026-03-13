@@ -79,6 +79,7 @@
             biome lint apps/readaloud_web/assets/js/
             touch $out
           '';
+          e2e = import ./cells/app/checks/e2e.nix { inherit self pkgs; };
         });
       };
 }

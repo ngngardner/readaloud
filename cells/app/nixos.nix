@@ -63,14 +63,12 @@ in
         PORT = toString cfg.port;
         LOCALAI_URL = cfg.localaiUrl;
         RELEASE_TMP = "/tmp/readaloud";
-        PATH = lib.makeBinPath (
-          with pkgs;
-          [
-            calibre
-            poppler-utils
-          ]
-        );
       };
+
+      path = with pkgs; [
+        calibre
+        poppler-utils
+      ];
 
       serviceConfig = {
         Type = "exec";
