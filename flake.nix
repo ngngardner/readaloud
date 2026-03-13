@@ -79,7 +79,9 @@
             biome lint apps/readaloud_web/assets/js/
             touch $out
           '';
-          e2e = import ./cells/app/checks/e2e.nix { inherit self pkgs; };
         });
+        # E2E test requires KVM — not included in default checks.
+        # Run explicitly: nix build .#e2e-test
+        e2e-test = eachSystem (pkgs: import ./cells/app/checks/e2e.nix { inherit self pkgs; });
       };
 }
