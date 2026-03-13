@@ -1,5 +1,5 @@
 defmodule ReadaloudAudiobook.GenerateJob do
-  use Oban.Worker, queue: :tts, max_attempts: 20
+  use Oban.Worker, queue: :tts, max_attempts: 3
 
   alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
@@ -8,8 +8,18 @@ defmodule ReadaloudAudiobook.GenerateJob do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"task_id" => task_id}}) do
+  def perform(%Oban.Job{args: %{"task_id" => task_id}} = job) do
     task = Repo.get!(AudiobookTask, task_id)
+
+    # Crash recovery: if task is still "processing", the previous run was killed
+    # by a restart. Compensate Oban's attempt counter so crashes don't burn
+    # real attempts — only genuine TTS failures should count.
+    if task.status == "processing" do
+      import Ecto.Query
+      from(j in "oban_jobs", where: j.id == ^job.id)
+      |> Repo.update_all(inc: [max_attempts: 1])
+    end
+
     update_task(task, %{status: "processing"})
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
@@ -45,9 +55,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
       {:error, reason} ->
         task = update_task(task, %{status: "failed", error_message: "#{inspect(reason)}"})
         broadcast_task_update(task)
-        # Return :ok so Oban doesn't retry — our ensure_audio_generated handles retry policy.
-        # Oban retries are reserved for crash recovery (process killed by restart).
-        :ok
+        {:error, reason}
     end
   end
 
