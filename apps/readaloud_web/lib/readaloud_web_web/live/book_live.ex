@@ -8,11 +8,12 @@ defmodule ReadaloudWebWeb.BookLive do
     book = ReadaloudLibrary.get_book!(String.to_integer(id))
     chapters = ReadaloudLibrary.list_chapters(book.id)
     progress = ReadaloudReader.get_progress(book.id)
-    audio_map = build_audio_map(chapters)
+    audio_map = build_audio_map(chapters, book)
     models = fetch_models()
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
     end
 
     {:ok,
@@ -27,66 +28,8 @@ defmodule ReadaloudWebWeb.BookLive do
        models: models,
        selected_model: default_model(book, models),
        selected_voice: default_voice(book, models),
-       selected_chapters: MapSet.new(),
-       show_generate_panel: false,
        page_title: book.title
      )}
-  end
-
-  @impl true
-  def handle_event("generate_batch", _params, socket) do
-    selected = socket.assigns.selected_chapters
-    book = socket.assigns.book
-    model = socket.assigns.selected_model
-    voice = socket.assigns.selected_voice
-
-    ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => model, "voice" => voice}})
-
-    for chapter_id <- selected do
-      ReadaloudAudiobook.generate_for_chapter(book.id, chapter_id, model: model, voice: voice)
-    end
-
-    chapters = ReadaloudLibrary.list_chapters(book.id)
-
-    {:noreply,
-     socket
-     |> assign(
-       show_generate_panel: false,
-       selected_chapters: MapSet.new(),
-       audio_map: build_audio_map(chapters)
-     )}
-  end
-
-  @impl true
-  def handle_event("select_all_chapters", _params, socket) do
-    all_ids = socket.assigns.chapters |> Enum.map(& &1.id) |> MapSet.new()
-    {:noreply, assign(socket, selected_chapters: all_ids)}
-  end
-
-  @impl true
-  def handle_event("select_from_current", _params, socket) do
-    current_num = current_chapter_number(socket.assigns.progress, socket.assigns.chapters)
-
-    ids =
-      socket.assigns.chapters
-      |> Enum.filter(&(&1.number >= current_num))
-      |> Enum.map(& &1.id)
-      |> MapSet.new()
-
-    {:noreply, assign(socket, selected_chapters: ids)}
-  end
-
-  @impl true
-  def handle_event("toggle_chapter", %{"chapter-id" => ch_id}, socket) do
-    ch_id = String.to_integer(ch_id)
-    selected = socket.assigns.selected_chapters
-
-    updated =
-      if MapSet.member?(selected, ch_id),
-        do: MapSet.delete(selected, ch_id),
-        else: MapSet.put(selected, ch_id)
-
-    {:noreply, assign(socket, selected_chapters: updated)}
   end
 
   @impl true
@@ -96,22 +39,58 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("retry_chapter_audio", %{"chapter-id" => ch_id}, socket) do
+  def handle_event("activate_audio", _params, socket) do
     book = socket.assigns.book
     model = socket.assigns.selected_model
     voice = socket.assigns.selected_voice
-    ReadaloudAudiobook.generate_for_chapter(book.id, String.to_integer(ch_id), model: model, voice: voice)
-    {:noreply, socket}
+    chapters = socket.assigns.chapters
+
+    case ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    }) do
+      {:ok, book} ->
+        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+        {:noreply,
+         socket
+         |> assign(
+           book: book,
+           audio_map: build_audio_map(chapters, book)
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to activate audio")}
+    end
+  end
+
+  @impl true
+  def handle_event("update_audio_settings", %{"model" => model, "voice" => voice}, socket) do
+    book = socket.assigns.book
+    chapters = socket.assigns.chapters
+
+    case ReadaloudLibrary.update_book(book, %{
+      audio_preferences: %{"model" => model, "voice" => voice}
+    }) do
+      {:ok, book} ->
+        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+
+        {:noreply,
+         socket
+         |> assign(
+           book: book,
+           selected_model: model,
+           selected_voice: voice,
+           audio_map: build_audio_map(chapters, book)
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update audio settings")}
+    end
   end
 
   @impl true
   def handle_event("set_theme", %{"theme" => theme}, socket) do
     {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
-  @impl true
-  def handle_event("toggle_generate_panel", _params, socket) do
-    {:noreply, assign(socket, show_generate_panel: !socket.assigns.show_generate_panel)}
   end
 
   @impl true
@@ -127,9 +106,15 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_info({:task_updated, _task}, socket) do
-    chapters = ReadaloudLibrary.list_chapters(socket.assigns.book.id)
-    {:noreply, assign(socket, audio_map: build_audio_map(chapters))}
+  def handle_info({:task_updated, task}, socket) do
+    book = socket.assigns.book
+    chapters = socket.assigns.chapters
+
+    if task.status == "completed" do
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+    end
+
+    {:noreply, assign(socket, audio_map: build_audio_map(chapters, book))}
   end
 
   @impl true
@@ -150,24 +135,107 @@ defmodule ReadaloudWebWeb.BookLive do
           style={gradient_style(@book)}
         />
         <div class="flex-1">
-          <h1 class="text-2xl font-bold tracking-tight"><%= @book.title %></h1>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-bold tracking-tight"><%= @book.title %></h1>
+            <%= if @book.audio_preferences do %>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
+                  <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
+                </div>
+                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                  <form phx-submit="update_audio_settings">
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Model</label>
+                      <select name="model" class="select select-sm select-bordered w-full">
+                        <option
+                          :for={m <- @models}
+                          value={m[:id]}
+                          selected={m[:id] == @selected_model}
+                        >
+                          <%= m[:id] %>
+                        </option>
+                      </select>
+                    </div>
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Voice</label>
+                      <select name="voice" class="select select-sm select-bordered w-full">
+                        <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                        <option
+                          :for={v <- (current_model && current_model[:voices]) || []}
+                          value={v}
+                          selected={v == @selected_voice}
+                        >
+                          <%= v %>
+                        </option>
+                      </select>
+                    </div>
+                    <p class="text-xs text-base-content/50 text-center mb-2">
+                      <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready
+                    </p>
+                    <button type="submit" class="btn btn-primary btn-sm w-full">Save</button>
+                  </form>
+                </div>
+              </div>
+            <% end %>
+          </div>
           <p :if={@book.author} class="text-base-content/60 mt-1"><%= @book.author %></p>
           <div class="flex flex-wrap gap-2 mt-3">
             <span class="badge badge-outline"><%= length(@chapters) %> chapters</span>
             <span class="badge badge-outline">
-              <%= progress_count(@progress, @book) %>/<%= length(@chapters) %> read
+              <%= progress_count(@progress, @book, @chapters) %>/<%= length(@chapters) %> read
             </span>
-            <span class="badge badge-outline">
-              <%= audio_count(@audio_map) %>/<%= length(@chapters) %> audio
-            </span>
+            <%= if @book.audio_preferences do %>
+              <span class="badge badge-outline">
+                <%= audio_count(@audio_map) %>/<%= length(@chapters) %> audio
+              </span>
+            <% end %>
           </div>
+          <%= if @book.audio_preferences do %>
+            <p class="text-xs text-base-content/50 mt-2">
+              <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready · <%= @book.audio_preferences["model"] %> / <%= @book.audio_preferences["voice"] %>
+            </p>
+          <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
-            <.link navigate={resume_path(@book, @progress)} class="btn btn-primary btn-sm">
+            <.link navigate={resume_path(@book, @progress, @chapters)} class="btn btn-primary btn-sm">
               Continue Reading
             </.link>
-            <button phx-click="toggle_generate_panel" class="btn btn-sm btn-outline">
-              Generate Audio
-            </button>
+            <%= if !@book.audio_preferences do %>
+              <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-sm btn-outline">
+                  Set up audio
+                </div>
+                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                  <div class="form-control mb-3">
+                    <label class="label label-text text-xs uppercase">Model</label>
+                    <select phx-change="select_model" name="model" class="select select-sm select-bordered w-full">
+                      <option
+                        :for={m <- @models}
+                        value={m[:id]}
+                        selected={m[:id] == @selected_model}
+                      >
+                        <%= m[:id] %>
+                      </option>
+                    </select>
+                  </div>
+                  <div class="form-control mb-3">
+                    <label class="label label-text text-xs uppercase">Voice</label>
+                    <select phx-change="select_voice" name="voice" class="select select-sm select-bordered w-full">
+                      <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                      <option
+                        :for={v <- (current_model && current_model[:voices]) || []}
+                        value={v}
+                        selected={v == @selected_voice}
+                      >
+                        <%= v %>
+                      </option>
+                    </select>
+                  </div>
+                  <button phx-click="activate_audio" class="btn btn-primary btn-sm w-full">
+                    Activate
+                  </button>
+                </div>
+              </div>
+            <% end %>
             <button
               phx-click="delete_book"
               data-confirm="This will remove the book and all generated audio. Continue?"
@@ -177,42 +245,6 @@ defmodule ReadaloudWebWeb.BookLive do
             </button>
           </div>
         </div>
-      </div>
-
-      <%!-- Batch generation panel --%>
-      <div :if={@show_generate_panel} class="card bg-base-200 p-4 mb-6">
-        <div class="flex flex-wrap gap-2 mb-3">
-          <button phx-click="select_all_chapters" class="btn btn-xs">All chapters</button>
-          <button phx-click="select_from_current" class="btn btn-xs">From current onward</button>
-        </div>
-        <div class="flex flex-wrap gap-3 mb-3">
-          <select phx-change="select_model" name="model" class="select select-sm select-bordered">
-            <option
-              :for={m <- @models}
-              value={m[:id]}
-              selected={m[:id] == @selected_model}
-            >
-              <%= m[:id] %>
-            </option>
-          </select>
-          <select phx-change="select_voice" name="voice" class="select select-sm select-bordered">
-            <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
-            <option
-              :for={v <- (current_model && current_model[:voices]) || []}
-              value={v}
-              selected={v == @selected_voice}
-            >
-              <%= v %>
-            </option>
-          </select>
-        </div>
-        <button
-          phx-click="generate_batch"
-          class="btn btn-primary btn-sm"
-          disabled={MapSet.size(@selected_chapters) == 0}
-        >
-          Generate Selected (<%= MapSet.size(@selected_chapters) %>)
-        </button>
       </div>
 
       <%!-- Chapter list --%>
@@ -231,43 +263,28 @@ defmodule ReadaloudWebWeb.BookLive do
           >
             <%= ch.title || "Chapter #{ch.number}" %>
           </.link>
-          <span :if={audio_duration(@audio_map, ch.id)} class="text-xs text-base-content/40">
-            <%= audio_duration(@audio_map, ch.id) %>
-          </span>
-          <.icon
-            :if={match?({:ready, _}, Map.get(@audio_map, ch.id))}
-            name="hero-speaker-wave"
-            class="w-4 h-4 text-success"
-          />
-          <.icon
-            :if={Map.get(@audio_map, ch.id) == :generating}
-            name="hero-arrow-path"
-            class="w-4 h-4 text-warning animate-spin"
-          />
-          <.icon
-            :if={Map.get(@audio_map, ch.id) == :failed}
-            name="hero-exclamation-triangle"
-            class="w-4 h-4 text-error"
-          />
-          <button
-            :if={Map.get(@audio_map, ch.id) == :failed}
-            phx-click="retry_chapter_audio"
-            phx-value-chapter-id={ch.id}
-            class="text-xs text-primary hover:underline"
-          >
-            Retry
-          </button>
+          <%= case Map.get(@audio_map, ch.id) do %>
+            <% {:ready, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:stale, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:generating, _} -> %>
+              <span class="text-xs text-base-content/40 animate-pulse"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% {:queued, _} -> %>
+              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+            <% :processing -> %>
+              <span class="text-xs text-base-content/40 animate-pulse">generating...</span>
+            <% :queued -> %>
+              <span class="text-xs text-base-content/40">queued</span>
+            <% :failed -> %>
+              <span class="text-xs text-error">failed</span>
+            <% :skipped -> %>
+              <span class="text-xs text-error">skipped</span>
+            <% _ -> %>
+          <% end %>
           <span :if={is_current?(ch, @progress)} class="badge badge-primary badge-xs">
             CURRENT
           </span>
-          <input
-            :if={@show_generate_panel && !match?({:ready, _}, Map.get(@audio_map, ch.id))}
-            type="checkbox"
-            checked={MapSet.member?(@selected_chapters, ch.id)}
-            phx-click="toggle_chapter"
-            phx-value-chapter-id={ch.id}
-            class="checkbox checkbox-xs checkbox-primary"
-          />
         </div>
       </div>
     </div>
@@ -276,29 +293,64 @@ defmodule ReadaloudWebWeb.BookLive do
 
   # --- Private helpers ---
 
-  defp build_audio_map(chapters) do
+  defp build_audio_map(chapters, book) do
     chapter_ids = Enum.map(chapters, & &1.id)
     audios = ReadaloudAudiobook.list_chapter_audio_for_chapters(chapter_ids)
     tasks = ReadaloudAudiobook.list_tasks_for_chapters(chapter_ids)
 
-    Enum.map(chapter_ids, fn id ->
-      audio = Enum.find(audios, &(&1.chapter_id == id))
+    model = get_in(book.audio_preferences || %{}, ["model"])
+    voice = get_in(book.audio_preferences || %{}, ["voice"])
+
+    audio_by_chapter = Map.new(audios, &{&1.chapter_id, &1})
+
+    # Active tasks indexed by chapter
+    active_by_chapter =
+      tasks
+      |> Enum.filter(&(&1.status in ["pending", "processing"]))
+      |> Map.new(&{&1.chapter_id, &1})
+
+    failed_by_chapter = ReadaloudAudiobook.failed_tasks_by_chapter(tasks, model, voice)
+
+    Map.new(chapter_ids, fn id ->
+      audio = Map.get(audio_by_chapter, id)
+      active_task = Map.get(active_by_chapter, id)
+      failed_task = Map.get(failed_by_chapter, id)
+      audio_matches = audio != nil && audio.model == model && audio.voice == voice
 
       cond do
-        audio != nil ->
+        # Priority 1: Active task exists
+        active_task != nil && active_task.status == "processing" && audio != nil && !audio_matches ->
+          {id, {:generating, audio.duration_seconds}}
+
+        active_task != nil && active_task.status == "pending" && audio != nil && !audio_matches ->
+          {id, {:queued, audio.duration_seconds}}
+
+        active_task != nil && active_task.status == "processing" ->
+          {id, :processing}
+
+        active_task != nil && active_task.status == "pending" ->
+          {id, :queued}
+
+        # Priority 2: Audio matches profile
+        audio_matches ->
           {id, {:ready, audio.duration_seconds}}
 
-        Enum.any?(tasks, &(&1.chapter_id == id && &1.status == "failed")) ->
+        # Priority 3: Stale audio, no active task
+        audio != nil && !audio_matches ->
+          {id, {:stale, audio.duration_seconds}}
+
+        # Priority 4-5: Failed tasks (matching profile only)
+        failed_task != nil && failed_task.attempt_number >= 3 ->
+          {id, :skipped}
+
+        failed_task != nil ->
           {id, :failed}
 
-        Enum.any?(tasks, &(&1.chapter_id == id && &1.status in ["pending", "processing"])) ->
-          {id, :generating}
-
+        # Priority 6: Nothing
         true ->
           {id, nil}
       end
     end)
-    |> Map.new()
   end
 
   defp current_chapter_number(nil, _chapters), do: 1
@@ -313,29 +365,27 @@ defmodule ReadaloudWebWeb.BookLive do
   defp is_current?(_chapter, nil), do: false
   defp is_current?(chapter, progress), do: chapter.id == progress.current_chapter_id
 
-  defp resume_path(book, nil) do
-    chapters = ReadaloudLibrary.list_chapters(book.id)
-
+  defp resume_path(book, nil, chapters) do
     case chapters do
       [first | _] -> ~p"/books/#{book.id}/read/#{first.id}"
       [] -> ~p"/books/#{book.id}"
     end
   end
 
-  defp resume_path(book, %{current_chapter_id: nil}), do: ~p"/books/#{book.id}"
-  defp resume_path(book, progress), do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
+  defp resume_path(book, %{current_chapter_id: nil}, _chapters), do: ~p"/books/#{book.id}"
+  defp resume_path(book, progress, _chapters), do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
 
-  defp progress_count(nil, _book), do: 0
+  defp progress_count(nil, _book, _chapters), do: 0
 
-  defp progress_count(progress, book) do
-    current_chapter_number(progress, ReadaloudLibrary.list_chapters(book.id))
+  defp progress_count(progress, _book, chapters) do
+    current_chapter_number(progress, chapters)
   end
 
   defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> match?({:ready, _}, v) end)
 
   defp audio_duration(audio_map, chapter_id) do
     case Map.get(audio_map, chapter_id) do
-      {:ready, seconds} when is_number(seconds) and seconds > 0 ->
+      {state, seconds} when state in [:ready, :stale, :generating, :queued] and is_number(seconds) and seconds > 0 ->
         mins = trunc(seconds / 60)
         secs = trunc(rem(trunc(seconds), 60))
         "#{mins}:#{String.pad_leading("#{secs}", 2, "0")}"

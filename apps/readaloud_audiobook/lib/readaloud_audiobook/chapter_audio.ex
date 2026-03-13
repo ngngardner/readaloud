@@ -7,12 +7,14 @@ defmodule ReadaloudAudiobook.ChapterAudio do
     field :audio_path, :string
     field :duration_seconds, :float
     field :word_timings, :string
+    field :model, :string
+    field :voice, :string
     timestamps()
   end
 
   def changeset(audio, attrs) do
     audio
-    |> cast(attrs, [:chapter_id, :audio_path, :duration_seconds, :word_timings])
+    |> cast(attrs, [:chapter_id, :audio_path, :duration_seconds, :word_timings, :model, :voice])
     |> validate_required([:chapter_id, :audio_path])
     |> unique_constraint(:chapter_id)
   end
