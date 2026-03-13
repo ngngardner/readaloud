@@ -182,11 +182,19 @@ On mount in `ReaderLive`, compare the navigated-to chapter against `ReadingProgr
   - Auto-advance (next chapter after audio ends)
   - Sequential forward navigation (prev/next buttons moving forward)
   - Same chapter reload
+  - In-session navigation from chapter bar, prev/next buttons, or any internal `push_navigate`
+
+**Distinguishing stale-tab from internal navigation:** Internal navigation (prev/next buttons, chapter bar jumps, auto-advance) passes a `?nav=internal` query param when calling `push_navigate`. The mount function checks for this param:
+- If `nav=internal` is present: skip the conflict check entirely, call `upsert_progress` normally
+- If absent (direct URL load, stale tab, bookmark): run the conflict check
+
+This ensures the popup only fires for genuine stale-tab scenarios, not for deliberate in-session backward navigation.
 
 ### Files Affected
 
-- `reader_live.ex` — restructure mount to defer `upsert_progress` when conflict detected, new assigns (`show_conflict_modal`, `conflict_chapter`), modal template, event handlers (`dismiss_conflict`, `go_to_conflict_chapter`)
-- No JS changes needed — pure LiveView server-rendered modal
+- `reader_live.ex` — restructure mount to defer `upsert_progress` when conflict detected, add `?nav=internal` param to all internal `push_navigate` calls, new assigns (`show_conflict_modal`, `conflict_chapter`), modal template, event handlers (`dismiss_conflict`, `go_to_conflict_chapter`)
+- `floating_pill.js` — ensure chapter bar jump navigation includes `?nav=internal`
+- No other JS changes needed — modal is pure LiveView server-rendered
 
 ## Summary of Changes
 
