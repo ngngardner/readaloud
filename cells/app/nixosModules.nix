@@ -55,10 +55,13 @@
 
           environment = {
             DATABASE_PATH = "${cfg.dataDir}/readaloud.db";
+            STORAGE_PATH = "${cfg.dataDir}/files";
             PHX_HOST = cfg.host;
             PORT = toString cfg.port;
             LOCALAI_URL = cfg.localaiUrl;
             RELEASE_TMP = "/tmp/readaloud";
+            ELIXIR_ERL_OPTIONS = "+fnu";
+            PHX_CHECK_ORIGIN = "false";
           };
 
           path = with pkgs; [
