@@ -31,3 +31,9 @@ readaloud-*.tar
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# nixago: ignore-linked-files
+/.editorconfig
+/.conform.yaml
+/lefthook.yml
+/treefmt.toml

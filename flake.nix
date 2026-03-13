@@ -6,9 +6,11 @@
 
     std = {
       url = "github:divnix/std";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.devshell.url = "github:numtide/devshell";
-      inputs.nixago.url = "github:nix-community/nixago";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        devshell.url = "github:numtide/devshell";
+        nixago.url = "github:nix-community/nixago";
+      };
     };
 
     treefmt-nix = {
@@ -28,6 +30,8 @@
     let
       systems = [ "x86_64-linux" ];
       eachSystem = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      # CI-safe subset of formatting checks (nix only).
+      # Full formatting (biome, eclint, mix format) runs via nixago treefmt in the devshell.
       treefmtEval = eachSystem (
         pkgs:
         treefmt-nix.lib.evalModule pkgs {
@@ -52,6 +56,16 @@
         formatter = eachSystem (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
         checks = eachSystem (pkgs: {
           formatting = treefmtEval.${pkgs.system}.config.build.check self;
+          statix = pkgs.runCommand "statix-check" { nativeBuildInputs = [ pkgs.statix ]; } ''
+            cd ${self}
+            statix check .
+            touch $out
+          '';
+          deadnix = pkgs.runCommand "deadnix-check" { nativeBuildInputs = [ pkgs.deadnix ]; } ''
+            cd ${self}
+            deadnix .
+            touch $out
+          '';
         });
       };
 }
