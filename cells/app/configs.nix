@@ -3,6 +3,7 @@ let
   inherit (inputs) nixpkgs;
   inherit (inputs.std.lib.dev) mkNixago;
   l = nixpkgs.lib;
+  lintGrep = import ./lint-grep.nix { inherit nixpkgs; };
 in
 {
   treefmt = mkNixago {
@@ -19,6 +20,12 @@ in
         commands = {
           treefmt = {
             run = "${l.getExe nixpkgs.treefmt} --fail-on-change";
+          };
+          ast-grep = {
+            run = "${l.getExe nixpkgs.ast-grep} scan";
+          };
+          lint-grep = {
+            run = "${l.getExe lintGrep}";
           };
         };
       };
