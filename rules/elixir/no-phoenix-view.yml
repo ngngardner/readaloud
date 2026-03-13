@@ -1,0 +1,6 @@
+id: no-phoenix-view
+language: elixir
+severity: error
+rule:
+  pattern: use Phoenix.View
+message: Phoenix.View is removed. Use Phoenix.Component and ~H sigils.

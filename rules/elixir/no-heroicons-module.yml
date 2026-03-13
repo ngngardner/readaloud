@@ -1,0 +1,6 @@
+id: no-heroicons-module
+language: elixir
+severity: error
+rule:
+  pattern: Heroicons.$METHOD($$$)
+message: Don't use Heroicons modules. Use the <.icon name="hero-x-mark" /> component.

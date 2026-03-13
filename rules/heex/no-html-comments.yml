@@ -1,0 +1,6 @@
+id: no-html-comments
+language: html
+severity: warning
+rule:
+  kind: comment
+message: Use HEEx comments <%!-- --%> instead of HTML <!-- --> comments.

@@ -1,0 +1,15 @@
+id: no-phx-update-append
+language: html
+severity: error
+rule:
+  kind: attribute
+  has:
+    kind: attribute_name
+    regex: "^phx-update$"
+  all:
+    - has:
+        kind: quoted_attribute_value
+        has:
+          kind: attribute_value
+          regex: "^append$"
+message: phx-update="append" is deprecated. Use LiveView streams.

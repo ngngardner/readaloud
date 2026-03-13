@@ -1,0 +1,8 @@
+id: no-process-sleep-in-tests
+language: elixir
+severity: error
+rule:
+  pattern: Process.sleep($A)
+files:
+  - "test/**/*.exs"
+message: Don't use Process.sleep/1 in tests. Use Process.monitor/1 + assert_receive or :sys.get_state/1 for synchronization.

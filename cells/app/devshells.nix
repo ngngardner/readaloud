@@ -5,6 +5,7 @@ let
   inherit (inputs) std;
   l = nixpkgs.lib;
   beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+  lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
 {
   default = lib.dev.mkShell {
@@ -38,6 +39,8 @@ in
       nixpkgs.deadnix
       nixpkgs.lefthook
       nixpkgs.conform
+      nixpkgs.ast-grep
+      lintGrep
     ];
 
     env = [
@@ -69,7 +72,7 @@ in
       {
         name = "lint";
         help = "Run all linters";
-        command = "${l.getExe nixpkgs.statix} check . && ${l.getExe nixpkgs.deadnix} . && ${l.getExe nixpkgs.biome} lint apps/readaloud_web/assets/js/ && mix credo --strict";
+        command = "${l.getExe nixpkgs.ast-grep} scan && ${l.getExe lintGrep} && ${l.getExe nixpkgs.statix} check . && ${l.getExe nixpkgs.deadnix} . && ${l.getExe nixpkgs.biome} lint apps/readaloud_web/assets/js/ && mix credo --strict";
       }
       {
         name = "check";

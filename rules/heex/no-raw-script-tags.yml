@@ -1,0 +1,10 @@
+id: no-raw-script-tags
+language: html
+severity: error
+rule:
+  kind: script_element
+files:
+  - "**/*.heex"
+ignores:
+  - "**/root.html.heex"
+message: Don't use raw <script> tags in HEEx. Use colocated JS hooks with :type={Phoenix.LiveView.ColocatedHook}.

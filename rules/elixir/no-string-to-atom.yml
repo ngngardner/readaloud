@@ -1,0 +1,6 @@
+id: no-string-to-atom
+language: elixir
+severity: warning
+rule:
+  pattern: String.to_atom($A)
+message: Avoid String.to_atom/1 — memory leak risk. Use String.to_existing_atom/1 or explicit mapping.

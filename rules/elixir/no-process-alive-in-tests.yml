@@ -1,0 +1,8 @@
+id: no-process-alive-in-tests
+language: elixir
+severity: error
+rule:
+  pattern: Process.alive?($A)
+files:
+  - "test/**/*.exs"
+message: Don't use Process.alive?/1 in tests. Use Process.monitor/1 + assert_receive {:DOWN, ...}.

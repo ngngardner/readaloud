@@ -1,0 +1,15 @@
+id: no-phx-update-prepend
+language: html
+severity: error
+rule:
+  kind: attribute
+  has:
+    kind: attribute_name
+    regex: "^phx-update$"
+  all:
+    - has:
+        kind: quoted_attribute_value
+        has:
+          kind: attribute_value
+          regex: "^prepend$"
+message: phx-update="prepend" is deprecated. Use LiveView streams.

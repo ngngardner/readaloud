@@ -1,0 +1,11 @@
+id: no-banned-http-clients
+language: elixir
+severity: error
+rule:
+  any:
+    - pattern: ":httpoison"
+    - pattern: ":tesla"
+    - pattern: ":httpc"
+files:
+  - "**/mix.exs"
+message: Use Req for HTTP requests. :httpoison, :tesla, and :httpc are banned.

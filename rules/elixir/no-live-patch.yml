@@ -1,0 +1,6 @@
+id: no-live-patch
+language: elixir
+severity: error
+rule:
+  pattern: live_patch($$$)
+message: live_patch is deprecated. Use <.link patch={href}> or push_patch/2.

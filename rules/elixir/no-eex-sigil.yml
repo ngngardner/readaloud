@@ -1,0 +1,7 @@
+id: no-eex-sigil
+language: elixir
+severity: error
+rule:
+  kind: sigil
+  regex: "^~E"
+message: ~E sigil is deprecated. Use ~H sigils or .html.heex files.
