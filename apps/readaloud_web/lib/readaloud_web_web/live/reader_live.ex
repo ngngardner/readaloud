@@ -2,9 +2,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
   use ReadaloudWebWeb, :live_view
 
   @impl true
-  def mount(%{"id" => book_id, "chapter_id" => chapter_id}, _session, socket) do
+  def mount(%{"id" => book_id, "chapter_id" => chapter_id} = params, _session, socket) do
     book_id = String.to_integer(book_id)
     chapter_id = String.to_integer(chapter_id)
+    is_internal_nav = params["nav"] == "internal"
 
     book = ReadaloudLibrary.get_book!(book_id)
     chapter = ReadaloudLibrary.get_chapter!(chapter_id)
@@ -21,9 +22,29 @@ defmodule ReadaloudWebWeb.ReaderLive do
     models = fetch_models()
     audio_state = determine_audio_state(chapter_id, audio)
 
+    # Conflict detection: only on external navigation (no ?nav=internal)
+    {show_conflict, conflict_chapter} =
+      if connected?(socket) && !is_internal_nav && progress &&
+           progress.current_chapter_id != chapter_id do
+        current_idx = Enum.find_index(chapters, &(&1.id == chapter_id)) || 0
+        last_read_idx = Enum.find_index(chapters, &(&1.id == progress.current_chapter_id))
+
+        if last_read_idx && last_read_idx > current_idx do
+          conflict_ch = Enum.at(chapters, last_read_idx)
+          {true, conflict_ch}
+        else
+          {false, nil}
+        end
+      else
+        {false, nil}
+      end
+
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
-      ReadaloudReader.upsert_progress(%{book_id: book_id, current_chapter_id: chapter_id})
+      # Only update progress if no conflict detected
+      unless show_conflict do
+        ReadaloudReader.upsert_progress(%{book_id: book_id, current_chapter_id: chapter_id})
+      end
     end
 
     {:ok,
@@ -48,7 +69,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
        initial_position_ms: (progress && progress.audio_position_ms) || 0,
        page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}",
        dark_themes: ReadaloudWebWeb.ThemeSelector.dark_themes(),
-       light_themes: ReadaloudWebWeb.ThemeSelector.light_themes()
+       light_themes: ReadaloudWebWeb.ThemeSelector.light_themes(),
+       show_conflict_modal: show_conflict,
+       conflict_chapter: conflict_chapter
      )}
   end
 
@@ -73,7 +96,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   def handle_event("prev_chapter", _params, socket) do
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
     end
   end
 
@@ -81,7 +104,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   def handle_event("next_chapter", _params, socket) do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
     end
   end
 
@@ -175,6 +198,25 @@ defmodule ReadaloudWebWeb.ReaderLive do
   @impl true
   def handle_event("select_voice", %{"voice" => voice}, socket) do
     {:noreply, assign(socket, selected_voice: voice)}
+  end
+
+  @impl true
+  def handle_event("dismiss_conflict", _params, socket) do
+    # User chose "Stay" — update progress to current chapter
+    ReadaloudReader.upsert_progress(%{
+      book_id: socket.assigns.book.id,
+      current_chapter_id: socket.assigns.chapter.id
+    })
+    {:noreply, assign(socket, show_conflict_modal: false, conflict_chapter: nil)}
+  end
+
+  @impl true
+  def handle_event("go_to_conflict_chapter", _params, socket) do
+    ch = socket.assigns.conflict_chapter
+    {:noreply,
+     socket
+     |> assign(show_conflict_modal: false, conflict_chapter: nil)
+     |> push_navigate(to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}" <> "?nav=internal")}
   end
 
   # -- PubSub handler: audio generation completed --
@@ -380,6 +422,33 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <.icon name="hero-arrow-down" class="w-4 h-4" /> Re-sync
       </button>
 
+      <%!-- Accidental navigation conflict modal --%>
+      <div
+        :if={@show_conflict_modal}
+        class="modal modal-open"
+      >
+        <div class="modal-box">
+          <h3 class="font-bold text-lg mb-2">Continue reading?</h3>
+          <p class="text-base-content/70">
+            Your last reading position is
+            <span class="font-semibold text-base-content">
+              <%= if @conflict_chapter do %>
+                Chapter <%= @conflict_chapter.title || @conflict_chapter.number %>
+              <% end %>
+            </span>.
+          </p>
+          <div class="modal-action">
+            <button phx-click="dismiss_conflict" class="btn btn-ghost">
+              Stay on <%= @chapter.title || "Chapter #{@chapter.number}" %>
+            </button>
+            <button phx-click="go_to_conflict_chapter" class="btn btn-primary">
+              Go to <%= if @conflict_chapter, do: @conflict_chapter.title || "Chapter #{@conflict_chapter.number}" %>
+            </button>
+          </div>
+        </div>
+        <div class="modal-backdrop"><button phx-click="dismiss_conflict">close</button></div>
+      </div>
+
       <%!-- 3. Bottom bar: three states --%>
 
       <%!-- State 1: No audio --%>
@@ -539,14 +608,14 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div :if={@audio_state == :none} class="max-w-[700px] mx-auto px-4 pb-24">
         <div class="flex justify-between mt-6">
           <%= if prev = prev_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}" <> "?nav=internal"} class="btn btn-ghost btn-sm">
               &larr; Previous
             </.link>
           <% else %>
             <div></div>
           <% end %>
           <%= if nxt = next_chapter(@chapter, @chapters) do %>
-            <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}"} class="btn btn-ghost btn-sm">
+            <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}" <> "?nav=internal"} class="btn btn-ghost btn-sm">
               Next &rarr;
             </.link>
           <% end %>
