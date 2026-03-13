@@ -4,6 +4,9 @@ defmodule ReadaloudWebWeb.ThemeSelector do
   @dark_themes ~w(abyss blood coffee dark dim dracula night sunset vampire)
   @light_themes ~w(acid autumn bumblebee cmyk corporate cupcake cyberpunk emerald fantasy garden lemonade light lofi nord pastel retro silk valentine wireframe)
 
+  def dark_themes, do: @dark_themes
+  def light_themes, do: @light_themes
+
   def theme_modal(assigns) do
     assigns =
       assigns

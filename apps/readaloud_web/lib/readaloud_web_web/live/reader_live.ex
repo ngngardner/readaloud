@@ -46,7 +46,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
        generation_progress: 0,
        initial_scroll: (progress && progress.scroll_position) || 0.0,
        initial_position_ms: (progress && progress.audio_position_ms) || 0,
-       page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
+       page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}",
+       dark_themes: ReadaloudWebWeb.ThemeSelector.dark_themes(),
+       light_themes: ReadaloudWebWeb.ThemeSelector.light_themes()
      )}
   end
 
@@ -219,7 +221,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div
         id="reader-settings"
         class="fixed top-16 right-4 z-50 hidden
-               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72"
+               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72
+               max-h-[calc(100vh-5rem)] overflow-y-auto"
       >
         <h3 class="text-sm font-semibold mb-3">Reading Settings</h3>
 
@@ -289,6 +292,46 @@ defmodule ReadaloudWebWeb.ReaderLive do
               class="toggle toggle-sm toggle-primary"
             />
           </label>
+
+          <%!-- Theme --%>
+          <div class="divider my-1"></div>
+          <label class="text-xs text-base-content/60 mb-2 block">Theme</label>
+
+          <div class="mb-2">
+            <div class="text-[10px] uppercase tracking-widest text-base-content/40 mb-1">Dark</div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                :for={theme <- @dark_themes}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
+                  <div class="w-1.5 h-1.5 rounded-full bg-base-100"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-base-content/40 mb-1">Light</div>
+            <div class="flex flex-wrap gap-1">
+              <button
+                :for={theme <- @light_themes}
+                data-set-theme={theme}
+                class="theme-swatch"
+                title={theme}
+              >
+                <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
+                  <div class="w-1.5 h-1.5 rounded-full bg-base-100"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

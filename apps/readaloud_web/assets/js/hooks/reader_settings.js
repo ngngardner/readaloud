@@ -29,6 +29,8 @@ const ReaderSettingsHook = {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
       });
     }
+
+    this.setupThemeSwatches();
   },
 
   applySettings() {
@@ -40,7 +42,29 @@ const ReaderSettingsHook = {
     content.style.fontSize = this.settings.fontSize + "px";
     content.style.lineHeight = this.settings.lineHeight;
     content.style.maxWidth = this.settings.maxWidth + "px";
-  }
+  },
+
+  setupThemeSwatches() {
+    const swatches = document.querySelectorAll("[data-set-theme]");
+    const currentTheme = localStorage.getItem("phx:theme") || "dark";
+
+    swatches.forEach(btn => {
+      // Mark active
+      if (btn.dataset.setTheme === currentTheme) {
+        btn.classList.add("active");
+      }
+
+      btn.addEventListener("click", () => {
+        const theme = btn.dataset.setTheme;
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("phx:theme", theme);
+
+        // Update active state
+        swatches.forEach(s => s.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+  },
 };
 
 export default ReaderSettingsHook;

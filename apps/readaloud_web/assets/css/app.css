@@ -100,6 +100,21 @@ body {
   color: oklch(from var(--color-base-content) l c h / 40%);
 }
 
+/* Theme swatches in reader settings */
+.theme-swatch {
+  padding: 4px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.theme-swatch:hover {
+  border-color: oklch(from var(--color-base-content) l c h / 30%);
+}
+.theme-swatch.active {
+  border-color: var(--color-primary);
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * {
