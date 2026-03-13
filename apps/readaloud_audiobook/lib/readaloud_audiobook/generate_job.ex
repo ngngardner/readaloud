@@ -45,7 +45,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
       {:error, reason} ->
         task = update_task(task, %{status: "failed", error_message: "#{inspect(reason)}"})
         broadcast_task_update(task)
-        {:error, reason}
+        # Return :ok so Oban doesn't retry — our ensure_audio_generated handles retry policy.
+        # Oban retries are reserved for crash recovery (process killed by restart).
+        :ok
     end
   end
 
