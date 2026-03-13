@@ -1,12 +1,12 @@
 # Idiomatic std/hive Refactor — Design Spec
 
 **Date:** 2026-03-13
-**Status:** Approved
+**Status:** Approved (rev3)
 **Predecessor:** `/home/noah/projects/readaloud/docs/superpowers/specs/2026-03-12-nix-infrastructure-overhaul-design.md`
 
 ## Overview
 
-Refactor the readaloud flake from a hybrid std/manual pattern to idiomatic divnix/std and divnix/hive usage. Move all outputs into cell blocks where possible. Drop treefmt-nix. Use hive for NixOS module export.
+Refactor the readaloud flake from a hybrid std/manual pattern to idiomatic divnix/std and divnix/hive usage. Move all outputs into cell blocks. Drop treefmt-nix. Use `(functions "nixosModules")` + `std.pick` to harvest system-independent NixOS modules.
 
 ## Motivation
 
@@ -14,9 +14,8 @@ The initial infrastructure overhaul (2026-03-12) used std for devshells/packages
 
 - Using `(nixago "configs")` block type instead of inline nixago configs in devshells.nix
 - Using `(anything "checks")` block type instead of manual `runCommand` definitions in flake.nix
-- Using `hive.blockTypes.nixosConfigurations` + `hive.collect` instead of manual `import ./cells/app/nixos.nix`
+- Using `(functions "nixosModules")` + `std.pick` instead of manual import for NixOS module export
 - Dropping `treefmt-nix` input — treefmt config is defined once in the nixago block
-- Removing redundant package declarations from devshells.nix
 
 **Reference pattern:** `/home/noah/projects/configs/flake.nix` — uses `hive.growOn`, `hive.blockTypes`, `hive.collect`, `nixago "configs"` block, `std.harvest`.
 
@@ -35,44 +34,51 @@ inputs = {
 };
 ```
 
-**Removed:** `treefmt-nix` (replaced by nixago treefmt config).
+**Removed:** `treefmt-nix` (replaced by nixago treefmt config), `devshell` and `nixago` explicit inputs.
 
-**Changed:** `std` now follows through `hive` (matching configs pattern). The `devshell` and `nixago` inputs previously injected into std are no longer needed — hive provides them.
+**Changed:** `std` now follows through `hive` (matching configs pattern). Hive's flake.nix wires its own `devshell` and `nixago` inputs into std before exposing it, so `std.follows = "hive/std"` includes all integrations (devshell, nixago) automatically. No separate follows needed.
 
 ## Cell Blocks
 
 ```nix
 cellBlocks =
   with std.blockTypes;
-  with hive.blockTypes;
   [
     (devshells "devshells")
     (installables "packages")
     (nixago "configs")
     (anything "checks")
-    nixosConfigurations
+    (functions "nixosModules")
   ];
 ```
+
+**`functions` for NixOS modules:** The `functions` block type is documented as "use this for all types of modules and profiles." It's a pass-through container with no actions or system-dependent behavior. Combined with `std.pick` (which strips the system prefix), it produces the correct `nixosModules.<name>` output shape.
 
 ## File Structure
 
 ```
 cells/app/
-├── devshells.nix             # Dev shell — references cell.configs.*, minimal packages
+├── devshells.nix             # Dev shell — references cell.configs.*, app + tool packages
 ├── configs.nix               # nixago block: treefmt, lefthook, conform, editorconfig
-├── checks.nix                # anything block: formatting, statix, deadnix, biome-lint
-├── nixosConfigurations.nix   # hive block: readaloud NixOS module
+├── treefmt-formatters.nix    # Shared treefmt formatter defs (used by configs.nix + checks)
+├── nixosModules.nix          # functions block: readaloud NixOS service module
 ├── checks/
-│   └── e2e.nix              # NixOS VM test (unchanged, referenced from flake.nix)
+│   ├── default.nix           # Re-exports all checks (except e2e)
+│   ├── formatting.nix        # treefmt --fail-on-change (nixfmt, biome, mix format)
+│   ├── statix.nix            # statix check
+│   ├── deadnix.nix           # deadnix check
+│   ├── biome-lint.nix        # biome lint check
+│   ├── credo.nix             # mix credo --strict (reuses fetchMixDeps)
+│   └── e2e.nix               # NixOS VM test (KVM, not wired up)
 ├── packages/
 │   ├── default.nix           # Re-exports readaloud as default
 │   └── readaloud/
 │       └── default.nix       # mixRelease build (unchanged)
 ```
 
-**Renamed:** `nixos.nix` → `nixosConfigurations.nix` (matches hive block type naming convention)
+**Renamed:** `nixos.nix` → `nixosModules.nix` (matches `functions "nixosModules"` block type)
 
-**New:** `configs.nix`, `checks.nix`
+**New:** `configs.nix`, `checks/` directory with per-check files (mirrors packages/ structure)
 
 **Deleted:** inline nixago configs from devshells.nix (moved to configs.nix)
 
@@ -100,43 +106,31 @@ cells/app/
         cellsFrom = ./cells;
         cellBlocks =
           with std.blockTypes;
-          with hive.blockTypes;
           [
             (devshells "devshells")
             (installables "packages")
             (nixago "configs")
             (anything "checks")
-            nixosConfigurations
+            (functions "nixosModules")
           ];
-      }
-      {
-        nixosConfigurations = hive.collect self "nixosConfigurations";
       }
       {
         devShells = std.harvest self [ "app" "devshells" ];
         packages = std.harvest self [ "app" "packages" ];
         checks = std.harvest self [ "app" "checks" ];
-      }
-      {
-        # E2E test requires KVM — not in default checks.
-        # Run explicitly: nix build .#e2e-test.x86_64-linux
-        e2e-test = nixpkgs.lib.genAttrs [ "x86_64-linux" ] (
-          system: import ./cells/app/checks/e2e.nix {
-            inherit self;
-            pkgs = nixpkgs.legacyPackages.${system};
-          }
-        );
+        nixosModules = std.pick self [ "app" "nixosModules" ];
       };
 }
 ```
 
 **Changes from current flake.nix:**
 - `hive.growOn` instead of `std.growOn`
-- `hive.collect` for nixosConfigurations (system-independent harvest)
-- `std.harvest` for devShells, packages, checks
+- `std.harvest` for devShells, packages, checks (per-system outputs)
+- `std.pick` for nixosModules (system-independent — strips system prefix)
 - No `eachSystem`, no `treefmtEval`, no `runCommand` — all moved to cells
 - No `formatter` output — use `treefmt` from devshell
-- Four "soil layers" in growOn (hive configs, std harvests, manual extras)
+- Single soil layer — all outputs harvested via `std.harvest` or `std.pick`
+- No e2e-test output — `checks/e2e.nix` kept in repo but not wired up until KVM is available
 
 ## cells/app/configs.nix (nixago block)
 
@@ -149,24 +143,7 @@ let
 in
 {
   treefmt = mkNixago {
-    data = {
-      formatter = {
-        nixfmt = {
-          command = l.getExe nixpkgs.nixfmt;
-          includes = [ "*.nix" ];
-        };
-        biome = {
-          command = l.getExe nixpkgs.biome;
-          options = [ "format" "--write" ];
-          includes = [ "*.js" ];
-        };
-        mix-format = {
-          command = "mix";
-          options = [ "format" ];
-          includes = [ "*.ex" "*.exs" ];
-        };
-      };
-    };
+    data = { formatter = import ./treefmt-formatters.nix { inherit nixpkgs l; }; };
     output = "treefmt.toml";
     format = "toml";
   };
@@ -177,10 +154,6 @@ in
         commands = {
           treefmt = {
             run = "${l.getExe nixpkgs.treefmt} --fail-on-change";
-          };
-          credo = {
-            run = "mix credo --strict";
-            glob = "*.{ex,exs}";
           };
         };
       };
@@ -256,7 +229,33 @@ in
 
 **eclint replaced:** Removed from treefmt formatters. Editorconfig enforcement is via `editorconfig-checker` (the engine in the editorconfig nixago config validates format; for CI, the checks block can add a check if needed). eclint is unmaintained since 2020.
 
-## cells/app/checks.nix (anything block)
+## cells/app/treefmt-formatters.nix (shared)
+
+```nix
+{ nixpkgs, l }:
+{
+  nixfmt = {
+    command = l.getExe nixpkgs.nixfmt;
+    includes = [ "*.nix" ];
+  };
+  biome = {
+    command = l.getExe nixpkgs.biome;
+    options = [ "format" "--write" ];
+    includes = [ "*.js" ];
+  };
+  mix-format = {
+    command = "mix";
+    options = [ "format" ];
+    includes = [ "*.ex" "*.exs" ];
+  };
+}
+```
+
+Not a cell block — a plain Nix file imported by both `configs.nix` (nixago treefmt) and `checks/formatting.nix` (CI check). Single source of truth for formatter definitions.
+
+## cells/app/checks/ (anything block — directory structure)
+
+### checks/default.nix
 
 ```nix
 { inputs, cell }:
@@ -264,43 +263,114 @@ let
   inherit (inputs) nixpkgs;
   self = inputs.self;
   l = nixpkgs.lib;
+  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+
+  # Reuse the fetchMixDeps from the package build via passthru — single source of truth.
+  inherit (cell.packages.readaloud.passthru) mixFodDeps;
+
+  # Shared treefmt formatter definitions — same file used by configs.nix
+  treefmtData = { formatter = import ../treefmt-formatters.nix { inherit nixpkgs l; }; };
 in
 {
-  formatting = nixpkgs.runCommand "formatting-check" {
-    nativeBuildInputs = [ nixpkgs.treefmt nixpkgs.nixfmt nixpkgs.biome ];
-  } ''
-    cd ${self}
-    treefmt --fail-on-change
-    touch $out
-  '';
-
-  statix = nixpkgs.runCommand "statix-check" {
-    nativeBuildInputs = [ nixpkgs.statix ];
-  } ''
-    cd ${self}
-    statix check .
-    touch $out
-  '';
-
-  deadnix = nixpkgs.runCommand "deadnix-check" {
-    nativeBuildInputs = [ nixpkgs.deadnix ];
-  } ''
-    cd ${self}
-    deadnix --fail -L .
-    touch $out
-  '';
-
-  biome-lint = nixpkgs.runCommand "biome-lint-check" {
-    nativeBuildInputs = [ nixpkgs.biome ];
-  } ''
-    cd ${self}
-    biome lint apps/readaloud_web/assets/js/
-    touch $out
-  '';
+  formatting = import ./formatting.nix { inherit nixpkgs self l treefmtData; };
+  statix = import ./statix.nix { inherit nixpkgs self; };
+  deadnix = import ./deadnix.nix { inherit nixpkgs self; };
+  biome-lint = import ./biome-lint.nix { inherit nixpkgs self; };
+  credo = import ./credo.nix { inherit nixpkgs self beamPackages mixFodDeps; };
 }
 ```
 
-**Note on formatting check:** The treefmt `--fail-on-change` check in the sandbox may have issues with `mix format` (not available in sandbox). The check includes only nixfmt and biome — the CI-safe subset. mix format runs via lefthook locally.
+### checks/formatting.nix
+
+```nix
+{ nixpkgs, self, l, treefmtData }:
+let
+  # Generate treefmt.toml from the same data as configs.nix nixago block.
+  # Single source of truth — no duplicated formatter definitions.
+  treefmtConfig = (nixpkgs.formats.toml { }).generate "treefmt.toml" treefmtData;
+  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+in
+nixpkgs.runCommand "formatting-check" {
+  # treefmt.toml references absolute store paths for commands, but
+  # nativeBuildInputs ensures the tools are built and available.
+  nativeBuildInputs = [ nixpkgs.treefmt nixpkgs.nixfmt nixpkgs.biome beamPackages.elixir ];
+} ''
+  cp -r ${self} source && chmod -R +w source && cd source
+  export HOME=$TMPDIR
+  cp ${treefmtConfig} treefmt.toml
+  treefmt --no-cache --fail-on-change
+  touch $out
+''
+```
+
+### checks/statix.nix
+
+```nix
+{ nixpkgs, self }:
+nixpkgs.runCommand "statix-check" {
+  nativeBuildInputs = [ nixpkgs.statix ];
+} ''
+  cd ${self}
+  statix check .
+  touch $out
+''
+```
+
+### checks/deadnix.nix
+
+```nix
+{ nixpkgs, self }:
+nixpkgs.runCommand "deadnix-check" {
+  nativeBuildInputs = [ nixpkgs.deadnix ];
+} ''
+  cd ${self}
+  deadnix --fail -L .
+  touch $out
+''
+```
+
+### checks/biome-lint.nix
+
+```nix
+{ nixpkgs, self }:
+nixpkgs.runCommand "biome-lint-check" {
+  nativeBuildInputs = [ nixpkgs.biome ];
+} ''
+  cd ${self}
+  biome lint apps/readaloud_web/assets/js/
+  touch $out
+''
+```
+
+### checks/credo.nix
+
+```nix
+{ nixpkgs, self, beamPackages, mixFodDeps }:
+nixpkgs.runCommand "credo-check" {
+  nativeBuildInputs = [ beamPackages.elixir beamPackages.erlang beamPackages.hex beamPackages.rebar3 ];
+} ''
+  cp -r ${self} source && chmod -R +w source && cd source
+  export HOME=$TMPDIR
+  export HEX_HOME="$TMPDIR/.hex"
+  export MIX_HOME="$TMPDIR/.mix"
+  export MIX_ENV=dev
+  export MIX_DEPS_PATH="$TMPDIR/deps"
+  export REBAR_GLOBAL_CONFIG_DIR="$TMPDIR/rebar3"
+  export REBAR_CACHE_DIR="$TMPDIR/rebar3.cache"
+  cp --no-preserve=mode -R ${mixFodDeps} "$MIX_DEPS_PATH"
+  mix deps.compile --no-deps-check
+  mix credo --strict
+  touch $out
+''
+```
+
+**Directory structure mirrors packages/.** Each check is a separate file imported by `default.nix`. The e2e test (`checks/e2e.nix`) is excluded from the default attrset — requires KVM, not wired up.
+
+**Sandbox strategies:**
+- **treefmt.toml:** gitignored (nixago-generated), so the formatting check generates its own via `pkgs.formats.toml`. Now includes `mix format` since Elixir is available.
+- **credo:** Accesses `mixFodDeps` via `cell.packages.readaloud.passthru.mixFodDeps` — single source of truth, no duplicated hash.
+
+**Package change required:** Add `passthru = { inherit mixFodDeps; };` to the `mixRelease` call in `packages/readaloud/default.nix` to expose the deps derivation.
 
 ## cells/app/devshells.nix (simplified)
 
@@ -311,6 +381,7 @@ let
   inherit (inputs.std) lib;
   inherit (inputs) std;
   l = nixpkgs.lib;
+  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
 in
 {
   default = lib.dev.mkShell {
@@ -325,15 +396,25 @@ in
       cell.configs.editorconfig
     ];
 
-    packages = with nixpkgs; [
-      # App deps
-      elixir_1_17
-      erlang_27
-      nodejs_22
-      sqlite
-      calibre
-      poppler-utils
-      inotify-tools
+    packages = [
+      # App deps — use same beamPackages as package build for version consistency
+      beamPackages.elixir
+      beamPackages.erlang
+      nixpkgs.nodejs_22
+      nixpkgs.sqlite
+      nixpkgs.calibre
+      nixpkgs.poppler-utils
+      nixpkgs.inotify-tools
+
+      # Dev tools — nixago generates config files and runs hooks,
+      # but does NOT add tool binaries to PATH. Must be explicit.
+      nixpkgs.treefmt
+      nixpkgs.nixfmt
+      nixpkgs.biome
+      nixpkgs.statix
+      nixpkgs.deadnix
+      nixpkgs.lefthook
+      nixpkgs.conform
     ];
 
     env = [
@@ -368,22 +449,20 @@ in
 }
 ```
 
-**Removed from packages:** treefmt, nixfmt, biome, eclint, statix, deadnix, lefthook, conform. These are provided by the nixago configs integration automatically.
+**Clarification on nixago and packages:** Nixago generates config files (treefmt.toml, lefthook.yml, etc.) and runs shell hooks on devshell entry. It does **not** add tool binaries to `$PATH`. Tool packages must be listed explicitly in `packages`, matching the configs reference pattern (`/home/noah/projects/configs/nix/core/shells.nix`).
 
-**Remaining packages:** Only app-specific deps that aren't provided by nixago (elixir, erlang, node, sqlite, calibre, poppler-utils, inotify-tools).
+**Moved to configs.nix:** Inline nixago config definitions (treefmt data, lefthook data, etc.). The devshell references them via `cell.configs.*`.
 
-## cells/app/nixosConfigurations.nix (hive block)
+## cells/app/nixosModules.nix (functions block)
 
 ```nix
 { inputs, cell }:
-let
-  package = cell.packages.default;
-in
 {
   readaloud =
     { config, lib, pkgs, ... }:
     let
       cfg = config.services.readaloud;
+      package = cell.packages.default;
     in
     {
       options.services.readaloud = {
@@ -443,17 +522,24 @@ in
 }
 ```
 
-**Key change:** `cell.packages.default` replaces `self.packages.x86_64-linux.default` — the package is accessed through the cell's own block, not the flake output. This eliminates the hardcoded system string.
+**Key changes from current nixos.nix:**
+- Now a proper cell block function (`{ inputs, cell }:`) instead of `{ package }:`
+- Uses `cell.packages.default` to access the package (no hardcoded system string)
+- Harvested via `std.pick self ["app" "nixosModules"]` — produces `nixosModules.readaloud` (system-independent)
+- `std.pick` works because `functions` blocks produce identical values across all systems — it safely grabs the first system's result
 
 ## Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Drop `treefmt-nix` | Single treefmt config in nixago, no duplication |
-| `std.follows = "hive/std"` | std comes through hive, matching configs pattern |
-| `hive.collect` for nixosConfigurations | System-independent harvest, proper hive pattern |
+| Drop `treefmt-nix` | Single treefmt config in nixago, no duplication; CI check generates its own config |
+| `std.follows = "hive/std"` | std comes through hive (includes devshell + nixago integrations automatically) |
+| `(functions "nixosModules")` + `std.pick` | `functions` is documented for modules/profiles; `std.pick` strips system prefix for system-independent output |
 | `(anything "checks")` for checks | Harvestable block type for derivation-based checks |
+| `checks/` directory structure | Mirrors `packages/` pattern — `default.nix` re-exports, individual check files |
 | Remove eclint | Unmaintained since 2020; editorconfig validated by custom engine |
 | Drop `formatter` output | `treefmt` available in devshell; `nix fmt` is redundant |
-| `cell.packages.default` in nixos module | Avoids hardcoded system string |
-| Keep e2e-test manual | KVM-dependent, shouldn't be in default checks |
+| Keep tool packages in devshells.nix | Nixago generates config files and runs hooks, but may not add binaries to PATH (verify in practice) |
+| Generate treefmt.toml in checks | `treefmt.toml` is gitignored (nixago-generated); CI check uses `pkgs.formats.toml` to create config inline |
+| `cell.packages.default` in nixos module | Avoids hardcoded system string; accessed through cell's own block |
+| e2e-test not wired up | KVM not available (BIOS SVM disabled); `checks/e2e.nix` kept in repo for future use |
