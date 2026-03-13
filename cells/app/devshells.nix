@@ -9,7 +9,8 @@ let
 
   l = nixpkgs.lib;
 
-  # Keep in sync with treefmt-nix evalModule in flake.nix
+  # Note: treefmt-nix evalModule in flake.nix only checks nixfmt (CI-safe subset).
+  # Full formatting (biome, eclint, mix format) runs here via nixago.
   treefmtConfig = {
     data = {
       formatter = {

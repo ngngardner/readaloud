@@ -63,7 +63,7 @@
           '';
           deadnix = pkgs.runCommand "deadnix-check" { nativeBuildInputs = [ pkgs.deadnix ]; } ''
             cd ${self}
-            deadnix .
+            deadnix --fail -L .
             touch $out
           '';
         });
