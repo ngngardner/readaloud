@@ -58,6 +58,9 @@
           "app"
           "packages"
         ];
+        nixosModules.readaloud = import ./cells/app/nixos.nix {
+          package = self.packages.x86_64-linux.default;
+        };
         formatter = eachSystem (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
         checks = eachSystem (pkgs: {
           formatting = treefmtEval.${pkgs.system}.config.build.check self;
