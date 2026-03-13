@@ -208,7 +208,7 @@ defmodule ReadaloudWebWeb.LibraryLive do
               <% :new -> %>
                 <span class="badge badge-xs badge-info absolute top-2 right-2">New</span>
               <% {:progress, read, total} -> %>
-                <span class="badge badge-xs badge-warning absolute top-2 right-2">
+                <span class="badge badge-xs badge-neutral absolute top-2 right-2">
                   {read}/{total}
                 </span>
               <% _ -> %>
