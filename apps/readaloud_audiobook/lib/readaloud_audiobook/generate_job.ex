@@ -1,5 +1,5 @@
 defmodule ReadaloudAudiobook.GenerateJob do
-  use Oban.Worker, queue: :tts, max_attempts: 3
+  use Oban.Worker, queue: :tts, max_attempts: 20
 
   alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
