@@ -22,6 +22,8 @@ let
     ];
     formatter = import ../treefmt-formatters.nix { inherit nixpkgs l; };
   };
+
+  lintGrep = import ../lint-grep.nix { inherit nixpkgs; };
 in
 {
   formatting = import ./formatting.nix {
@@ -37,6 +39,7 @@ in
   statix = import ./statix.nix { inherit nixpkgs self; };
   deadnix = import ./deadnix.nix { inherit nixpkgs self; };
   biome-lint = import ./biome-lint.nix { inherit nixpkgs self; };
+  ast-grep = import ./ast-grep.nix { inherit nixpkgs self lintGrep; };
   credo = import ./credo.nix {
     inherit
       nixpkgs
