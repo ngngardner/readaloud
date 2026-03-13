@@ -18,16 +18,14 @@ if config_env() == :prod do
       """
 
   host = System.get_env("PHX_HOST", "localhost")
+  port = String.to_integer(System.get_env("PORT", "4000"))
 
   config :readaloud_web, ReadaloudWebWeb.Endpoint,
-    url: [host: host, port: 4000],
-    http: [ip: {0, 0, 0, 0}, port: 4000],
+    url: [host: host, port: port],
+    http: [ip: {0, 0, 0, 0}, port: port],
     secret_key_base: secret_key_base,
     server: true
 
   config :readaloud_tts,
-    base_url: System.get_env("LOCALAI_URL", "http://localai:8080"),
-    tts_model: System.get_env("TTS_MODEL", "kokoro"),
-    voice: System.get_env("TTS_VOICE", "af_heart"),
-    stt_model: System.get_env("STT_MODEL", "whisper-large-v3")
+    base_url: System.get_env("LOCALAI_URL", "http://localai:8080")
 end
