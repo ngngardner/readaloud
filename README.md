@@ -13,7 +13,7 @@ Self-hosted AI audiobook reader with word-level highlighting. Import EPUB and PD
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/readaloud.git
+git clone https://github.com/ngngardner/readaloud.git
 cd readaloud
 docker compose up
 ```
@@ -36,9 +36,6 @@ Edit `docker-compose.yml`: change the LocalAI image to `localai/localai:latest` 
 | `SECRET_KEY_BASE` | (required) | Phoenix secret — generate with `mix phx.gen.secret` |
 | `PHX_HOST` | `localhost` | Hostname for the web server |
 | `LOCALAI_URL` | `http://localai:8080` | LocalAI endpoint |
-| `TTS_MODEL` | `kokoro` | TTS model name in LocalAI |
-| `TTS_VOICE` | `af_heart` | Default voice |
-| `STT_MODEL` | `whisper-large-v3` | Whisper model for word timing extraction |
 | `DATABASE_PATH` | `/data/readaloud.db` | SQLite database path |
 | `STORAGE_PATH` | `/data/files` | Book and audio file storage |
 
