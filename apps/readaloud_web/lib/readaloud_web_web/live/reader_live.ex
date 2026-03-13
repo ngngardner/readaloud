@@ -451,19 +451,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
             <div class="flex-1 [.collapsed_&]:hidden"></div>
 
-            <%!-- Speed dropdown (hidden when collapsed) --%>
-            <div class="dropdown dropdown-top dropdown-end [.collapsed_&]:hidden">
-              <button tabindex="0" class="btn btn-ghost btn-xs">Speed</button>
-              <div tabindex="0" class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]">
-                <button
-                  :for={speed <- ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"]}
-                  data-speed={speed}
-                  class="btn btn-ghost btn-xs w-full justify-center"
-                >
-                  <%= speed %>x
-                </button>
-              </div>
-            </div>
+            <%!-- Speed badge (hidden when collapsed) --%>
+            <button
+              id="speed-badge"
+              class="btn btn-ghost btn-xs [.collapsed_&]:hidden font-mono"
+              style="font-variant-numeric: tabular-nums;"
+              title="Playback speed (click to cycle)"
+            >
+              1x
+            </button>
 
             <%!-- Volume slider (hidden when collapsed, hidden on mobile) --%>
             <div class="hidden sm:flex items-center gap-1 [.collapsed_&]:!hidden">
