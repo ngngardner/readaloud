@@ -9,7 +9,7 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
   check_grep() {
     local pattern="$1" include="$2" msg="$3"
     local matches
-    if matches=$(${gnugrep}/bin/grep -rn "$pattern" --include="$include" . 2>/dev/null); then
+    if matches=$(${gnugrep}/bin/grep -rn "$pattern" --include="$include" --exclude-dir=deps --exclude-dir=_build --exclude-dir=node_modules . 2>/dev/null); then
       echo "ERROR: $msg"
       echo "$matches"
       ((errors++)) || true
@@ -17,7 +17,7 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
   }
 
   # no-flash-group-outside-layouts
-  flash_matches=$(${findutils}/bin/find . -name '*.heex' ! -name '*layout*' ! -path '*/layouts/*' \
+  flash_matches=$(${findutils}/bin/find . -name '*.heex' ! -name '*layout*' ! -path '*/layouts/*' ! -path '*/deps/*' ! -path '*/_build/*' \
     -exec ${gnugrep}/bin/grep -ln '<\.flash_group' {} + 2>/dev/null || true)
   if [ -n "$flash_matches" ]; then
     echo "ERROR: <.flash_group> must only be used inside layouts."
@@ -50,7 +50,7 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
     "Don't use @apply in CSS. Write Tailwind classes directly on elements."
 
   # no-is-prefix-functions
-  is_matches=$(${gnugrep}/bin/grep -rEn '^\s*(def|defp)\s+is_' --include='*.ex' --include='*.exs' . 2>/dev/null \
+  is_matches=$(${gnugrep}/bin/grep -rEn '^\s*(def|defp)\s+is_' --include='*.ex' --include='*.exs' --exclude-dir=deps --exclude-dir=_build . 2>/dev/null \
     | ${gnugrep}/bin/grep -v 'defguard' || true)
   if [ -n "$is_matches" ]; then
     echo "ERROR: Predicate functions should end with ? not start with is_. Reserve is_ for guards."
