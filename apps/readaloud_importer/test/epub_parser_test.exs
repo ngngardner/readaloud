@@ -12,7 +12,9 @@ defmodule ReadaloudImporter.EpubParserTest do
 
   describe "extract_chapters/1" do
     test "splits HTML content into chapters by heading tags" do
-      html = "<h1>Chapter 1</h1><p>First chapter content.</p><h1>Chapter 2</h1><p>Second chapter content.</p>"
+      html =
+        "<h1>Chapter 1</h1><p>First chapter content.</p><h1>Chapter 2</h1><p>Second chapter content.</p>"
+
       chapters = EpubParser.extract_chapters(html)
       assert length(chapters) == 2
       assert Enum.at(chapters, 0).title == "Chapter 1"

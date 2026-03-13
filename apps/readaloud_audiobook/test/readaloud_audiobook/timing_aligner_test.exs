@@ -6,6 +6,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — exact match" do
     test "passes through timings when words match exactly" do
       source = "Hello world"
+
       timings = [
         %{word: "Hello", start_ms: 0, end_ms: 300},
         %{word: "world", start_ms: 300, end_ms: 600}
@@ -24,6 +25,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — Whisper splits a word" do
     test "merges split word timings (slidin + G → sliding)" do
       source = "reaching up and sliding her chalk"
+
       timings = [
         %{word: "reaching", start_ms: 0, end_ms: 400},
         %{word: "up", start_ms: 400, end_ms: 600},
@@ -54,6 +56,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — Whisper merges words" do
     test "handles Whisper merging two source words into one" do
       source = "good bye friend"
+
       timings = [
         %{word: "goodbye", start_ms: 0, end_ms: 500},
         %{word: "friend", start_ms: 500, end_ms: 800}
@@ -77,6 +80,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — Whisper skips a word" do
     test "interpolates timing for word Whisper missed" do
       source = "the quick brown fox"
+
       timings = [
         %{word: "the", start_ms: 0, end_ms: 200},
         %{word: "quick", start_ms: 200, end_ms: 500},
@@ -99,6 +103,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — Whisper adds extra words" do
     test "ignores extra Whisper words not in source" do
       source = "hello world"
+
       timings = [
         %{word: "uh", start_ms: 0, end_ms: 100},
         %{word: "hello", start_ms: 100, end_ms: 400},
@@ -116,6 +121,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — punctuation normalization" do
     test "matches words ignoring punctuation differences" do
       source = "Hello, world! How's it going?"
+
       timings = [
         %{word: "Hello", start_ms: 0, end_ms: 300},
         %{word: "world", start_ms: 300, end_ms: 600},
@@ -136,6 +142,7 @@ defmodule ReadaloudAudiobook.TimingAlignerTest do
   describe "align/2 — em/en-dash splitting" do
     test "splits words around em-dashes to match Whisper" do
       source = "ours\u2014a long time"
+
       timings = [
         %{word: "ours", start_ms: 0, end_ms: 300},
         %{word: "a", start_ms: 300, end_ms: 400},

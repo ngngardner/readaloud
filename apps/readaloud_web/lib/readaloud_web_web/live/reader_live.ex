@@ -70,16 +70,22 @@ defmodule ReadaloudWebWeb.ReaderLive do
   @impl true
   def handle_event("prev_chapter", _params, socket) do
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
-      nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      nil ->
+        {:noreply, socket}
+
+      ch ->
+        {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
     end
   end
 
   @impl true
   def handle_event("next_chapter", _params, socket) do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
-      nil -> {:noreply, socket}
-      ch -> {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
+      nil ->
+        {:noreply, socket}
+
+      ch ->
+        {:noreply, push_navigate(socket, to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}")}
     end
   end
 
@@ -106,6 +112,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
     voice = socket.assigns.selected_voice
 
     ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => model, "voice" => voice}})
+
     ReadaloudAudiobook.generate_for_chapter(book.id, chapter.id, model: model, voice: voice)
 
     {:noreply, assign(socket, audio_state: :generating, generation_progress: 0)}
@@ -208,7 +215,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
           <.icon name="hero-book-open" class="w-4 h-4" />
         </.link>
         <span class="text-xs text-base-content/60">
-          Ch <%= chapter_index(@chapter, @chapters) + 1 %> / <%= length(@chapters) %>
+          Ch {chapter_index(@chapter, @chapters) + 1} / {length(@chapters)}
         </span>
         <button phx-click={JS.toggle(to: "#reader-settings")} class="btn btn-ghost btn-xs btn-circle">
           <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
@@ -229,10 +236,12 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <div class="join w-full">
               <button
                 :for={font <- [{"serif", "Serif"}, {"sans", "Sans"}, {"mono", "Mono"}]}
-                phx-click={JS.push("update_reader_setting", value: %{key: "fontFamily", value: elem(font, 0)})}
+                phx-click={
+                  JS.push("update_reader_setting", value: %{key: "fontFamily", value: elem(font, 0)})
+                }
                 class="btn btn-xs join-item flex-1"
               >
-                <%= elem(font, 1) %>
+                {elem(font, 1)}
               </button>
             </div>
           </div>
@@ -289,12 +298,16 @@ defmodule ReadaloudWebWeb.ReaderLive do
       >
         <%!-- Loading skeleton --%>
         <div :if={!@content} class="space-y-4 animate-pulse">
-          <div :for={_ <- 1..8} class="h-4 bg-base-300 rounded" style={"width: #{Enum.random(60..95)}%"} />
+          <div
+            :for={_ <- 1..8}
+            class="h-4 bg-base-300 rounded"
+            style={"width: #{Enum.random(60..95)}%"}
+          />
         </div>
 
         <%!-- Chapter title --%>
         <div :if={@content} class="text-xs uppercase tracking-widest text-base-content/40 mb-6">
-          <%= @chapter.title || "Chapter #{@chapter.number}" %>
+          {@chapter.title || "Chapter #{@chapter.number}"}
         </div>
 
         <%!-- Chapter content: with word spans when audio ready, plain HTML otherwise --%>
@@ -306,7 +319,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
           data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
-          <%= raw(prepare_text_with_spans(@content)) %>
+          {raw(prepare_text_with_spans(@content))}
         </article>
         <article
           :if={@content && @audio_state != :ready}
@@ -316,12 +329,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
           data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
-          <%= raw(@content) %>
+          {raw(@content)}
         </article>
       </div>
 
       <%!-- Re-sync button (shown when user manually scrolls during playback) --%>
-      <button id="resync-btn" class="fixed bottom-24 right-4 z-40 btn btn-sm btn-primary shadow-lg hidden">
+      <button
+        id="resync-btn"
+        class="fixed bottom-24 right-4 z-40 btn btn-sm btn-primary shadow-lg hidden"
+      >
         <.icon name="hero-arrow-down" class="w-4 h-4" /> Re-sync
       </button>
 
@@ -336,17 +352,19 @@ defmodule ReadaloudWebWeb.ReaderLive do
           <.icon name="hero-speaker-wave" class="w-6 h-6 text-base-content/40" />
           <div class="flex-1">
             <div class="text-sm font-medium">Listen to Audiobook</div>
-            <div class="text-xs text-base-content/50">Generate an audiobook version of this chapter</div>
+            <div class="text-xs text-base-content/50">
+              Generate an audiobook version of this chapter
+            </div>
           </div>
           <div class="hidden sm:flex items-center gap-2">
             <select phx-change="select_model" name="model" class="select select-xs select-bordered">
               <option :for={m <- @models} value={m[:id]} selected={m[:id] == @selected_model}>
-                <%= m[:id] %>
+                {m[:id]}
               </option>
             </select>
             <select phx-change="select_voice" name="voice" class="select select-xs select-bordered">
               <%= for m <- @models, m[:id] == @selected_model, v <- (m[:voices] || []) do %>
-                <option value={v} selected={v == @selected_voice}><%= v %></option>
+                <option value={v} selected={v == @selected_voice}>{v}</option>
               <% end %>
             </select>
           </div>
@@ -433,7 +451,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
             </div>
 
             <%!-- Time display --%>
-            <span id="time-display" class="text-sm font-mono opacity-60 shrink-0 [.collapsed_&]:text-xs">
+            <span
+              id="time-display"
+              class="text-sm font-mono opacity-60 shrink-0 [.collapsed_&]:text-xs"
+            >
               0:00 / 0:00
             </span>
 
@@ -442,13 +463,16 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <%!-- Speed dropdown (hidden when collapsed) --%>
             <div class="dropdown dropdown-top dropdown-end [.collapsed_&]:hidden">
               <button tabindex="0" class="btn btn-ghost btn-xs">Speed</button>
-              <div tabindex="0" class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]">
+              <div
+                tabindex="0"
+                class="dropdown-content z-50 mb-2 p-1 shadow bg-base-200 rounded-box flex flex-col gap-0.5 min-w-[80px]"
+              >
                 <button
                   :for={speed <- ["0.5", "0.75", "1", "1.25", "1.5", "1.75", "2"]}
                   data-speed={speed}
                   class="btn btn-ghost btn-xs w-full justify-center"
                 >
-                  <%= speed %>x
+                  {speed}x
                 </button>
               </div>
             </div>
@@ -478,7 +502,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
             <%!-- Collapse toggle --%>
             <button data-collapse-toggle class="btn btn-ghost btn-xs btn-circle" title="Toggle player">
-              <.icon name="hero-chevron-down" class="w-4 h-4 [.collapsed_&]:rotate-180 transition-transform" />
+              <.icon
+                name="hero-chevron-down"
+                class="w-4 h-4 [.collapsed_&]:rotate-180 transition-transform"
+              />
             </button>
           </div>
         </div>
@@ -533,11 +560,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
       import Ecto.Query
 
       case ReadaloudLibrary.Repo.one(
-             from j in Oban.Job,
-               where:
-                 fragment("?->>'task_id' = ?", j.args, ^to_string(task.id)),
+             from(j in Oban.Job,
+               where: fragment("?->>'task_id' = ?", j.args, ^to_string(task.id)),
                where: j.state in ["available", "executing"],
                limit: 1
+             )
            ) do
         nil -> :ok
         job -> Oban.cancel_job(job.id)
@@ -555,9 +582,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
           {idx, [acc, segment]}
         else
           # Split em/en-dashes into spaces to match aligner tokenization
-          normalized = segment
+          normalized =
+            segment
             |> String.replace("\u2014", " ")
             |> String.replace("\u2013", " ")
+
           words = String.split(normalized, ~r/(\s+)/, include_captures: true)
 
           {new_idx, parts} =

@@ -65,6 +65,10 @@ let
           treefmt = {
             run = "${l.getExe nixpkgs.treefmt} --fail-on-change";
           };
+          credo = {
+            run = "mix credo --strict";
+            glob = "*.{ex,exs}";
+          };
         };
       };
       commit-msg = {
@@ -216,7 +220,7 @@ in
       {
         name = "lint";
         help = "Run all linters";
-        command = "${l.getExe nixpkgs.statix} check . && ${l.getExe nixpkgs.deadnix} . && ${l.getExe nixpkgs.biome} lint apps/readaloud_web/assets/js/ apps/readaloud_web/assets/css/";
+        command = "${l.getExe nixpkgs.statix} check . && ${l.getExe nixpkgs.deadnix} . && ${l.getExe nixpkgs.biome} lint apps/readaloud_web/assets/js/ && mix credo --strict";
       }
       {
         name = "check";

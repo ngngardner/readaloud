@@ -30,7 +30,7 @@ defmodule ReadaloudWebWeb.Layouts do
 
       <main class={[@active_nav != :reader && "sm:ml-14", "min-h-screen p-4 sm:p-6 lg:p-8"]}>
         <.flash_group flash={@flash} />
-        <%= @inner_content %>
+        {@inner_content}
       </main>
     </div>
     """

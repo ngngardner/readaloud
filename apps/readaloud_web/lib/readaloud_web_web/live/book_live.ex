@@ -46,8 +46,8 @@ defmodule ReadaloudWebWeb.BookLive do
     chapters = socket.assigns.chapters
 
     case ReadaloudLibrary.update_book(book, %{
-      audio_preferences: %{"model" => model, "voice" => voice}
-    }) do
+           audio_preferences: %{"model" => model, "voice" => voice}
+         }) do
       {:ok, book} ->
         ReadaloudAudiobook.ensure_audio_generated(book, chapters)
 
@@ -69,8 +69,8 @@ defmodule ReadaloudWebWeb.BookLive do
     chapters = socket.assigns.chapters
 
     case ReadaloudLibrary.update_book(book, %{
-      audio_preferences: %{"model" => model, "voice" => voice}
-    }) do
+           audio_preferences: %{"model" => model, "voice" => voice}
+         }) do
       {:ok, book} ->
         ReadaloudAudiobook.ensure_audio_generated(book, chapters)
 
@@ -122,13 +122,20 @@ defmodule ReadaloudWebWeb.BookLive do
     ~H"""
     <div class="max-w-4xl mx-auto">
       <%!-- Back link --%>
-      <.link navigate={~p"/"} class="flex items-center gap-1 text-sm text-base-content/60 hover:text-base-content mb-6">
+      <.link
+        navigate={~p"/"}
+        class="flex items-center gap-1 text-sm text-base-content/60 hover:text-base-content mb-6"
+      >
         <.icon name="hero-arrow-left-mini" class="w-4 h-4" /> Back to Library
       </.link>
 
       <%!-- Book header --%>
       <div class="flex flex-col sm:flex-row gap-6 mb-8">
-        <img :if={cover_url(@book)} src={"/api/books/#{@book.id}/cover"} class="w-24 rounded-lg shadow" />
+        <img
+          :if={cover_url(@book)}
+          src={"/api/books/#{@book.id}/cover"}
+          class="w-24 rounded-lg shadow"
+        />
         <div
           :if={!cover_url(@book)}
           class="w-24 h-32 rounded-lg"
@@ -136,13 +143,16 @@ defmodule ReadaloudWebWeb.BookLive do
         />
         <div class="flex-1">
           <div class="flex items-center gap-2">
-            <h1 class="text-2xl font-bold tracking-tight"><%= @book.title %></h1>
+            <h1 class="text-2xl font-bold tracking-tight">{@book.title}</h1>
             <%= if @book.audio_preferences do %>
               <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
                   <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
                 </div>
-                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                <div
+                  tabindex="0"
+                  class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4"
+                >
                   <form phx-submit="update_audio_settings">
                     <div class="form-control mb-3">
                       <label class="label label-text text-xs uppercase">Model</label>
@@ -152,7 +162,7 @@ defmodule ReadaloudWebWeb.BookLive do
                           value={m[:id]}
                           selected={m[:id] == @selected_model}
                         >
-                          <%= m[:id] %>
+                          {m[:id]}
                         </option>
                       </select>
                     </div>
@@ -165,12 +175,12 @@ defmodule ReadaloudWebWeb.BookLive do
                           value={v}
                           selected={v == @selected_voice}
                         >
-                          <%= v %>
+                          {v}
                         </option>
                       </select>
                     </div>
                     <p class="text-xs text-base-content/50 text-center mb-2">
-                      <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready
+                      {audio_count(@audio_map)}/{length(@chapters)} chapters ready
                     </p>
                     <button type="submit" class="btn btn-primary btn-sm w-full">Save</button>
                   </form>
@@ -178,21 +188,23 @@ defmodule ReadaloudWebWeb.BookLive do
               </div>
             <% end %>
           </div>
-          <p :if={@book.author} class="text-base-content/60 mt-1"><%= @book.author %></p>
+          <p :if={@book.author} class="text-base-content/60 mt-1">{@book.author}</p>
           <div class="flex flex-wrap gap-2 mt-3">
-            <span class="badge badge-outline"><%= length(@chapters) %> chapters</span>
+            <span class="badge badge-outline">{length(@chapters)} chapters</span>
             <span class="badge badge-outline">
-              <%= progress_count(@progress, @book, @chapters) %>/<%= length(@chapters) %> read
+              {progress_count(@progress, @book, @chapters)}/{length(@chapters)} read
             </span>
             <%= if @book.audio_preferences do %>
               <span class="badge badge-outline">
-                <%= audio_count(@audio_map) %>/<%= length(@chapters) %> audio
+                {audio_count(@audio_map)}/{length(@chapters)} audio
               </span>
             <% end %>
           </div>
           <%= if @book.audio_preferences do %>
             <p class="text-xs text-base-content/50 mt-2">
-              <%= audio_count(@audio_map) %>/<%= length(@chapters) %> chapters ready · <%= @book.audio_preferences["model"] %> / <%= @book.audio_preferences["voice"] %>
+              {audio_count(@audio_map)}/{length(@chapters)} chapters ready · {@book.audio_preferences[
+                "model"
+              ]} / {@book.audio_preferences["voice"]}
             </p>
           <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
@@ -204,29 +216,40 @@ defmodule ReadaloudWebWeb.BookLive do
                 <div tabindex="0" role="button" class="btn btn-sm btn-outline">
                   Set up audio
                 </div>
-                <div tabindex="0" class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4">
+                <div
+                  tabindex="0"
+                  class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4"
+                >
                   <div class="form-control mb-3">
                     <label class="label label-text text-xs uppercase">Model</label>
-                    <select phx-change="select_model" name="model" class="select select-sm select-bordered w-full">
+                    <select
+                      phx-change="select_model"
+                      name="model"
+                      class="select select-sm select-bordered w-full"
+                    >
                       <option
                         :for={m <- @models}
                         value={m[:id]}
                         selected={m[:id] == @selected_model}
                       >
-                        <%= m[:id] %>
+                        {m[:id]}
                       </option>
                     </select>
                   </div>
                   <div class="form-control mb-3">
                     <label class="label label-text text-xs uppercase">Voice</label>
-                    <select phx-change="select_voice" name="voice" class="select select-sm select-bordered w-full">
+                    <select
+                      phx-change="select_voice"
+                      name="voice"
+                      class="select select-sm select-bordered w-full"
+                    >
                       <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
                       <option
                         :for={v <- (current_model && current_model[:voices]) || []}
                         value={v}
                         selected={v == @selected_voice}
                       >
-                        <%= v %>
+                        {v}
                       </option>
                     </select>
                   </div>
@@ -253,25 +276,27 @@ defmodule ReadaloudWebWeb.BookLive do
           :for={ch <- @chapters}
           class={[
             "flex items-center gap-3 p-3 rounded-lg",
-            is_current?(ch, @progress) && "bg-primary/10"
+            current?(ch, @progress) && "bg-primary/10"
           ]}
         >
-          <span class="text-sm font-mono text-base-content/40 w-8"><%= ch.number %></span>
+          <span class="text-sm font-mono text-base-content/40 w-8">{ch.number}</span>
           <.link
             navigate={~p"/books/#{@book.id}/read/#{ch.id}"}
             class="flex-1 text-sm hover:text-primary"
           >
-            <%= ch.title || "Chapter #{ch.number}" %>
+            {ch.title || "Chapter #{ch.number}"}
           </.link>
           <%= case Map.get(@audio_map, ch.id) do %>
             <% {:ready, _} -> %>
-              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+              <span class="text-xs text-base-content/40">{audio_duration(@audio_map, ch.id)}</span>
             <% {:stale, _} -> %>
-              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+              <span class="text-xs text-base-content/40">{audio_duration(@audio_map, ch.id)}</span>
             <% {:generating, _} -> %>
-              <span class="text-xs text-base-content/40 animate-pulse"><%= audio_duration(@audio_map, ch.id) %></span>
+              <span class="text-xs text-base-content/40 animate-pulse">
+                {audio_duration(@audio_map, ch.id)}
+              </span>
             <% {:queued, _} -> %>
-              <span class="text-xs text-base-content/40"><%= audio_duration(@audio_map, ch.id) %></span>
+              <span class="text-xs text-base-content/40">{audio_duration(@audio_map, ch.id)}</span>
             <% :processing -> %>
               <span class="text-xs text-base-content/40 animate-pulse">generating...</span>
             <% :queued -> %>
@@ -282,7 +307,7 @@ defmodule ReadaloudWebWeb.BookLive do
               <span class="text-xs text-error">skipped</span>
             <% _ -> %>
           <% end %>
-          <span :if={is_current?(ch, @progress)} class="badge badge-primary badge-xs">
+          <span :if={current?(ch, @progress)} class="badge badge-primary badge-xs">
             CURRENT
           </span>
         </div>
@@ -362,8 +387,8 @@ defmodule ReadaloudWebWeb.BookLive do
     end
   end
 
-  defp is_current?(_chapter, nil), do: false
-  defp is_current?(chapter, progress), do: chapter.id == progress.current_chapter_id
+  defp current?(_chapter, nil), do: false
+  defp current?(chapter, progress), do: chapter.id == progress.current_chapter_id
 
   defp resume_path(book, nil, chapters) do
     case chapters do
@@ -373,7 +398,9 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   defp resume_path(book, %{current_chapter_id: nil}, _chapters), do: ~p"/books/#{book.id}"
-  defp resume_path(book, progress, _chapters), do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
+
+  defp resume_path(book, progress, _chapters),
+    do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
 
   defp progress_count(nil, _book, _chapters), do: 0
 
@@ -385,7 +412,8 @@ defmodule ReadaloudWebWeb.BookLive do
 
   defp audio_duration(audio_map, chapter_id) do
     case Map.get(audio_map, chapter_id) do
-      {state, seconds} when state in [:ready, :stale, :generating, :queued] and is_number(seconds) and seconds > 0 ->
+      {state, seconds}
+      when state in [:ready, :stale, :generating, :queued] and is_number(seconds) and seconds > 0 ->
         mins = trunc(seconds / 60)
         secs = trunc(rem(trunc(seconds), 60))
         "#{mins}:#{String.pad_leading("#{secs}", 2, "0")}"

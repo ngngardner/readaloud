@@ -1,6 +1,6 @@
 defmodule ReadaloudImporter do
-  alias ReadaloudLibrary.Repo
   alias ReadaloudImporter.{ImportTask, ParseJob}
+  alias ReadaloudLibrary.Repo
   import Ecto.Query
 
   def import_file(file_path, file_type) do

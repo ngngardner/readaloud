@@ -20,8 +20,7 @@ import Config
 config :readaloud_library,
   ecto_repos: [ReadaloudLibrary.Repo]
 
-config :readaloud_library, ReadaloudLibrary.Repo,
-  database: "readaloud_dev.db"
+config :readaloud_library, ReadaloudLibrary.Repo, database: "readaloud_dev.db"
 
 config :readaloud_library, Oban,
   engine: Oban.Engines.Lite,

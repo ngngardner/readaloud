@@ -2,8 +2,12 @@ defmodule ReadaloudWebWeb.LiveHelpers do
   @moduledoc "Shared helpers for all LiveViews."
 
   def active_task_count do
-    import_count = ReadaloudImporter.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
-    audio_count = ReadaloudAudiobook.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
+    import_count =
+      ReadaloudImporter.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
+
+    audio_count =
+      ReadaloudAudiobook.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
+
     import_count + audio_count
   end
 
@@ -23,6 +27,8 @@ defmodule ReadaloudWebWeb.LiveHelpers do
     prefs = book.audio_preferences || %{}
     model_id = prefs["model"] || List.first(models)[:id]
     model = Enum.find(models, &(&1[:id] == model_id)) || %{}
-    prefs["voice"] || get_in(model, [:voices]) |> List.wrap() |> List.first() || ReadaloudTTS.Config.from_env().voice
+
+    prefs["voice"] || get_in(model, [:voices]) |> List.wrap() |> List.first() ||
+      ReadaloudTTS.Config.from_env().voice
   end
 end

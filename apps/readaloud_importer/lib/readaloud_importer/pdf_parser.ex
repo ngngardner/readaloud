@@ -6,7 +6,8 @@ defmodule ReadaloudImporter.PdfParser do
   end
 
   def parse(pdf_path, storage_dir) do
-    tmp_txt = Path.join(System.tmp_dir!(), "readaloud_pdf_#{:erlang.unique_integer([:positive])}.txt")
+    tmp_txt =
+      Path.join(System.tmp_dir!(), "readaloud_pdf_#{:erlang.unique_integer([:positive])}.txt")
 
     try do
       {cmd, args} = build_command(pdf_path, tmp_txt)
@@ -23,7 +24,12 @@ defmodule ReadaloudImporter.PdfParser do
                   {:error, _} -> nil
                 end
 
-              {:ok, %{chapters: chapters, metadata: %{title: pdf_title(pdf_path), author: nil}, cover_image: cover_image}}
+              {:ok,
+               %{
+                 chapters: chapters,
+                 metadata: %{title: pdf_title(pdf_path), author: nil},
+                 cover_image: cover_image
+               }}
 
             {:error, reason} ->
               {:error, "Failed to read extracted text: #{reason}"}
@@ -73,11 +79,23 @@ defmodule ReadaloudImporter.PdfParser do
     File.mkdir_p!(storage_dir)
     output_prefix = Path.join(storage_dir, "cover")
 
-    case System.cmd("pdftoppm", [
-      "-jpeg", "-f", "1", "-l", "1",
-      "-scale-to-x", "300", "-scale-to-y", "400",
-      pdf_path, output_prefix
-    ], stderr_to_stdout: true) do
+    case System.cmd(
+           "pdftoppm",
+           [
+             "-jpeg",
+             "-f",
+             "1",
+             "-l",
+             "1",
+             "-scale-to-x",
+             "300",
+             "-scale-to-y",
+             "400",
+             pdf_path,
+             output_prefix
+           ],
+           stderr_to_stdout: true
+         ) do
       {_, 0} ->
         # pdftoppm adds page number suffix: cover-1.jpg
         cover_file = Path.join(storage_dir, "cover-1.jpg")

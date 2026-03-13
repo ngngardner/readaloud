@@ -3,12 +3,12 @@ defmodule ReadaloudAudiobook.ChapterAudio do
   import Ecto.Changeset
 
   schema "chapter_audios" do
-    field :chapter_id, :integer
-    field :audio_path, :string
-    field :duration_seconds, :float
-    field :word_timings, :string
-    field :model, :string
-    field :voice, :string
+    field(:chapter_id, :integer)
+    field(:audio_path, :string)
+    field(:duration_seconds, :float)
+    field(:word_timings, :string)
+    field(:model, :string)
+    field(:voice, :string)
     timestamps()
   end
 

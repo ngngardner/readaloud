@@ -71,6 +71,11 @@
             deadnix --fail -L .
             touch $out
           '';
+          biome-lint = pkgs.runCommand "biome-lint-check" { nativeBuildInputs = [ pkgs.biome ]; } ''
+            cd ${self}
+            biome lint apps/readaloud_web/assets/js/
+            touch $out
+          '';
         });
       };
 }

@@ -2,7 +2,7 @@ defmodule ReadaloudImporter.CoverJob do
   use Oban.Worker, queue: :import, max_attempts: 1
 
   alias ReadaloudImporter.CoverResolver
-  alias ReadaloudLibrary.{Repo, Book}
+  alias ReadaloudLibrary.{Book, Repo}
 
   @impl true
   def perform(%Oban.Job{args: %{"book_id" => book_id, "title" => title, "author" => author}}) do

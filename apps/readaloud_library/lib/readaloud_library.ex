@@ -1,5 +1,5 @@
 defmodule ReadaloudLibrary do
-  alias ReadaloudLibrary.{Repo, Book, Chapter}
+  alias ReadaloudLibrary.{Book, Chapter, Repo}
   import Ecto.Query
 
   # Books
@@ -35,13 +35,20 @@ defmodule ReadaloudLibrary do
 
     query =
       case sort_by do
-        "title" -> from(b in base, order_by: [asc: b.title])
-        "author" -> from(b in base, order_by: [asc: b.author, asc: b.title])
-        "added" -> from(b in base, order_by: [desc: b.inserted_at])
+        "title" ->
+          from(b in base, order_by: [asc: b.title])
+
+        "author" ->
+          from(b in base, order_by: [asc: b.author, asc: b.title])
+
+        "added" ->
+          from(b in base, order_by: [desc: b.inserted_at])
+
         _ ->
           # "recent" default: sort by last reading activity
           from(b in base,
-            left_join: rp in ReadaloudReader.ReadingProgress, on: rp.book_id == b.id,
+            left_join: rp in ReadaloudReader.ReadingProgress,
+            on: rp.book_id == b.id,
             order_by: [desc_nulls_last: rp.last_read_at, desc: b.inserted_at]
           )
       end

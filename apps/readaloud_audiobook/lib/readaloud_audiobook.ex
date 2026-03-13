@@ -1,6 +1,6 @@
 defmodule ReadaloudAudiobook do
-  alias ReadaloudLibrary.Repo
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob}
+  alias ReadaloudLibrary.Repo
   import Ecto.Query
 
   @max_attempts 3
@@ -27,7 +27,9 @@ defmodule ReadaloudAudiobook do
   end
 
   def ensure_audio_generated(%{audio_preferences: nil}, _chapters), do: {:ok, 0}
-  def ensure_audio_generated(%{audio_preferences: prefs}, _chapters) when map_size(prefs) == 0, do: {:ok, 0}
+
+  def ensure_audio_generated(%{audio_preferences: prefs}, _chapters) when map_size(prefs) == 0,
+    do: {:ok, 0}
 
   def ensure_audio_generated(book, chapters) do
     model = book.audio_preferences["model"]
@@ -40,6 +42,7 @@ defmodule ReadaloudAudiobook do
 
     # Index by chapter_id for fast lookup
     audio_by_chapter = Map.new(audios, &{&1.chapter_id, &1})
+
     pending_chapter_ids =
       tasks
       |> Enum.filter(&(&1.status in ["pending", "processing"]))
@@ -93,7 +96,10 @@ defmodule ReadaloudAudiobook do
 
   def list_tasks_for_chapters(chapter_ids) when is_list(chapter_ids) do
     AudiobookTask
-    |> where([t], t.chapter_id in ^chapter_ids and t.status in ["pending", "processing", "failed"])
+    |> where(
+      [t],
+      t.chapter_id in ^chapter_ids and t.status in ["pending", "processing", "failed"]
+    )
     |> Repo.all()
   end
 

@@ -1,8 +1,8 @@
 defmodule ReadaloudImporter.ParseJob do
   use Oban.Worker, queue: :import, max_attempts: 3
 
+  alias ReadaloudImporter.{CoverJob, CoverResolver, EpubParser, ImportTask, PdfParser}
   alias ReadaloudLibrary.Repo
-  alias ReadaloudImporter.{ImportTask, EpubParser, PdfParser, CoverResolver, CoverJob}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"task_id" => task_id}}) do
@@ -29,7 +29,9 @@ defmodule ReadaloudImporter.ParseJob do
           })
 
         for chapter_data <- chapters do
-          content_path = Path.join(storage_dir, "#{String.pad_leading("#{chapter_data.number}", 3, "0")}.html")
+          content_path =
+            Path.join(storage_dir, "#{String.pad_leading("#{chapter_data.number}", 3, "0")}.html")
+
           File.write!(content_path, chapter_data.content)
 
           ReadaloudLibrary.create_chapter(%{
@@ -62,7 +64,13 @@ defmodule ReadaloudImporter.ParseJob do
         end
 
         update_status(task, "completed", book.id)
-        Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:import", {:import_completed, book.id})
+
+        Phoenix.PubSub.broadcast(
+          ReadaloudWeb.PubSub,
+          "tasks:import",
+          {:import_completed, book.id}
+        )
+
         :ok
 
       {:error, reason} ->

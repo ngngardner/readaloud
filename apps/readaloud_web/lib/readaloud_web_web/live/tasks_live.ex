@@ -114,7 +114,7 @@ defmodule ReadaloudWebWeb.TasksLive do
         <div class="flex items-center gap-3 mb-4">
           <h2 class="text-xl font-semibold">Active</h2>
           <span :if={@active_tasks != []} class="badge badge-warning badge-sm">
-            <%= length(@active_tasks) %>
+            {length(@active_tasks)}
           </span>
         </div>
 
@@ -131,13 +131,13 @@ defmodule ReadaloudWebWeb.TasksLive do
               <.icon name="hero-arrow-path" class="size-5 text-warning animate-spin shrink-0" />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="font-medium truncate"><%= task_description(task) %></span>
+                  <span class="font-medium truncate">{task_description(task)}</span>
                   <span class="badge badge-xs badge-ghost shrink-0">
-                    <%= task_type_label(task) %>
+                    {task_type_label(task)}
                   </span>
                 </div>
                 <div :if={book_name(task) != nil} class="text-xs text-base-content/50 truncate">
-                  <%= book_name(task) %>
+                  {book_name(task)}
                 </div>
               </div>
               <button
@@ -160,7 +160,7 @@ defmodule ReadaloudWebWeb.TasksLive do
           <div class="flex items-center gap-3">
             <h2 class="text-xl font-semibold">Completed</h2>
             <span :if={@completed_tasks != []} class="badge badge-ghost badge-sm">
-              <%= length(@completed_tasks) %>
+              {length(@completed_tasks)}
             </span>
           </div>
           <button
@@ -193,20 +193,23 @@ defmodule ReadaloudWebWeb.TasksLive do
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm truncate"><%= task_description(task) %></span>
+                <span class="text-sm truncate">{task_description(task)}</span>
                 <span class="badge badge-xs badge-ghost shrink-0">
-                  <%= task_type_label(task) %>
+                  {task_type_label(task)}
                 </span>
               </div>
               <div :if={book_name(task) != nil} class="text-xs text-base-content/50 truncate">
-                <%= book_name(task) %>
+                {book_name(task)}
               </div>
-              <div :if={task.status != "completed" && task.error_message} class="text-xs text-error truncate">
-                <%= task.error_message %>
+              <div
+                :if={task.status != "completed" && task.error_message}
+                class="text-xs text-error truncate"
+              >
+                {task.error_message}
               </div>
             </div>
             <span class="text-xs text-base-content/40 shrink-0">
-              <%= relative_time(task.updated_at) %>
+              {relative_time(task.updated_at)}
             </span>
             <button
               :if={task.status == "failed"}
@@ -288,8 +291,8 @@ defmodule ReadaloudWebWeb.TasksLive do
     cond do
       diff < 60 -> "#{diff}s ago"
       diff < 3600 -> "#{div(diff, 60)}m ago"
-      diff < 86400 -> "#{div(diff, 3600)}h ago"
-      true -> "#{div(diff, 86400)}d ago"
+      diff < 86_400 -> "#{div(diff, 3600)}h ago"
+      true -> "#{div(diff, 86_400)}d ago"
     end
   end
 end

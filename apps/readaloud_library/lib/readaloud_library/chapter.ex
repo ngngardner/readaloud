@@ -3,12 +3,12 @@ defmodule ReadaloudLibrary.Chapter do
   import Ecto.Changeset
 
   schema "chapters" do
-    field :title, :string
-    field :number, :integer
-    field :volume, :integer
-    field :content_path, :string
-    field :word_count, :integer, default: 0
-    belongs_to :book, ReadaloudLibrary.Book
+    field(:title, :string)
+    field(:number, :integer)
+    field(:volume, :integer)
+    field(:content_path, :string)
+    field(:word_count, :integer, default: 0)
+    belongs_to(:book, ReadaloudLibrary.Book)
     timestamps()
   end
 
