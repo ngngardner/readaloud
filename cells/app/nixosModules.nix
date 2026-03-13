@@ -77,7 +77,6 @@
             StateDirectory = "readaloud";
             RuntimeDirectory = "readaloud";
             WorkingDirectory = cfg.dataDir;
-            ExecStartPre = "${package}/bin/readaloud eval 'ReadaloudLibrary.Release.migrate()'";
             ExecStop = "${package}/bin/readaloud stop";
             Restart = "on-failure";
             RestartSec = 5;
@@ -91,6 +90,7 @@
 
           script = ''
             export SECRET_KEY_BASE="$(cat $CREDENTIALS_DIRECTORY/secret_key_base)"
+            ${package}/bin/readaloud eval 'ReadaloudLibrary.Release.migrate()'
             exec ${package}/bin/readaloud start
           '';
         };
