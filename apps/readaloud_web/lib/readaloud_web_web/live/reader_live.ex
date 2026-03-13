@@ -18,11 +18,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
     progress = ReadaloudReader.get_progress(book_id)
     audio = ReadaloudAudiobook.get_chapter_audio(chapter_id)
-    models = fetch_models()
     audio_state = determine_audio_state(chapter_id, audio)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
+      send(self(), :fetch_models)
     end
 
     {:ok,
@@ -37,9 +37,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
        progress: progress,
        audio: audio,
        audio_state: audio_state,
-       models: models,
-       selected_model: default_model(book, models),
-       selected_voice: default_voice(book, models),
+       models: [],
+       selected_model: default_model(book, []),
+       selected_voice: default_voice(book, []),
        player_collapsed: false,
        show_settings: false,
        show_conflict_modal: false,
@@ -256,6 +256,20 @@ defmodule ReadaloudWebWeb.ReaderLive do
   @impl true
   def handle_event("select_voice", %{"voice" => voice}, socket) do
     {:noreply, assign(socket, selected_voice: voice)}
+  end
+
+  # -- Async model fetch --
+
+  @impl true
+  def handle_info(:fetch_models, socket) do
+    models = fetch_models()
+
+    {:noreply,
+     assign(socket,
+       models: models,
+       selected_model: default_model(socket.assigns.book, models),
+       selected_voice: default_voice(socket.assigns.book, models)
+     )}
   end
 
   # -- PubSub handler: audio generation completed --
