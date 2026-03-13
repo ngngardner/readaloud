@@ -9,7 +9,7 @@ defmodule ReadaloudTTS.TextChunker do
   @default_max_chars 1500
 
   @split_patterns [
-    ~r/[.!?]["')\]]*\s+/,
+    ~r/[.!?]["'\x{201d}\x{2019})\]]*\s+/u,
     ~r/[;:]\s+/,
     ~r/,\s+/,
     ~r/\s+/
@@ -37,7 +37,7 @@ defmodule ReadaloudTTS.TextChunker do
 
       case find_split_point(window) do
         nil ->
-          # No good split point, force split at limit
+          # No split point at all (no whitespace) — force split at limit
           do_chunk(
             String.slice(remaining, max_chars, String.length(remaining)) |> String.trim(),
             max_chars,
@@ -60,8 +60,11 @@ defmodule ReadaloudTTS.TextChunker do
 
         matches ->
           # Take the last match (furthest into the text = largest chunk)
-          [{start, len}] = List.last(matches)
-          start + len
+          [{byte_start, byte_len}] = List.last(matches)
+          byte_pos = byte_start + byte_len
+          # Convert byte offset to grapheme count (Regex returns byte indices,
+          # but String.slice uses grapheme indices)
+          binary_part(text, 0, byte_pos) |> String.length()
       end
     end)
   end

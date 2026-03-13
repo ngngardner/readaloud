@@ -19,10 +19,13 @@ defmodule ReadaloudAudiobook.GenerateJob do
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
          chunks = TextChunker.chunk(clean_text),
-         {:ok, audio, timings} <- synthesize_chunks(chunks, task, config) do
+         {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, task, config) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
       File.write!(audio_path, audio)
+
+      # Final alignment pass: reconcile per-chunk timings with full source text
+      timings = TimingAligner.align(chunk_timings, clean_text)
 
       %ChapterAudio{}
       |> ChapterAudio.changeset(%{
