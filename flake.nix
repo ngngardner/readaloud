@@ -46,12 +46,17 @@
         cellsFrom = ./cells;
         cellBlocks = with std.blockTypes; [
           (devshells "devshells")
+          (installables "packages")
         ];
       }
       {
         devShells = std.harvest self [
           "app"
           "devshells"
+        ];
+        packages = std.harvest self [
+          "app"
+          "packages"
         ];
         formatter = eachSystem (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
         checks = eachSystem (pkgs: {
