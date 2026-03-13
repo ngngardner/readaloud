@@ -39,6 +39,9 @@ readaloud-*.tar
 # E2E test dependencies
 /e2e/node_modules/
 
+# Local migration scripts
+/scripts/
+
 # nixago: ignore-linked-files
 /.editorconfig
 /.conform.yaml

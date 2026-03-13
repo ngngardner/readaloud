@@ -7,8 +7,11 @@ defmodule ReadaloudImporter.CoverResolver do
 
   def cover_path(book_id), do: Path.join(covers_dir(), "#{book_id}.jpg")
 
+  @min_cover_bytes 1_000
+
   @doc "Save raw cover bytes for a book. Returns {:ok, path} or {:error, reason}."
-  def save_cover(book_id, image_bytes) when is_binary(image_bytes) do
+  def save_cover(book_id, image_bytes)
+      when is_binary(image_bytes) and byte_size(image_bytes) >= @min_cover_bytes do
     path = cover_path(book_id)
     File.mkdir_p!(covers_dir())
 
@@ -17,6 +20,8 @@ defmodule ReadaloudImporter.CoverResolver do
       {:error, reason} -> {:error, reason}
     end
   end
+
+  def save_cover(_book_id, _image_bytes), do: {:error, :image_too_small}
 
   @doc "Generate a deterministic gradient CSS string from a title hash."
   def gradient_placeholder(title) do
@@ -33,17 +38,24 @@ defmodule ReadaloudImporter.CoverResolver do
 
     with {:ok, %{status: 200, body: body}} <- Req.get(search_url, receive_timeout: 10_000),
          [%{"cover_i" => cover_id} | _] when is_integer(cover_id) <- body["docs"] do
-      cover_url = "https://covers.openlibrary.org/b/id/#{cover_id}-M.jpg"
-
-      case Req.get(cover_url, receive_timeout: 10_000) do
-        {:ok, %{status: 200, body: image_bytes}} when is_binary(image_bytes) ->
-          {:ok, image_bytes}
-
-        _ ->
-          {:error, :cover_download_failed}
-      end
+      fetch_cover_image(cover_id)
     else
       _ -> {:error, :no_cover_found}
     end
+  end
+
+  defp fetch_cover_image(cover_id) do
+    Enum.find_value(["L", "M"], {:error, :cover_download_failed}, fn size ->
+      url = "https://covers.openlibrary.org/b/id/#{cover_id}-#{size}.jpg"
+
+      case Req.get(url, receive_timeout: 10_000, redirect: true) do
+        {:ok, %{status: 200, body: bytes}}
+        when is_binary(bytes) and byte_size(bytes) >= @min_cover_bytes ->
+          {:ok, bytes}
+
+        _ ->
+          nil
+      end
+    end)
   end
 end
