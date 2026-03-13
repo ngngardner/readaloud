@@ -67,7 +67,7 @@ in
           with pkgs;
           [
             calibre
-            poppler_utils
+            poppler-utils
           ]
         );
       };
