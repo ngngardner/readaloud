@@ -1,4 +1,8 @@
-{ nixpkgs, self, lintGrep }:
+{
+  nixpkgs,
+  self,
+  lintGrep,
+}:
 nixpkgs.runCommand "lint-grep-check"
   {
     nativeBuildInputs = [
