@@ -188,6 +188,8 @@ defmodule ReadaloudAudiobook.GenerateJob do
     html
     |> String.replace(~r/<[^>]+>/, " ")
     |> String.replace(~r/&[^;]+;/, " ")
+    |> String.replace("\u2014", " ")
+    |> String.replace("\u2013", " ")
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
   end

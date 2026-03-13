@@ -554,7 +554,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
         if String.starts_with?(segment, "<") do
           {idx, [acc, segment]}
         else
-          words = String.split(segment, ~r/(\s+)/, include_captures: true)
+          # Split em/en-dashes into spaces to match aligner tokenization
+          normalized = segment
+            |> String.replace("\u2014", " ")
+            |> String.replace("\u2013", " ")
+          words = String.split(normalized, ~r/(\s+)/, include_captures: true)
 
           {new_idx, parts} =
             Enum.reduce(words, {idx, []}, fn word, {i, wacc} ->
