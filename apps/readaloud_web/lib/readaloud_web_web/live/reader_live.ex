@@ -245,15 +245,42 @@ defmodule ReadaloudWebWeb.ReaderLive do
                bg-base-200/90 backdrop-blur-xl rounded-full px-4 py-2 shadow-lg border border-base-content/6
                opacity-0 pointer-events-none transition-opacity duration-200"
       >
-        <.link navigate={~p"/books/#{@book.id}"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-arrow-left" class="w-4 h-4" />
+        <%!-- Home --%>
+        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle" title="Library">
+          <.icon name="hero-home" class="w-4 h-4" />
         </.link>
-        <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle">
-          <.icon name="hero-book-open" class="w-4 h-4" />
-        </.link>
-        <span class="text-xs text-base-content/60">
+
+        <%!-- Prev chapter --%>
+        <%= if prev = prev_chapter(@chapter, @chapters) do %>
+          <.link navigate={~p"/books/#{@book.id}/read/#{prev.id}" <> "?nav=internal"} class="btn btn-ghost btn-xs btn-circle">
+            <.icon name="hero-chevron-left" class="w-4 h-4" />
+          </.link>
+        <% else %>
+          <button class="btn btn-ghost btn-xs btn-circle opacity-30" disabled>
+            <.icon name="hero-chevron-left" class="w-4 h-4" />
+          </button>
+        <% end %>
+
+        <%!-- Chapter indicator (tappable - toggles chapter bar) --%>
+        <button
+          id="chapter-indicator"
+          class="text-xs text-base-content/60 hover:text-base-content cursor-pointer px-1"
+        >
           Ch <%= chapter_index(@chapter, @chapters) + 1 %> / <%= length(@chapters) %>
-        </span>
+        </button>
+
+        <%!-- Next chapter --%>
+        <%= if nxt = next_chapter(@chapter, @chapters) do %>
+          <.link navigate={~p"/books/#{@book.id}/read/#{nxt.id}" <> "?nav=internal"} class="btn btn-ghost btn-xs btn-circle">
+            <.icon name="hero-chevron-right" class="w-4 h-4" />
+          </.link>
+        <% else %>
+          <button class="btn btn-ghost btn-xs btn-circle opacity-30" disabled>
+            <.icon name="hero-chevron-right" class="w-4 h-4" />
+          </button>
+        <% end %>
+
+        <%!-- Settings --%>
         <button phx-click={JS.toggle(to: "#reader-settings")} class="btn btn-ghost btn-xs btn-circle">
           <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
         </button>
