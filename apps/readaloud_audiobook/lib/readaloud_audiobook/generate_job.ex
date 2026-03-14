@@ -58,6 +58,19 @@ defmodule ReadaloudAudiobook.GenerateJob do
         broadcast_task_update(task)
         {:error, reason}
     end
+  rescue
+    exception ->
+      # Prevent zombie tasks: ensure status transitions to "failed" even on
+      # unexpected exceptions (e.g., crashes outside the with block).
+      # Fresh lookup — task_id is bound from function head, always safe.
+      if failed_task = Repo.get(AudiobookTask, task_id) do
+        update_task(failed_task, %{
+          status: "failed",
+          error_message: "Unexpected error: #{Exception.message(exception)}"
+        })
+      end
+
+      reraise exception, __STACKTRACE__
   end
 
   defp synthesize_chunks(chunks, task, config) do

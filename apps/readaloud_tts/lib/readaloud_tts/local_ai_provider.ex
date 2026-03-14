@@ -15,7 +15,10 @@ defmodule ReadaloudTTS.LocalAIProvider do
              speed: config.speed,
              response_format: config.response_format
            },
-           receive_timeout: 300_000
+           receive_timeout: 300_000,
+           retry: :transient,
+           retry_delay: &retry_delay/1,
+           max_retries: 8
          ) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, %{audio: body}}
@@ -38,7 +41,10 @@ defmodule ReadaloudTTS.LocalAIProvider do
              model: config.stt_model,
              response_format: "verbose_json"
            ],
-           receive_timeout: 300_000
+           receive_timeout: 300_000,
+           retry: :transient,
+           retry_delay: &retry_delay/1,
+           max_retries: 8
          ) do
       {:ok, %{status: 200, body: body}} when is_map(body) ->
         {:ok, extract_word_timings(body)}
@@ -56,6 +62,8 @@ defmodule ReadaloudTTS.LocalAIProvider do
         {:error, reason}
     end
   end
+
+  defp retry_delay(attempt), do: min(1_000 * Integer.pow(2, attempt), 30_000)
 
   defp extract_word_timings(%{"segments" => segments}) when is_list(segments) do
     segments
