@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "87211bbf18ef",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_library/lib/readaloud_library.ex",
+    "apps/readaloud_reader/lib/readaloud_reader.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/library_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex"
+  ],
+  "sessions": [
+    {
+      "metadata": "/87/211bbf18ef/0/metadata.json",
+      "transcript": "/87/211bbf18ef/0/full.jsonl",
+      "content_hash": "/87/211bbf18ef/0/content_hash.txt",
+      "prompt": "/87/211bbf18ef/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 92,
+    "cache_creation_tokens": 148563,
+    "cache_read_tokens": 5782416,
+    "output_tokens": 40885,
+    "api_call_count": 53
+  }
+}
