@@ -9,7 +9,7 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
   check_grep() {
     local pattern="$1" include="$2" msg="$3"
     local matches
-    if matches=$(${gnugrep}/bin/grep -rn "$pattern" --include="$include" --exclude-dir=deps --exclude-dir=_build --exclude-dir=node_modules . 2>/dev/null); then
+    if matches=$(${gnugrep}/bin/grep -rn "$pattern" --include="$include" --exclude-dir=deps --exclude-dir=_build --exclude-dir=node_modules --exclude-dir=worktrees . 2>/dev/null); then
       echo "ERROR: $msg"
       echo "$matches"
       ((errors++)) || true
@@ -50,7 +50,7 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
     "Don't use @apply in CSS. Write Tailwind classes directly on elements."
 
   # no-is-prefix-functions
-  is_matches=$(${gnugrep}/bin/grep -rEn '^\s*(def|defp)\s+is_' --include='*.ex' --include='*.exs' --exclude-dir=deps --exclude-dir=_build . 2>/dev/null \
+  is_matches=$(${gnugrep}/bin/grep -rEn '^\s*(def|defp)\s+is_' --include='*.ex' --include='*.exs' --exclude-dir=deps --exclude-dir=_build --exclude-dir=worktrees . 2>/dev/null \
     | ${gnugrep}/bin/grep -v 'defguard' || true)
   if [ -n "$is_matches" ]; then
     echo "ERROR: Predicate functions should end with ? not start with is_. Reserve is_ for guards."
@@ -60,12 +60,12 @@ nixpkgs.writeShellScriptBin "lint-grep" ''
 
   # no-nested-modules
   while IFS= read -r file; do
-    count=$(${gnugrep}/bin/grep -c '^defmodule ' "$file" 2>/dev/null || echo 0)
+    count=$(${gnugrep}/bin/grep -c '^defmodule ' "$file" 2>/dev/null) || count=0
     if [ "$count" -gt 1 ]; then
       echo "ERROR: Multiple top-level modules in $file — causes cyclic dependencies."
       ((errors++)) || true
     fi
-  done < <(${findutils}/bin/find . -name '*.ex' -not -path './_build/*' -not -path './deps/*' 2>/dev/null)
+  done < <(${findutils}/bin/find . -name '*.ex' -not -path './_build/*' -not -path './deps/*' -not -path './.claude/*' 2>/dev/null)
 
   if [ "$errors" -gt 0 ]; then
     echo ""
