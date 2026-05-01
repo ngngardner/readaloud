@@ -3,7 +3,7 @@
   "checkpoint_id": "31a8d7f0341f",
   "strategy": "manual-commit",
   "branch": "master",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "apps/readaloud_web/assets/js/hooks/audio_player.js",
     "apps/readaloud_web/assets/js/hooks/floating_pill.js",
@@ -17,13 +17,19 @@
       "transcript": "/31/a8d7f0341f/0/full.jsonl",
       "content_hash": "/31/a8d7f0341f/0/content_hash.txt",
       "prompt": "/31/a8d7f0341f/0/prompt.txt"
+    },
+    {
+      "metadata": "/31/a8d7f0341f/1/metadata.json",
+      "transcript": "/31/a8d7f0341f/1/full.jsonl",
+      "content_hash": "/31/a8d7f0341f/1/content_hash.txt",
+      "prompt": "/31/a8d7f0341f/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 106,
-    "cache_creation_tokens": 124311,
-    "cache_read_tokens": 18308196,
-    "output_tokens": 84395,
-    "api_call_count": 96
+    "input_tokens": 437,
+    "cache_creation_tokens": 912938,
+    "cache_read_tokens": 66373774,
+    "output_tokens": 201422,
+    "api_call_count": 367
   }
 }
