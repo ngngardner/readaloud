@@ -63,7 +63,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
           Enum.find(socket.assigns.chapters, &(&1.id == progress.current_chapter_id))
 
         if conflict_chapter do
-          {:noreply, assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
+          {:noreply,
+           assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
         else
           ReadaloudReader.upsert_progress(%{
             book_id: socket.assigns.book.id,
@@ -209,9 +210,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
     {:noreply,
      socket
      |> assign(show_conflict_modal: false, conflict_chapter: nil)
-     |> push_navigate(
-       to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter.id}?nav=internal"
-     )}
+     |> push_navigate(to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter.id}?nav=internal")}
   end
 
   @impl true
@@ -335,7 +334,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
         phx-hook="ChapterBarHook"
         data-current-index={chapter_index(@chapter, @chapters)}
         data-total-chapters={length(@chapters)}
-        data-chapters={Jason.encode!(Enum.map(@chapters, fn c -> %{id: c.id, number: c.number, title: c.title} end))}
+        data-chapters={
+          Jason.encode!(
+            Enum.map(@chapters, fn c -> %{id: c.id, number: c.number, title: c.title} end)
+          )
+        }
         data-book-id={@book.id}
         class="fixed top-14 left-1/2 -translate-x-1/2 z-49
                w-[90vw] max-w-xl bg-base-200/90 backdrop-blur-xl rounded-2xl
@@ -344,8 +347,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
       >
         <%!-- Scrubber row --%>
         <div class="relative mb-2">
-          <div data-chapter-scrubber class="w-full h-2 bg-base-300 rounded-full cursor-pointer relative">
-            <div data-scrubber-fill class="h-full bg-primary rounded-full pointer-events-none" style="width: 0%" />
+          <div
+            data-chapter-scrubber
+            class="w-full h-2 bg-base-300 rounded-full cursor-pointer relative"
+          >
+            <div
+              data-scrubber-fill
+              class="h-full bg-primary rounded-full pointer-events-none"
+              style="width: 0%"
+            />
             <div
               data-scrubber-thumb
               class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-primary rounded-full shadow"
@@ -445,7 +455,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <input
               id="auto-next-chapter-toggle"
               type="checkbox"
-              phx-click={JS.push("update_reader_setting", value: %{key: "autoNextChapter", value: "toggle"})}
+              phx-click={
+                JS.push("update_reader_setting", value: %{key: "autoNextChapter", value: "toggle"})
+              }
               class="toggle toggle-sm toggle-primary"
             />
           </label>
@@ -475,7 +487,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">Light</div>
             <div class="flex flex-wrap gap-1">
               <button
-                :for={theme <- ~w(autumn bumblebee corporate cupcake emerald garden lemonade light lofi nord pastel retro)}
+                :for={
+                  theme <-
+                    ~w(autumn bumblebee corporate cupcake emerald garden lemonade light lofi nord pastel retro)
+                }
                 phx-click="set_theme"
                 phx-value-theme={theme}
                 data-set-theme={theme}
@@ -601,7 +616,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         data-initial-position={@initial_position_ms}
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 transition-all duration-300"
       >
-        <audio id="audio-element" preload="auto"></audio>
+        <audio id="audio-element" phx-update="ignore" preload="auto"></audio>
         <div class="max-w-2xl mx-auto px-4 py-3 space-y-3">
           <%!-- Scrubber (hidden when collapsed) --%>
           <div
@@ -738,8 +753,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <div class="modal-box">
           <h3 class="font-bold text-lg">Continue reading?</h3>
           <p class="py-4">
-            Your last position was on
-            <strong>
+            Your last position was on <strong>
               {if @conflict_chapter,
                 do: @conflict_chapter.title || "Chapter #{@conflict_chapter.number}",
                 else: "another chapter"}
@@ -750,7 +764,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <button phx-click="dismiss_conflict" class="btn btn-ghost">Stay here</button>
             <button phx-click="go_to_conflict_chapter" class="btn btn-primary">
               Go to {if @conflict_chapter,
-                do: "Ch #{Enum.find_index(@chapters, &(&1.id == @conflict_chapter.id)) |> then(&((&1 || 0) + 1))}",
+                do:
+                  "Ch #{Enum.find_index(@chapters, &(&1.id == @conflict_chapter.id)) |> then(&((&1 || 0) + 1))}",
                 else: "last position"}
             </button>
           </div>

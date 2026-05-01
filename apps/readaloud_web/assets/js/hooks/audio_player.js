@@ -35,6 +35,15 @@ export const AudioPlayer = {
 		// Load audio
 		this.audio.src = this.el.dataset.audioUrl;
 
+		// Show duration as soon as metadata is available (don't wait for first
+		// timeupdate, which only fires once playback starts).
+		this.audio.addEventListener("loadedmetadata", () =>
+			this.updateTimeDisplay(),
+		);
+		this.audio.addEventListener("durationchange", () =>
+			this.updateTimeDisplay(),
+		);
+
 		// Load word-level timings
 		fetch(this.el.dataset.timingsUrl)
 			.then((r) => r.json())
@@ -135,12 +144,7 @@ export const AudioPlayer = {
 				const fillMini = this.el.querySelector("[data-progress-fill-mini]");
 				if (fillMini) fillMini.style.width = `${pct}%`;
 
-				if (this.timeDisplay) {
-					this.timeDisplay.textContent =
-						this.formatTime(this.audio.currentTime) +
-						" / " +
-						this.formatTime(this.audio.duration);
-				}
+				this.updateTimeDisplay();
 
 				// Report position (throttled: every ~5s of audio time)
 				const nowMs = Math.round(this.audio.currentTime * 1000);
@@ -484,9 +488,18 @@ export const AudioPlayer = {
 	},
 
 	formatTime(secs) {
+		if (!Number.isFinite(secs) || secs < 0) return "0:00";
 		const m = Math.floor(secs / 60);
 		const s = Math.floor(secs % 60);
 		return `${m}:${s < 10 ? "0" : ""}${s}`;
+	},
+
+	updateTimeDisplay() {
+		if (!this.timeDisplay) return;
+		this.timeDisplay.textContent =
+			this.formatTime(this.audio.currentTime) +
+			" / " +
+			this.formatTime(this.audio.duration);
 	},
 
 	destroyed() {
