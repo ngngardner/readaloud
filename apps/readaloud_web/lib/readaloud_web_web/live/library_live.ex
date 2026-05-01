@@ -236,15 +236,20 @@ defmodule ReadaloudWebWeb.LibraryLive do
 
   defp build_progress_map(books) do
     book_ids = Enum.map(books, & &1.id)
+    progresses = ReadaloudReader.list_progress_for_books(book_ids)
 
-    ReadaloudReader.list_progress_for_books(book_ids)
-    |> Enum.map(fn p -> {p.book_id, p} end)
-    |> Map.new()
+    current_ids = for p <- progresses, p.current_chapter_id, do: p.current_chapter_id
+    numbers = ReadaloudLibrary.chapter_numbers_by_ids(current_ids)
+
+    Map.new(progresses, fn p ->
+      n = Map.get(numbers, p.current_chapter_id)
+      {p.book_id, %{progress: p, current_chapter_number: n}}
+    end)
   end
 
   defp resume_path(book, progress_map) do
     case Map.get(progress_map, book.id) do
-      %{current_chapter_id: ch_id} when not is_nil(ch_id) ->
+      %{progress: %{current_chapter_id: ch_id}} when not is_nil(ch_id) ->
         ~p"/books/#{book.id}/read/#{ch_id}"
 
       _ ->
@@ -269,37 +274,25 @@ defmodule ReadaloudWebWeb.LibraryLive do
     CoverResolver.gradient_placeholder(book.title)
   end
 
-  defp status_badge(book, progress) do
+  defp status_badge(book, view) do
     total = book.total_chapters || 0
-    read = progress_chapter_count(progress, book)
+    current_n = view && view.current_chapter_number
+    read = if current_n, do: max(0, current_n - 1), else: 0
     new_cutoff = DateTime.add(DateTime.utc_now(), -7, :day)
 
     cond do
-      read > 0 and read >= total ->
+      total > 0 and current_n == total ->
         :done
 
-      read == 0 and NaiveDateTime.compare(book.inserted_at, DateTime.to_naive(new_cutoff)) == :gt ->
+      current_n == nil and
+          NaiveDateTime.compare(book.inserted_at, DateTime.to_naive(new_cutoff)) == :gt ->
         :new
 
-      read > 0 ->
+      current_n != nil ->
         {:progress, read, total}
 
       true ->
         nil
-    end
-  end
-
-  defp progress_chapter_count(nil, _book), do: 0
-
-  defp progress_chapter_count(progress, book) do
-    case progress.current_chapter_id do
-      nil ->
-        0
-
-      ch_id ->
-        chapters = ReadaloudLibrary.list_chapters(book.id)
-        current = Enum.find(chapters, &(&1.id == ch_id))
-        if current, do: current.number, else: 0
     end
   end
 

@@ -251,6 +251,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <.link navigate={~p"/"} class="btn btn-ghost btn-xs btn-circle" title="Library">
           <.icon name="hero-home" class="w-4 h-4" />
         </.link>
+        <span class="text-xs text-base-content/30 select-none">/</span>
+        <.link
+          navigate={~p"/books/#{@book.id}"}
+          class="btn btn-ghost btn-xs max-w-[12ch] truncate"
+          title={@book.title}
+        >
+          {@book.title}
+        </.link>
+        <span class="text-xs text-base-content/30 select-none">/</span>
         <button
           phx-click="prev_chapter"
           class="btn btn-ghost btn-xs btn-circle"

@@ -19,4 +19,28 @@ defmodule ReadaloudReader do
     |> ReadingProgress.changeset(attrs)
     |> Repo.insert_or_update()
   end
+
+  def chapter_statuses(chapters, nil), do: Map.new(chapters, &{&1.id, :unread})
+
+  def chapter_statuses(chapters, %{current_chapter_id: nil}),
+    do: Map.new(chapters, &{&1.id, :unread})
+
+  def chapter_statuses(chapters, %{current_chapter_id: current_id}) do
+    current_number =
+      case Enum.find(chapters, &(&1.id == current_id)) do
+        nil -> nil
+        ch -> ch.number
+      end
+
+    Map.new(chapters, fn ch ->
+      status =
+        cond do
+          ch.id == current_id -> :current
+          current_number && ch.number < current_number -> :read
+          true -> :unread
+        end
+
+      {ch.id, status}
+    end)
+  end
 end

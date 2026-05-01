@@ -61,6 +61,16 @@ defmodule ReadaloudLibrary do
     Chapter |> where(book_id: ^book_id) |> order_by(:number) |> Repo.all()
   end
 
+  def chapter_numbers_by_ids([]), do: %{}
+
+  def chapter_numbers_by_ids(ids) when is_list(ids) do
+    Chapter
+    |> where([c], c.id in ^ids)
+    |> select([c], {c.id, c.number})
+    |> Repo.all()
+    |> Map.new()
+  end
+
   def get_chapter(id), do: Repo.get(Chapter, id)
   def get_chapter!(id), do: Repo.get!(Chapter, id)
 

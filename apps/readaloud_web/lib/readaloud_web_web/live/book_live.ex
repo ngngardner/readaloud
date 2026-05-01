@@ -23,8 +23,10 @@ defmodule ReadaloudWebWeb.BookLive do
        task_count: active_task_count(),
        book: book,
        chapters: chapters,
+       chapter_statuses: ReadaloudReader.chapter_statuses(chapters, progress),
        progress: progress,
        audio_map: audio_map,
+       hide_read: true,
        models: models,
        selected_model: default_model(book, models),
        selected_voice: default_voice(book, models),
@@ -36,6 +38,11 @@ defmodule ReadaloudWebWeb.BookLive do
   def handle_event("delete_book", _params, socket) do
     ReadaloudLibrary.delete_book(socket.assigns.book)
     {:noreply, push_navigate(socket, to: ~p"/")}
+  end
+
+  @impl true
+  def handle_event("toggle_hide_read", _params, socket) do
+    {:noreply, assign(socket, hide_read: not socket.assigns.hide_read)}
   end
 
   @impl true
@@ -184,16 +191,27 @@ defmodule ReadaloudWebWeb.BookLive do
             <% end %>
           </div>
           <p :if={@book.author} class="text-base-content/60 mt-1">{@book.author}</p>
-          <div class="flex flex-wrap gap-2 mt-3">
+          <div class="flex flex-wrap gap-2 mt-3 items-center">
             <span class="badge badge-outline">{length(@chapters)} chapters</span>
             <span class="badge badge-outline">
-              {progress_count(@progress, @book, @chapters)}/{length(@chapters)} read
+              {read_count(@chapter_statuses)}/{length(@chapters)} read
             </span>
             <%= if @book.audio_preferences do %>
               <span class="badge badge-outline">
                 {audio_count(@audio_map)}/{length(@chapters)} audio
               </span>
             <% end %>
+            <button
+              phx-click="toggle_hide_read"
+              class="btn btn-ghost btn-xs gap-1"
+              title={if @hide_read, do: "Show read chapters", else: "Hide read chapters"}
+            >
+              <.icon
+                name={if @hide_read, do: "hero-eye-slash-mini", else: "hero-eye-mini"}
+                class="size-3"
+              />
+              {if @hide_read, do: "Read hidden", else: "All shown"}
+            </button>
           </div>
           <%= if @book.audio_preferences do %>
             <p class="text-xs text-base-content/50 mt-2">
@@ -269,9 +287,11 @@ defmodule ReadaloudWebWeb.BookLive do
       <div class="space-y-1">
         <div
           :for={ch <- @chapters}
+          :if={Map.get(@chapter_statuses, ch.id) != :read or not @hide_read}
           class={[
             "flex items-center gap-3 p-3 rounded-lg",
-            current?(ch, @progress) && "bg-primary/10"
+            Map.get(@chapter_statuses, ch.id) == :current && "bg-primary/10",
+            Map.get(@chapter_statuses, ch.id) == :read && "opacity-60"
           ]}
         >
           <span class="text-sm font-mono text-base-content/40 w-8">{ch.number}</span>
@@ -302,9 +322,13 @@ defmodule ReadaloudWebWeb.BookLive do
               <span class="text-xs text-error">skipped</span>
             <% _ -> %>
           <% end %>
-          <span :if={current?(ch, @progress)} class="badge badge-primary badge-xs">
-            CURRENT
-          </span>
+          <%= case Map.get(@chapter_statuses, ch.id) do %>
+            <% :current -> %>
+              <span class="badge badge-primary badge-xs">CURRENT</span>
+            <% :read -> %>
+              <.icon name="hero-check-mini" class="size-4 text-success" />
+            <% _ -> %>
+          <% end %>
         </div>
       </div>
     </div>
@@ -373,18 +397,6 @@ defmodule ReadaloudWebWeb.BookLive do
     end)
   end
 
-  defp current_chapter_number(nil, _chapters), do: 1
-
-  defp current_chapter_number(progress, chapters) do
-    case Enum.find(chapters, &(&1.id == progress.current_chapter_id)) do
-      nil -> 1
-      ch -> ch.number
-    end
-  end
-
-  defp current?(_chapter, nil), do: false
-  defp current?(chapter, progress), do: chapter.id == progress.current_chapter_id
-
   defp resume_path(book, nil, chapters) do
     case chapters do
       [first | _] -> ~p"/books/#{book.id}/read/#{first.id}"
@@ -397,11 +409,7 @@ defmodule ReadaloudWebWeb.BookLive do
   defp resume_path(book, progress, _chapters),
     do: ~p"/books/#{book.id}/read/#{progress.current_chapter_id}"
 
-  defp progress_count(nil, _book, _chapters), do: 0
-
-  defp progress_count(progress, _book, chapters) do
-    current_chapter_number(progress, chapters)
-  end
+  defp read_count(statuses), do: Enum.count(statuses, fn {_, s} -> s == :read end)
 
   defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> match?({:ready, _}, v) end)
 
