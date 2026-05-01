@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "03208c69dd96",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/hooks/audio_player.js",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex"
+  ],
+  "sessions": [
+    {
+      "metadata": "/03/208c69dd96/0/metadata.json",
+      "transcript": "/03/208c69dd96/0/full.jsonl",
+      "content_hash": "/03/208c69dd96/0/content_hash.txt",
+      "prompt": "/03/208c69dd96/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 61,
+    "cache_creation_tokens": 177380,
+    "cache_read_tokens": 2072536,
+    "output_tokens": 15608,
+    "api_call_count": 27
+  }
+}
