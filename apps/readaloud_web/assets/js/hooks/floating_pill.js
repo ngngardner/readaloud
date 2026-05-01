@@ -1,3 +1,16 @@
+// Any element marked with `data-pill-popover` keeps the pill alive while it's
+// visible. Visibility is judged by computed style so this works for both
+// `class="hidden"` (display:none) and the chapter-bar's opacity/pointer-events
+// closed state.
+function isVisible(el) {
+	const style = getComputedStyle(el);
+	if (style.display === "none") return false;
+	if (style.visibility === "hidden") return false;
+	if (Number.parseFloat(style.opacity) === 0) return false;
+	if (style.pointerEvents === "none") return false;
+	return true;
+}
+
 const FloatingPillHook = {
 	mounted() {
 		this.pill = this.el;
@@ -25,7 +38,6 @@ const FloatingPillHook = {
 			this.pill.addEventListener("mouseleave", () => this.resetTimer(3000));
 		}
 
-		// Listen for toggle-pill CustomEvent from AudioPlayer (Escape key)
 		this._togglePillHandler = () => this.toggle();
 		window.addEventListener("toggle-pill", this._togglePillHandler);
 
@@ -39,6 +51,7 @@ const FloatingPillHook = {
 	},
 
 	hide() {
+		if (this.hasOpenPopover()) return;
 		this.pill.classList.add("opacity-0", "pointer-events-none");
 		this.pill.classList.remove("opacity-100");
 		this.visible = false;
@@ -52,6 +65,14 @@ const FloatingPillHook = {
 	resetTimer(ms) {
 		clearTimeout(this.hideTimeout);
 		this.hideTimeout = setTimeout(() => this.hide(), ms);
+	},
+
+	hasOpenPopover() {
+		const popovers = document.querySelectorAll("[data-pill-popover]");
+		for (const el of popovers) {
+			if (isVisible(el)) return true;
+		}
+		return false;
 	},
 
 	destroyed() {

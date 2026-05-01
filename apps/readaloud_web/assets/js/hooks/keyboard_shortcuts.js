@@ -1,3 +1,9 @@
+// Keyboard shortcuts that don't require server work dispatch a window event
+// directly. Only chapter navigation (which mutates server state) goes through
+// pushEvent.
+const dispatchWin = (name, detail) =>
+	window.dispatchEvent(new CustomEvent(name, { detail }));
+
 const KeyboardShortcutsHook = {
 	mounted() {
 		this.handleKeydown = (e) => {
@@ -11,7 +17,7 @@ const KeyboardShortcutsHook = {
 			switch (e.key) {
 				case " ":
 					e.preventDefault();
-					this.pushEvent("toggle_playback");
+					dispatchWin("audio:toggle-playback");
 					break;
 				case "ArrowLeft":
 					e.preventDefault();
@@ -24,19 +30,19 @@ const KeyboardShortcutsHook = {
 				case "+":
 				case "=":
 					e.preventDefault();
-					this.pushEvent("change_speed", { direction: "up" });
+					dispatchWin("audio:change-speed", { direction: "up" });
 					break;
 				case "-":
 					e.preventDefault();
-					this.pushEvent("change_speed", { direction: "down" });
+					dispatchWin("audio:change-speed", { direction: "down" });
 					break;
 				case "Escape":
 					e.preventDefault();
-					this.pushEvent("toggle_pill");
+					dispatchWin("toggle-pill");
 					break;
 				case "m":
 					e.preventDefault();
-					this.pushEvent("toggle_mute");
+					dispatchWin("audio:toggle-mute");
 					break;
 			}
 		};

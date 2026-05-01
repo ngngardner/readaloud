@@ -7,6 +7,29 @@ defmodule ReadaloudWebWeb.ThemeSelector do
   def dark_themes, do: @dark_themes
   def light_themes, do: @light_themes
 
+  attr :themes, :list, required: true
+  attr :label, :string, required: true
+
+  def theme_swatches(assigns) do
+    ~H"""
+    <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">{@label}</div>
+    <div class="flex flex-wrap gap-1 mb-2">
+      <button
+        :for={theme <- @themes}
+        phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", to: "window", detail: %{theme: theme})}
+        class="theme-swatch"
+        title={theme}
+      >
+        <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
+          <div class="w-2 h-2 rounded-full bg-base-100"></div>
+          <div class="w-2 h-2 rounded-full bg-primary"></div>
+          <div class="w-2 h-2 rounded-full bg-secondary"></div>
+        </div>
+      </button>
+    </div>
+    """
+  end
+
   def theme_modal(assigns) do
     assigns =
       assigns
@@ -28,8 +51,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button
               :for={theme <- @dark_themes}
-              phx-click="set_theme"
-              phx-value-theme={theme}
+              phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", to: "window", detail: %{theme: theme})}
               class="btn btn-sm btn-ghost justify-start gap-2"
             >
               <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
@@ -48,8 +70,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button
               :for={theme <- @light_themes}
-              phx-click="set_theme"
-              phx-value-theme={theme}
+              phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", to: "window", detail: %{theme: theme})}
               class="btn btn-sm btn-ghost justify-start gap-2"
             >
               <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>

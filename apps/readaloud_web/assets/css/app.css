@@ -105,6 +105,7 @@ body {
   padding: 4px;
   border-radius: 6px;
   border: 2px solid transparent;
+  background: transparent;
   cursor: pointer;
   transition: border-color 0.15s;
 }

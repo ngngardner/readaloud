@@ -53,11 +53,6 @@ defmodule ReadaloudWebWeb.LibraryLive do
      |> push_event("persist_sort", %{sort: sort_by})}
   end
 
-  @impl true
-  def handle_event("set_theme", %{"theme" => theme}, socket) do
-    {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
   # Existing upload handlers preserved from original implementation
   @impl true
   def handle_event("validate", _params, socket) do

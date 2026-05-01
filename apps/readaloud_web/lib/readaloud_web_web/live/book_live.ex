@@ -89,11 +89,6 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("set_theme", %{"theme" => theme}, socket) do
-    {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
-  @impl true
   def handle_event("select_model", %{"model" => model_id}, socket) do
     model = Enum.find(socket.assigns.models, &(&1[:id] == model_id))
     voice = if model, do: List.first(model[:voices] || []), else: socket.assigns.selected_voice

@@ -94,11 +94,6 @@ defmodule ReadaloudWebWeb.TasksLive do
   end
 
   @impl true
-  def handle_event("set_theme", %{"theme" => theme}, socket) do
-    {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
-  @impl true
   def handle_info(_, socket) do
     {:noreply, reload_tasks(socket)}
   end

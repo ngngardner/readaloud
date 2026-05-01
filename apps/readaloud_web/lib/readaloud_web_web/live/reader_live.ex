@@ -1,6 +1,8 @@
 defmodule ReadaloudWebWeb.ReaderLive do
   use ReadaloudWebWeb, :live_view
 
+  alias ReadaloudWebWeb.ThemeSelector
+
   @impl true
   def mount(%{"id" => book_id, "chapter_id" => chapter_id}, _session, socket) do
     book_id = String.to_integer(book_id)
@@ -40,8 +42,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
        models: [],
        selected_model: default_model(book, []),
        selected_voice: default_voice(book, []),
-       player_collapsed: false,
-       show_settings: false,
        show_conflict_modal: false,
        conflict_chapter: nil,
        generation_progress: 0,
@@ -99,11 +99,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
   # -- Event handlers --
 
   @impl true
-  def handle_event("toggle_playback", _params, socket) do
-    {:noreply, push_event(socket, "toggle_audio", %{})}
-  end
-
-  @impl true
   def handle_event("prev_chapter", _params, socket) do
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
@@ -129,21 +124,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
            to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
          )}
     end
-  end
-
-  @impl true
-  def handle_event("change_speed", %{"direction" => dir}, socket) do
-    {:noreply, push_event(socket, "change_speed", %{direction: dir})}
-  end
-
-  @impl true
-  def handle_event("toggle_pill", _params, socket) do
-    {:noreply, push_event(socket, "toggle_pill", %{})}
-  end
-
-  @impl true
-  def handle_event("toggle_mute", _params, socket) do
-    {:noreply, push_event(socket, "toggle_mute", %{})}
   end
 
   @impl true
@@ -189,11 +169,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
-  def handle_event("set_theme", %{"theme" => theme}, socket) do
-    {:noreply, push_event(socket, "set_theme", %{theme: theme})}
-  end
-
-  @impl true
   def handle_event("dismiss_conflict", _params, socket) do
     ReadaloudReader.upsert_progress(%{
       book_id: socket.assigns.book.id,
@@ -219,30 +194,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
      push_navigate(socket,
        to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}?nav=internal"
      )}
-  end
-
-  @impl true
-  def handle_event("update_reader_setting", params, socket) do
-    # Relay setting changes to the client-side ReaderSettingsHook
-    {key, value} =
-      cond do
-        params["key"] -> {params["key"], params["value"]}
-        params["fontSize"] -> {"fontSize", params["fontSize"]}
-        params["lineHeight"] -> {"lineHeight", params["lineHeight"]}
-        params["maxWidth"] -> {"maxWidth", params["maxWidth"]}
-        true -> {nil, nil}
-      end
-
-    if key do
-      {:noreply, push_event(socket, "update_reader_setting", %{key: key, value: value})}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  @impl true
-  def handle_event("toggle_settings", _params, socket) do
-    {:noreply, assign(socket, show_settings: !socket.assigns.show_settings)}
   end
 
   @impl true
@@ -332,6 +283,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div
         id="chapter-bar"
         phx-hook="ChapterBarHook"
+        data-pill-popover="chapters"
         data-current-index={chapter_index(@chapter, @chapters)}
         data-total-chapters={length(@chapters)}
         data-chapters={
@@ -385,6 +337,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <%!-- Reader settings popover --%>
       <div
         id="reader-settings"
+        data-pill-popover="settings"
         class="fixed top-16 right-4 z-50 hidden
                bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72"
       >
@@ -396,9 +349,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <div class="join w-full">
               <button
                 :for={font <- [{"serif", "Serif"}, {"sans", "Sans"}, {"mono", "Mono"}]}
-                phx-click={
-                  JS.push("update_reader_setting", value: %{key: "fontFamily", value: elem(font, 0)})
-                }
+                data-font-family={elem(font, 0)}
                 class="btn btn-xs join-item flex-1"
               >
                 {elem(font, 1)}
@@ -413,7 +364,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
               min="14"
               max="28"
               value="18"
-              phx-change="update_reader_setting"
               name="fontSize"
               class="range range-xs w-full"
             />
@@ -427,7 +377,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
               max="2.4"
               step="0.2"
               value="1.8"
-              phx-change="update_reader_setting"
               name="lineHeight"
               class="range range-xs w-full"
             />
@@ -441,7 +390,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
               max="1000"
               step="50"
               value="700"
-              phx-change="update_reader_setting"
               name="maxWidth"
               class="range range-xs w-full"
             />
@@ -455,9 +403,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <input
               id="auto-next-chapter-toggle"
               type="checkbox"
-              phx-click={
-                JS.push("update_reader_setting", value: %{key: "autoNextChapter", value: "toggle"})
-              }
               class="toggle toggle-sm toggle-primary"
             />
           </label>
@@ -467,43 +412,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
           <%!-- Theme selector --%>
           <div>
             <div class="text-xs text-base-content/60 mb-2">Theme</div>
-            <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">Dark</div>
-            <div class="flex flex-wrap gap-1 mb-2">
-              <button
-                :for={theme <- ~w(abyss dark dim dracula night sunset vampire)}
-                phx-click="set_theme"
-                phx-value-theme={theme}
-                data-set-theme={theme}
-                class="theme-swatch"
-                title={theme}
-              >
-                <div class="flex gap-0.5" data-theme={theme}>
-                  <div class="w-2 h-2 rounded-full bg-base-100"></div>
-                  <div class="w-2 h-2 rounded-full bg-primary"></div>
-                  <div class="w-2 h-2 rounded-full bg-secondary"></div>
-                </div>
-              </button>
-            </div>
-            <div class="text-xs uppercase tracking-widest text-base-content/40 mb-1">Light</div>
-            <div class="flex flex-wrap gap-1">
-              <button
-                :for={
-                  theme <-
-                    ~w(autumn bumblebee corporate cupcake emerald garden lemonade light lofi nord pastel retro)
-                }
-                phx-click="set_theme"
-                phx-value-theme={theme}
-                data-set-theme={theme}
-                class="theme-swatch"
-                title={theme}
-              >
-                <div class="flex gap-0.5" data-theme={theme}>
-                  <div class="w-2 h-2 rounded-full bg-base-100"></div>
-                  <div class="w-2 h-2 rounded-full bg-primary"></div>
-                  <div class="w-2 h-2 rounded-full bg-secondary"></div>
-                </div>
-              </button>
-            </div>
+            <ThemeSelector.theme_swatches themes={ThemeSelector.dark_themes()} label="Dark" />
+            <ThemeSelector.theme_swatches themes={ThemeSelector.light_themes()} label="Light" />
           </div>
         </div>
       </div>
@@ -682,8 +592,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
             <%!-- Speed badge (click to cycle) --%>
             <button
               id="speed-badge"
-              phx-click="change_speed"
-              phx-value-direction="up"
               class="btn btn-ghost btn-xs font-mono tabular-nums [.collapsed_&]:hidden"
               title="Click to change speed"
             >

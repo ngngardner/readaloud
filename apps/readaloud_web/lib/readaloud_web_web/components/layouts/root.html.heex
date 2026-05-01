@@ -19,8 +19,8 @@
         var theme = localStorage.getItem("phx:theme");
         if (theme) document.documentElement.setAttribute("data-theme", theme);
       })();
-      // Listen for LiveView theme-change push events (phx-hook can't be on <html>)
-      window.addEventListener("phx:set_theme", (e) => {
+      // Theme swatches dispatch this directly via JS.dispatch — no LV round-trip.
+      window.addEventListener("readaloud:set-theme", (e) => {
         document.documentElement.setAttribute("data-theme", e.detail.theme);
         localStorage.setItem("phx:theme", e.detail.theme);
       });
