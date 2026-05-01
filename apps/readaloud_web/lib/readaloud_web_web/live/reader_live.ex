@@ -254,10 +254,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <span class="text-xs text-base-content/30 select-none">/</span>
         <.link
           navigate={~p"/books/#{@book.id}"}
-          class="btn btn-ghost btn-xs max-w-[12ch] truncate"
+          class="btn btn-ghost btn-xs px-2 max-w-[14ch]"
           title={@book.title}
         >
-          {@book.title}
+          <span class="truncate">{@book.title}</span>
         </.link>
         <span class="text-xs text-base-content/30 select-none">/</span>
         <button
