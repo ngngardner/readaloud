@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "31a8d7f0341f",
+  "session_id": "313a90af-7255-4653-b5ba-0440308fb9fa",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-01T20:58:34.219904077Z",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/hooks/audio_player.js",
+    "apps/readaloud_web/assets/js/hooks/floating_pill.js",
+    "apps/readaloud_web/assets/js/hooks/word_menu.js",
+    "apps/readaloud_web/lib/readaloud_web_web/components/theme_selector.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "848bf5e4897a",
+  "checkpoint_transcript_start": 107,
+  "transcript_lines_at_start": 107,
+  "token_usage": {
+    "input_tokens": 106,
+    "cache_creation_tokens": 124311,
+    "cache_read_tokens": 18308196,
+    "output_tokens": 84395,
+    "api_call_count": 96
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-01T20:58:33.879111426Z",
+    "agent_lines": 180,
+    "human_added": 65,
+    "human_modified": 85,
+    "human_removed": 0,
+    "total_committed": 330,
+    "agent_percentage": 54.54545454545454
+  }
+}
