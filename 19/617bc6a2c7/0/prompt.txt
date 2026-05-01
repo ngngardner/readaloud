@@ -1,0 +1,144 @@
+some general complaints looking to do a /skillserver jason refactor to address. 
+
+floating pill doesnt provide a way to navigate back to the book screen
+book screen should provide a filter to hide read chapters by default (user can show if they want)
+
+---
+
+Base directory for this skill: /home/noah/.claude/skills/skillserver
+
+# Skillserver Bridge
+
+Interact with the MCP skillserver (served over LiteLLM gateway on `pylon:4100`)
+to list, search, and invoke skills hosted there. Works from any project —
+requires only the `litellm-gateway` MCP server to be connected.
+
+## Setup: load the MCP tools
+
+The skillserver MCP tools are deferred. Before doing anything else, load them:
+
+```
+ToolSearch query: "+skillserver"
+```
+
+This exposes:
+
+- `mcp__litellm-gateway__skillserver-list_skills`
+- `mcp__litellm-gateway__skillserver-read_skill`
+- `mcp__litellm-gateway__skillserver-search_skills`
+- `mcp__litellm-gateway__skillserver-list_skill_resources`
+- `mcp__litellm-gateway__skillserver-read_skill_resource`
+- `mcp__litellm-gateway__skillserver-get_skill_resource_info`
+
+## Argument parsing
+
+Parse `jason` and route:
+
+| Argument form             | Action                                         |
+| ------------------------- | ---------------------------------------------- |
+| (empty) or `list`         | List all skills                                |
+| `search <query>`          | Search skills by keyword                       |
+| `show <name>`             | Read and display the skill's SKILL.md          |
+| `status`                  | Health check                                   |
+| `<name>` (any other word) | **Invoke** that skill — read it and follow it  |
+
+The invoke form is the default for a bare name. `/skillserver jason` means
+"read the `jason` skill from the MCP server and execute its instructions as
+if it had been triggered locally." `/skillserver good-morning` runs the
+good-morning routine, etc.
+
+## Actions
+
+### List
+
+```
+mcp__litellm-gateway__skillserver-list_skills
+```
+
+Format as a table: skill name + one-line description. If the result is long,
+group by category or prefix.
+
+### Search
+
+```
+mcp__litellm-gateway__skillserver-search_skills(query: "<query>")
+```
+
+Show matches with relevance context.
+
+### Show
+
+```
+mcp__litellm-gateway__skillserver-read_skill(id: "<name>")
+```
+
+Dump the full skill content. Do NOT execute it.
+
+### Invoke
+
+1. Read the skill:
+   ```
+   mcp__litellm-gateway__skillserver-read_skill(id: "<name>")
+   ```
+2. If the skill references a `references/` folder or other resources, list
+   them and pull what's needed:
+   ```
+   mcp__litellm-gateway__skillserver-list_skill_resources(id: "<name>")
+   mcp__litellm-gateway__skillserver-read_skill_resource(id: "<name>", resource: "<path>")
+   ```
+3. Follow the skill's instructions as if it had been invoked directly.
+   Treat the returned SKILL.md body as authoritative — obey its workflow,
+   checkpoints, and constraints exactly.
+4. If the skill expects further arguments (e.g. `jason` expects
+   `refactor|design|review [target]`), pass through whatever the user
+   supplied after the skill name. Example: `/skillserver jason refactor src/foo.ts`
+   → invoke `jason` with `refactor src/foo.ts` as its arguments.
+
+### Status
+
+```
+mcp__litellm-gateway__skillserver-list_skills
+```
+
+If it returns results, report "Skillserver reachable, N skills available."
+If it errors, report the error and suggest checking:
+
+- `curl -s http://pylon:4100/health/liveliness`
+- Whether the `litellm-gateway` MCP server is connected in `~/.claude.json`
+
+## Error handling
+
+### Skill not found
+
+If `read_skill` returns an error for a name, fall back to:
+
+```
+mcp__litellm-gateway__skillserver-search_skills(query: "<name>")
+```
+
+Suggest the closest matches.
+
+### MCP server not connected
+
+If `ToolSearch` returns no skillserver tools, the `litellm-gateway` MCP server
+isn't attached. Tell the user to check `~/.claude.json` for the
+`litellm-gateway` entry and that pylon:4100 is reachable.
+
+### Skill pass-through fails
+
+If a skill's instructions reference local files or env vars that don't exist
+in the current project (e.g., `jason` needs a target, `improve` needs a
+project to improve), report the mismatch instead of guessing. The skill
+definitions are project-agnostic; the *invocation context* may not be.
+
+---
+
+proceed
+
+---
+
+proceed
+
+---
+
+go, q1 progress is determined by current chapter only (chapters before current chapter are considered read). q2 not sure do whats best. q3 ok
