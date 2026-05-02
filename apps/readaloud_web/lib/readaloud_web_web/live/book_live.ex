@@ -46,10 +46,8 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("activate_audio", _params, socket) do
+  def handle_event("activate_audio", %{"model" => model, "voice" => voice}, socket) do
     book = socket.assigns.book
-    model = socket.assigns.selected_model
-    voice = socket.assigns.selected_voice
     chapters = socket.assigns.chapters
     progress = socket.assigns.progress
 
@@ -66,6 +64,8 @@ defmodule ReadaloudWebWeb.BookLive do
          socket
          |> assign(
            book: book,
+           selected_model: model,
+           selected_voice: voice,
            audio_map: build_audio_map(chapters, book)
          )}
 
@@ -104,15 +104,15 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("select_model", %{"model" => model_id}, socket) do
-    model = Enum.find(socket.assigns.models, &(&1[:id] == model_id))
-    voice = if model, do: List.first(model[:voices] || []), else: socket.assigns.selected_voice
-    {:noreply, assign(socket, selected_model: model_id, selected_voice: voice)}
-  end
+  def handle_event("update_audio_form", %{"model" => model_id, "voice" => voice}, socket) do
+    voices =
+      case Enum.find(socket.assigns.models, &(&1[:id] == model_id)) do
+        nil -> []
+        m -> m[:voices] || []
+      end
 
-  @impl true
-  def handle_event("select_voice", %{"voice" => voice}, socket) do
-    {:noreply, assign(socket, selected_voice: voice)}
+    new_voice = if voice in voices, do: voice, else: List.first(voices)
+    {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}
   end
 
   @impl true
@@ -248,42 +248,36 @@ defmodule ReadaloudWebWeb.BookLive do
                   tabindex="0"
                   class="dropdown-content z-10 card card-compact bg-base-200 shadow-xl w-64 p-4"
                 >
-                  <div class="form-control mb-3">
-                    <label class="label label-text text-xs uppercase">Model</label>
-                    <select
-                      phx-change="select_model"
-                      name="model"
-                      class="select select-sm select-bordered w-full"
-                    >
-                      <option
-                        :for={m <- @models}
-                        value={m[:id]}
-                        selected={m[:id] == @selected_model}
-                      >
-                        {m[:id]}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="form-control mb-3">
-                    <label class="label label-text text-xs uppercase">Voice</label>
-                    <select
-                      phx-change="select_voice"
-                      name="voice"
-                      class="select select-sm select-bordered w-full"
-                    >
-                      <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
-                      <option
-                        :for={v <- (current_model && current_model[:voices]) || []}
-                        value={v}
-                        selected={v == @selected_voice}
-                      >
-                        {v}
-                      </option>
-                    </select>
-                  </div>
-                  <button phx-click="activate_audio" class="btn btn-primary btn-sm w-full">
-                    Activate
-                  </button>
+                  <form phx-change="update_audio_form" phx-submit="activate_audio">
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Model</label>
+                      <select name="model" class="select select-sm select-bordered w-full">
+                        <option
+                          :for={m <- @models}
+                          value={m[:id]}
+                          selected={m[:id] == @selected_model}
+                        >
+                          {m[:id]}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="form-control mb-3">
+                      <label class="label label-text text-xs uppercase">Voice</label>
+                      <select name="voice" class="select select-sm select-bordered w-full">
+                        <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                        <option
+                          :for={v <- (current_model && current_model[:voices]) || []}
+                          value={v}
+                          selected={v == @selected_voice}
+                        >
+                          {v}
+                        </option>
+                      </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-full">
+                      Activate
+                    </button>
+                  </form>
                 </div>
               </div>
             <% end %>
