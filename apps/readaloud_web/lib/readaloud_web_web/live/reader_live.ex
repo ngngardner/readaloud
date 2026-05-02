@@ -71,6 +71,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
             current_chapter_id: socket.assigns.chapter.id
           })
 
+          ReadaloudAudiobook.reprioritize_pending_jobs(
+            socket.assigns.chapters,
+            socket.assigns.chapter.number
+          )
+
           {:noreply, socket}
         end
       else
@@ -78,6 +83,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
           book_id: socket.assigns.book.id,
           current_chapter_id: socket.assigns.chapter.id
         })
+
+        ReadaloudAudiobook.reprioritize_pending_jobs(
+          socket.assigns.chapters,
+          socket.assigns.chapter.number
+        )
 
         {:noreply, socket}
       end

@@ -15,8 +15,14 @@ defmodule ReadaloudAudiobook do
 
     case %AudiobookTask{} |> AudiobookTask.changeset(attrs) |> Repo.insert() do
       {:ok, task} ->
+        job_opts =
+          case Keyword.get(opts, :priority) do
+            nil -> []
+            p -> [priority: p]
+          end
+
         %{"task_id" => task.id}
-        |> GenerateJob.new()
+        |> GenerateJob.new(job_opts)
         |> Oban.insert()
 
         {:ok, task}
@@ -26,15 +32,19 @@ defmodule ReadaloudAudiobook do
     end
   end
 
-  def ensure_audio_generated(%{audio_preferences: nil}, _chapters), do: {:ok, 0}
+  def ensure_audio_generated(book, chapters, progress \\ nil)
 
-  def ensure_audio_generated(%{audio_preferences: prefs}, _chapters) when map_size(prefs) == 0,
-    do: {:ok, 0}
+  def ensure_audio_generated(%{audio_preferences: nil}, _chapters, _progress), do: {:ok, 0}
 
-  def ensure_audio_generated(book, chapters) do
+  def ensure_audio_generated(%{audio_preferences: prefs}, _chapters, _progress)
+      when map_size(prefs) == 0,
+      do: {:ok, 0}
+
+  def ensure_audio_generated(book, chapters, progress) do
     model = book.audio_preferences["model"]
     voice = book.audio_preferences["voice"]
     chapter_ids = Enum.map(chapters, & &1.id)
+    current_number = current_chapter_number(chapters, progress)
 
     # Load existing state
     audios = list_chapter_audio_for_chapters(chapter_ids)
@@ -69,10 +79,82 @@ defmodule ReadaloudAudiobook do
     Enum.each(to_generate, fn ch ->
       failed_task = Map.get(failed_by_chapter, ch.id)
       attempt = if failed_task, do: failed_task.attempt_number + 1, else: 1
-      generate_for_chapter(book.id, ch.id, model: model, voice: voice, attempt_number: attempt)
+
+      generate_for_chapter(book.id, ch.id,
+        model: model,
+        voice: voice,
+        attempt_number: attempt,
+        priority: chapter_priority(ch.number, current_number)
+      )
     end)
 
+    # Re-prioritize already-pending jobs against the current reading position
+    # so the queue picks up near-current chapters first.
+    reprioritize_pending_jobs(chapters, current_number)
+
     {:ok, length(to_generate)}
+  end
+
+  @doc """
+  Updates priority on already-queued Oban jobs based on chapter distance
+  from the current reading position. Lower priority value = picked sooner.
+  """
+  def reprioritize_pending_jobs(_chapters, nil), do: :ok
+
+  def reprioritize_pending_jobs(chapters, current_number) do
+    chapter_ids = Enum.map(chapters, & &1.id)
+    number_by_chapter_id = Map.new(chapters, &{&1.id, &1.number})
+
+    pending_tasks =
+      AudiobookTask
+      |> where([t], t.chapter_id in ^chapter_ids and t.status == "pending")
+      |> select([t], {t.id, t.chapter_id})
+      |> Repo.all()
+
+    pending_tasks
+    |> Enum.group_by(
+      fn {_task_id, chapter_id} ->
+        number_by_chapter_id |> Map.get(chapter_id) |> chapter_priority(current_number)
+      end,
+      fn {task_id, _chapter_id} -> task_id end
+    )
+    |> Enum.each(fn {priority, task_ids} ->
+      from(j in "oban_jobs",
+        where:
+          j.state in ["available", "scheduled", "retryable"] and j.queue == "tts" and
+            fragment("CAST(json_extract(?, '$.task_id') AS INTEGER)", j.args) in ^task_ids and
+            j.priority != ^priority
+      )
+      |> Repo.update_all(set: [priority: priority])
+    end)
+
+    :ok
+  end
+
+  defp current_chapter_number(_chapters, nil), do: nil
+  defp current_chapter_number(_chapters, %{current_chapter_id: nil}), do: nil
+
+  defp current_chapter_number(chapters, %{current_chapter_id: current_id}) do
+    case Enum.find(chapters, &(&1.id == current_id)) do
+      nil -> nil
+      ch -> ch.number
+    end
+  end
+
+  defp chapter_priority(_chapter_number, nil), do: 0
+  defp chapter_priority(nil, _current_number), do: 5
+
+  defp chapter_priority(chapter_number, current_number) do
+    offset = chapter_number - current_number
+
+    cond do
+      offset < 0 -> 9
+      offset <= 4 -> 0
+      offset <= 19 -> 1
+      offset <= 49 -> 2
+      offset <= 99 -> 3
+      true -> 5
+    end
   end
 
   def list_tasks do

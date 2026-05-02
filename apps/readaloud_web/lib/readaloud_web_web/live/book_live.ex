@@ -13,7 +13,12 @@ defmodule ReadaloudWebWeb.BookLive do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
-      ReadaloudAudiobook.ensure_audio_generated(book, chapters_needing_audio(chapters, progress))
+
+      ReadaloudAudiobook.ensure_audio_generated(
+        book,
+        chapters_needing_audio(chapters, progress),
+        progress
+      )
     end
 
     {:ok,
@@ -59,7 +64,8 @@ defmodule ReadaloudWebWeb.BookLive do
       {:ok, book} ->
         ReadaloudAudiobook.ensure_audio_generated(
           book,
-          chapters_needing_audio(chapters, progress)
+          chapters_needing_audio(chapters, progress),
+          progress
         )
 
         {:noreply,
@@ -88,7 +94,8 @@ defmodule ReadaloudWebWeb.BookLive do
       {:ok, book} ->
         ReadaloudAudiobook.ensure_audio_generated(
           book,
-          chapters_needing_audio(chapters, progress)
+          chapters_needing_audio(chapters, progress),
+          progress
         )
 
         {:noreply,
@@ -132,7 +139,11 @@ defmodule ReadaloudWebWeb.BookLive do
     progress = socket.assigns.progress
 
     if task.status == "completed" do
-      ReadaloudAudiobook.ensure_audio_generated(book, chapters_needing_audio(chapters, progress))
+      ReadaloudAudiobook.ensure_audio_generated(
+        book,
+        chapters_needing_audio(chapters, progress),
+        progress
+      )
     end
 
     {:noreply, assign(socket, audio_map: build_audio_map(chapters, book))}
