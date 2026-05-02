@@ -476,9 +476,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <article
           :if={@content && @audio_state == :ready}
           id="chapter-text"
-          phx-hook="ScrollTracker"
+          phx-hook="ScrollTrackerHook"
           data-initial-scroll={@initial_scroll}
-          data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
           {raw(prepare_text_with_spans(@content))}
@@ -486,9 +485,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <article
           :if={@content && @audio_state != :ready}
           id="chapter-text"
-          phx-hook="ScrollTracker"
+          phx-hook="ScrollTrackerHook"
           data-initial-scroll={@initial_scroll}
-          data-audio-playing="false"
           class="prose prose-lg max-w-none leading-relaxed"
         >
           {raw(@content)}
@@ -555,7 +553,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <div
         :if={@audio_state == :ready}
         id="audio-player"
-        phx-hook="AudioPlayer"
+        phx-hook="AudioPlayerHook"
         data-audio-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/audio"}
         data-timings-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/timings"}
         data-initial-position={@initial_position_ms}

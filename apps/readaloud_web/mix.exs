@@ -80,14 +80,25 @@ defmodule ReadaloudWeb.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing",
+        "cmd --cd assets npm install --silent --no-fund --no-audit"
+      ],
       "assets.build": ["compile", "tailwind readaloud_web", "esbuild readaloud_web"],
+      "assets.typecheck": ["cmd --cd assets npx --no-install tsc --noEmit"],
       "assets.deploy": [
         "tailwind readaloud_web --minify",
         "esbuild readaloud_web --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "assets.typecheck",
+        "test"
+      ]
     ]
   end
 end

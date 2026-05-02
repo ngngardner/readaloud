@@ -10,6 +10,9 @@
       "format"
       "--write"
     ];
-    includes = [ "*.js" ];
+    includes = [
+      "*.js"
+      "*.ts"
+    ];
   };
 }

@@ -60,11 +60,12 @@ beamPackages.mixRelease {
     # resolution (mirrors the env config in config/config.exs)
     NODE_PATH="deps:_build/$MIX_BUILD_PREFIX" \
     esbuild \
-      apps/readaloud_web/assets/js/app.js \
+      apps/readaloud_web/assets/js/app.ts \
       --bundle --target=es2022 \
       --outdir=apps/readaloud_web/priv/static/assets/js \
       "--external:/fonts/*" "--external:/images/*" \
       "--alias:@=apps/readaloud_web/assets" \
+      '--define:process.env.NODE_ENV="production"' \
       --minify
 
     echo "Running Phoenix digest..."

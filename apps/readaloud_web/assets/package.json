@@ -1,0 +1,11 @@
+{
+  "name": "readaloud_web_assets",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

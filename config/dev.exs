@@ -15,7 +15,13 @@ config :readaloud_web, ReadaloudWebWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "Xt86mmFKxeKArsx6EpHdlvxVWtf8/l5Edq58Uiba69EvRGVvgbSl/IZpzD/Vfsta",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:readaloud_web, ~w(--sourcemap=inline --watch)]},
+    esbuild:
+      {Esbuild, :install_and_run,
+       [
+         :readaloud_web,
+         ~w(--sourcemap=inline --watch) ++
+           [~s|--define:process.env.NODE_ENV="development"|]
+       ]},
     tailwind: {Tailwind, :install_and_run, [:readaloud_web, ~w(--watch)]}
   ]
 

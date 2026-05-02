@@ -88,7 +88,7 @@ in
         trim_trailing_whitespace = true;
         charset = "utf-8";
       };
-      "*.{nix,ex,exs,js,css,heex}" = {
+      "*.{nix,ex,exs,js,ts,css,heex}" = {
         indent_style = "space";
         indent_size = 2;
       };
