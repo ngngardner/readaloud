@@ -127,17 +127,23 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
-  def handle_event("generate_audio", _params, socket) do
+  def handle_event("generate_audio", params, socket) do
     book = socket.assigns.book
     chapter = socket.assigns.chapter
-    model = socket.assigns.selected_model
-    voice = socket.assigns.selected_voice
+    model = params["model"] || socket.assigns.selected_model
+    voice = params["voice"] || socket.assigns.selected_voice
 
     ReadaloudLibrary.update_book(book, %{audio_preferences: %{"model" => model, "voice" => voice}})
 
     ReadaloudAudiobook.generate_for_chapter(book.id, chapter.id, model: model, voice: voice)
 
-    {:noreply, assign(socket, audio_state: :generating, generation_progress: 0)}
+    {:noreply,
+     assign(socket,
+       audio_state: :generating,
+       generation_progress: 0,
+       selected_model: model,
+       selected_voice: voice
+     )}
   end
 
   @impl true
@@ -197,15 +203,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
-  def handle_event("select_model", %{"model" => model_id}, socket) do
-    model = Enum.find(socket.assigns.models, &(&1[:id] == model_id))
-    voice = if model, do: List.first(model[:voices] || []), else: socket.assigns.selected_voice
-    {:noreply, assign(socket, selected_model: model_id, selected_voice: voice)}
-  end
+  def handle_event("update_audio_form", %{"model" => model_id, "voice" => voice}, socket) do
+    voices =
+      case Enum.find(socket.assigns.models, &(&1[:id] == model_id)) do
+        nil -> []
+        m -> m[:voices] || []
+      end
 
-  @impl true
-  def handle_event("select_voice", %{"voice" => voice}, socket) do
-    {:noreply, assign(socket, selected_voice: voice)}
+    new_voice = if voice in voices, do: voice, else: List.first(voices)
+    {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}
   end
 
   # -- Async model fetch --
@@ -482,8 +488,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <%!-- 3. Bottom bar: three states --%>
 
       <%!-- State 1: No audio --%>
-      <div
+      <form
         :if={@audio_state == :none}
+        phx-change="update_audio_form"
+        phx-submit="generate_audio"
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 px-4 py-3"
       >
         <div class="max-w-2xl mx-auto flex items-center gap-4">
@@ -495,20 +503,20 @@ defmodule ReadaloudWebWeb.ReaderLive do
             </div>
           </div>
           <div class="hidden sm:flex items-center gap-2">
-            <select phx-change="select_model" name="model" class="select select-xs select-bordered">
+            <select name="model" class="select select-xs select-bordered">
               <option :for={m <- @models} value={m[:id]} selected={m[:id] == @selected_model}>
                 {m[:id]}
               </option>
             </select>
-            <select phx-change="select_voice" name="voice" class="select select-xs select-bordered">
+            <select name="voice" class="select select-xs select-bordered">
               <%= for m <- @models, m[:id] == @selected_model, v <- (m[:voices] || []) do %>
                 <option value={v} selected={v == @selected_voice}>{v}</option>
               <% end %>
             </select>
           </div>
-          <button phx-click="generate_audio" class="btn btn-primary btn-sm">Generate Audio</button>
+          <button type="submit" class="btn btn-primary btn-sm">Generate Audio</button>
         </div>
-      </div>
+      </form>
 
       <%!-- State 2: Generating --%>
       <div
