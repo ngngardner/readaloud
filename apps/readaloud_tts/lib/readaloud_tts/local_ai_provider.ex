@@ -120,6 +120,7 @@ defmodule ReadaloudTTS.LocalAIProvider do
             voices = Map.get(Config.known_voices(), model_id, [])
             %{id: model_id, voices: voices}
           end)
+          |> Enum.reject(&(&1.voices == []))
 
         {:ok, tts_models}
 
