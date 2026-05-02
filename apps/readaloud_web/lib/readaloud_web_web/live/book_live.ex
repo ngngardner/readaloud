@@ -13,7 +13,7 @@ defmodule ReadaloudWebWeb.BookLive do
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
-      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters_needing_audio(chapters, progress))
     end
 
     {:ok,
@@ -51,12 +51,16 @@ defmodule ReadaloudWebWeb.BookLive do
     model = socket.assigns.selected_model
     voice = socket.assigns.selected_voice
     chapters = socket.assigns.chapters
+    progress = socket.assigns.progress
 
     case ReadaloudLibrary.update_book(book, %{
            audio_preferences: %{"model" => model, "voice" => voice}
          }) do
       {:ok, book} ->
-        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+        ReadaloudAudiobook.ensure_audio_generated(
+          book,
+          chapters_needing_audio(chapters, progress)
+        )
 
         {:noreply,
          socket
@@ -74,12 +78,16 @@ defmodule ReadaloudWebWeb.BookLive do
   def handle_event("update_audio_settings", %{"model" => model, "voice" => voice}, socket) do
     book = socket.assigns.book
     chapters = socket.assigns.chapters
+    progress = socket.assigns.progress
 
     case ReadaloudLibrary.update_book(book, %{
            audio_preferences: %{"model" => model, "voice" => voice}
          }) do
       {:ok, book} ->
-        ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+        ReadaloudAudiobook.ensure_audio_generated(
+          book,
+          chapters_needing_audio(chapters, progress)
+        )
 
         {:noreply,
          socket
@@ -111,9 +119,10 @@ defmodule ReadaloudWebWeb.BookLive do
   def handle_info({:task_updated, task}, socket) do
     book = socket.assigns.book
     chapters = socket.assigns.chapters
+    progress = socket.assigns.progress
 
     if task.status == "completed" do
-      ReadaloudAudiobook.ensure_audio_generated(book, chapters)
+      ReadaloudAudiobook.ensure_audio_generated(book, chapters_needing_audio(chapters, progress))
     end
 
     {:noreply, assign(socket, audio_map: build_audio_map(chapters, book))}
@@ -182,7 +191,9 @@ defmodule ReadaloudWebWeb.BookLive do
                       </select>
                     </div>
                     <p class="text-xs text-base-content/50 text-center mb-2">
-                      {audio_count(@audio_map)}/{length(@chapters)} chapters ready
+                      {audio_pending_ready(@audio_map, @chapter_statuses)}/{audio_pending_total(
+                        @chapter_statuses
+                      )} chapters ready
                     </p>
                     <button type="submit" class="btn btn-primary btn-sm w-full">Save</button>
                   </form>
@@ -198,7 +209,9 @@ defmodule ReadaloudWebWeb.BookLive do
             </span>
             <%= if @book.audio_preferences do %>
               <span class="badge badge-outline">
-                {audio_count(@audio_map)}/{length(@chapters)} audio
+                {audio_pending_ready(@audio_map, @chapter_statuses)}/{audio_pending_total(
+                  @chapter_statuses
+                )} audio
               </span>
             <% end %>
             <button
@@ -215,9 +228,11 @@ defmodule ReadaloudWebWeb.BookLive do
           </div>
           <%= if @book.audio_preferences do %>
             <p class="text-xs text-base-content/50 mt-2">
-              {audio_count(@audio_map)}/{length(@chapters)} chapters ready · {@book.audio_preferences[
-                "model"
-              ]} / {@book.audio_preferences["voice"]}
+              {audio_pending_ready(@audio_map, @chapter_statuses)}/{audio_pending_total(
+                @chapter_statuses
+              )} chapters ready · {@book.audio_preferences["model"]} / {@book.audio_preferences[
+                "voice"
+              ]}
             </p>
           <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
@@ -397,6 +412,11 @@ defmodule ReadaloudWebWeb.BookLive do
     end)
   end
 
+  defp chapters_needing_audio(chapters, progress) do
+    statuses = ReadaloudReader.chapter_statuses(chapters, progress)
+    Enum.reject(chapters, fn ch -> Map.get(statuses, ch.id) == :read end)
+  end
+
   defp resume_path(book, nil, chapters) do
     case chapters do
       [first | _] -> ~p"/books/#{book.id}/read/#{first.id}"
@@ -411,7 +431,14 @@ defmodule ReadaloudWebWeb.BookLive do
 
   defp read_count(statuses), do: Enum.count(statuses, fn {_, s} -> s == :read end)
 
-  defp audio_count(audio_map), do: Enum.count(audio_map, fn {_, v} -> match?({:ready, _}, v) end)
+  defp audio_pending_total(statuses),
+    do: Enum.count(statuses, fn {_id, s} -> s != :read end)
+
+  defp audio_pending_ready(audio_map, statuses) do
+    Enum.count(statuses, fn {id, s} ->
+      s != :read and match?({:ready, _}, Map.get(audio_map, id))
+    end)
+  end
 
   defp audio_duration(audio_map, chapter_id) do
     case Map.get(audio_map, chapter_id) do
