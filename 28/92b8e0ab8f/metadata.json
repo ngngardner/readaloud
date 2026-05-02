@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "2892b8e0ab8f",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_tts/lib/readaloud_tts/local_ai_provider.ex"
+  ],
+  "sessions": [
+    {
+      "metadata": "/28/92b8e0ab8f/0/metadata.json",
+      "transcript": "/28/92b8e0ab8f/0/full.jsonl",
+      "content_hash": "/28/92b8e0ab8f/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 77,
+    "cache_creation_tokens": 90764,
+    "cache_read_tokens": 9139707,
+    "output_tokens": 29360,
+    "api_call_count": 72
+  }
+}
