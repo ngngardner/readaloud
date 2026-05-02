@@ -1,0 +1,1 @@
+just update editorconfig for ts if 2 space is standard
