@@ -203,14 +203,22 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
-  def handle_event("update_audio_form", %{"model" => model_id, "voice" => voice}, socket) do
+  def handle_event("update_audio_form", params, socket) do
+    model_id = params["model"] || socket.assigns.selected_model
+    voice = params["voice"]
+
     voices =
       case Enum.find(socket.assigns.models, &(&1[:id] == model_id)) do
         nil -> []
         m -> m[:voices] || []
       end
 
-    new_voice = if voice in voices, do: voice, else: List.first(voices)
+    new_voice =
+      cond do
+        voice && voice != "" && voice in voices -> voice
+        true -> List.first(voices) || socket.assigns.selected_voice
+      end
+
     {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}
   end
 
