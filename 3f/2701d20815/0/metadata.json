@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "3f2701d20815",
+  "session_id": "e1d38ef3-2ac1-4bd6-9223-272f356a7223",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-02T17:46:16.990600041Z",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "f62b57f9e432",
+  "checkpoint_transcript_start": 237,
+  "transcript_lines_at_start": 237,
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 8308,
+    "cache_read_tokens": 1732535,
+    "output_tokens": 3918,
+    "api_call_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-02T17:46:16.719052952Z",
+    "agent_lines": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 100
+  }
+}
