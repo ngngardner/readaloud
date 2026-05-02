@@ -46,10 +46,12 @@ defmodule ReadaloudWebWeb.BookLive do
   end
 
   @impl true
-  def handle_event("activate_audio", %{"model" => model, "voice" => voice}, socket) do
+  def handle_event("activate_audio", params, socket) do
     book = socket.assigns.book
     chapters = socket.assigns.chapters
     progress = socket.assigns.progress
+    model = params["model"] || socket.assigns.selected_model
+    voice = params["voice"] || socket.assigns.selected_voice
 
     case ReadaloudLibrary.update_book(book, %{
            audio_preferences: %{"model" => model, "voice" => voice}
