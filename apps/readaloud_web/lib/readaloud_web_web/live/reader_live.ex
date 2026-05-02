@@ -115,6 +115,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
+        reset_progress_for_chapter(socket.assigns.book.id, ch.id)
+
         {:noreply,
          push_navigate(socket,
            to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
@@ -129,6 +131,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
+        reset_progress_for_chapter(socket.assigns.book.id, ch.id)
+
         {:noreply,
          push_navigate(socket,
            to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
@@ -206,6 +210,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_event("jump_to_chapter", %{"chapter_id" => chapter_id}, socket) do
+    reset_progress_for_chapter(socket.assigns.book.id, chapter_id)
+
     {:noreply,
      push_navigate(socket,
        to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}?nav=internal"
@@ -718,6 +724,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   # -- Private helpers --
+
+  defp reset_progress_for_chapter(book_id, chapter_id) do
+    ReadaloudReader.upsert_progress(%{
+      book_id: book_id,
+      current_chapter_id: chapter_id,
+      audio_position_ms: 0,
+      scroll_position: 0.0
+    })
+  end
 
   defp prev_chapter(current, chapters) do
     idx = Enum.find_index(chapters, &(&1.id == current.id))

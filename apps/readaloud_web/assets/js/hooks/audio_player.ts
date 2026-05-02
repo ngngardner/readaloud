@@ -32,6 +32,7 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 const POSITION_REPORT_INTERVAL_MS = 5000;
 const SKIP_SECONDS = 10;
 const AUTO_SCROLL_GRACE_MS = 800;
+const AUTO_PLAY_HANDOFF_KEY = "readaloud-audio-autoplay";
 
 function coercePlayerPrefs(raw: unknown): Partial<PlayerPrefs> {
   if (!raw || typeof raw !== "object") return {};
@@ -131,6 +132,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       const p = playerPrefs.get();
       audio.playbackRate = p.speed;
       audio.volume = p.volume;
+      updateSpeedBadge(p.speed);
     };
 
     const updateTimeDisplay = (): void => {
@@ -284,6 +286,23 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       );
     }
 
+    // Auto-play handoff: if the previous chapter ended with auto-next-chapter
+    // enabled, the ended handler stashed a flag in sessionStorage. Consume it
+    // and start playback once metadata is loaded.
+    if (sessionStorage.getItem(AUTO_PLAY_HANDOFF_KEY) === "1") {
+      sessionStorage.removeItem(AUTO_PLAY_HANDOFF_KEY);
+      ctx.on(
+        audio,
+        "loadedmetadata",
+        () => {
+          audio.play().catch((err: unknown) => {
+            console.warn("AudioPlayer: auto-play blocked by browser", err);
+          });
+        },
+        { once: true },
+      );
+    }
+
     // Controls
     ctx.on(playPauseBtn, "click", togglePlayback);
 
@@ -377,7 +396,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     });
     ctx.on(audio, "ended", () => {
       stopHighlightLoop();
-      if (readerSettings.get().autoNextChapter) ctx.pushEvent("next_chapter");
+      if (readerSettings.get().autoNextChapter) {
+        sessionStorage.setItem(AUTO_PLAY_HANDOFF_KEY, "1");
+        ctx.pushEvent("next_chapter");
+      }
     });
 
     // Re-sync UX
