@@ -1,10 +1,15 @@
 import { defineHook } from "../lib/hook";
+import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
 import { PersistedRecord } from "../lib/persisted_record";
 import { attachScrubber, fractionAt } from "../lib/scrubber";
 import { scrollFollow } from "../lib/scroll_follow";
 import { readerSettings } from "../lib/reader_settings_store";
 import { cycleOption } from "../lib/cycle_option";
-import { type WordTiming, parseWordTimings } from "../lib/types";
+import {
+  type WordTiming,
+  parseWordTimings,
+  wordSelector,
+} from "../lib/types";
 import { attachWordMenu } from "./word_menu";
 
 interface AudioPlayerDataset {
@@ -32,7 +37,13 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 const POSITION_REPORT_INTERVAL_MS = 5000;
 const SKIP_SECONDS = 10;
 const AUTO_SCROLL_GRACE_MS = 800;
-const AUTO_PLAY_HANDOFF_KEY = "readaloud-audio-autoplay";
+
+// Cross-runtime handshake: when an "auto-next-chapter" navigation is in
+// flight, the old hook (about to unmount) sets this sessionStorage key, and
+// the new hook (mounting on the next chapter's LV) consumes it to start
+// playback on loadedmetadata. The Elixir side at ReaderLive.handle_event
+// "next_chapter" is intentionally unaware — it just navigates.
+const AUTO_NEXT_HANDSHAKE_KEY = "readaloud-audio-autoplay";
 
 function coercePlayerPrefs(raw: unknown): Partial<PlayerPrefs> {
   if (!raw || typeof raw !== "object") return {};
@@ -109,17 +120,14 @@ function formatTime(secs: number): string {
 
 export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
   (ctx) => {
-    const audio = document.getElementById("audio-element");
-    const playPauseBtn = document.getElementById("play-pause-btn");
-    const timeDisplay = document.getElementById("time-display");
-    const textContainer = document.getElementById("chapter-text");
-    const resyncBtn = document.getElementById("resync-btn");
-    const speedBadge = document.getElementById("speed-badge");
+    const audio = requireElement(DOM_IDS.AUDIO_ELEMENT, HTMLAudioElement);
+    const playPauseBtn = requireElement(DOM_IDS.PLAY_PAUSE_BTN, HTMLElement);
+    const timeDisplay = findElement(DOM_IDS.TIME_DISPLAY, HTMLElement);
+    const textContainer = findElement(DOM_IDS.CHAPTER_TEXT, HTMLElement);
+    const resyncBtn = findElement(DOM_IDS.RESYNC_BTN, HTMLElement);
+    const speedBadge = findElement(DOM_IDS.SPEED_BADGE, HTMLElement);
 
-    if (!(audio instanceof HTMLAudioElement) || !playPauseBtn) {
-      console.error("AudioPlayer: required DOM elements missing");
-      return;
-    }
+    if (!audio || !playPauseBtn) return;
 
     let timings: ReadonlyArray<WordTiming> = [];
     let currentWordIndex = -1;
@@ -180,7 +188,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
 
       if (currentWordIndex >= 0) {
         const old = textContainer.querySelector<HTMLElement>(
-          `[data-word-index="${currentWordIndex}"]`,
+          wordSelector(currentWordIndex),
         );
         old?.classList.remove("word-active");
         old?.classList.add("word-spoken");
@@ -188,7 +196,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
 
       if (idx >= 0) {
         const next = textContainer.querySelector<HTMLElement>(
-          `[data-word-index="${idx}"]`,
+          wordSelector(idx),
         );
         if (next) {
           next.classList.add("word-active");
@@ -207,9 +215,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
 
       if (idx > currentWordIndex) {
         for (let i = Math.max(0, currentWordIndex); i < idx; i++) {
-          const el = textContainer.querySelector<HTMLElement>(
-            `[data-word-index="${i}"]`,
-          );
+          const el = textContainer.querySelector<HTMLElement>(wordSelector(i));
           if (el) {
             el.classList.remove("word-active");
             el.classList.add("word-spoken");
@@ -217,9 +223,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         }
       } else if (idx >= 0 && idx < currentWordIndex) {
         for (let i = idx + 1; i <= currentWordIndex; i++) {
-          const el = textContainer.querySelector<HTMLElement>(
-            `[data-word-index="${i}"]`,
-          );
+          const el = textContainer.querySelector<HTMLElement>(wordSelector(i));
           if (el) el.classList.remove("word-spoken", "word-active");
         }
       }
@@ -294,8 +298,8 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // Auto-play handoff: if the previous chapter ended with auto-next-chapter
     // enabled, the ended handler stashed a flag in sessionStorage. Consume it
     // and start playback once metadata is loaded.
-    if (sessionStorage.getItem(AUTO_PLAY_HANDOFF_KEY) === "1") {
-      sessionStorage.removeItem(AUTO_PLAY_HANDOFF_KEY);
+    if (sessionStorage.getItem(AUTO_NEXT_HANDSHAKE_KEY) === "1") {
+      sessionStorage.removeItem(AUTO_NEXT_HANDSHAKE_KEY);
       ctx.on(
         audio,
         "loadedmetadata",
@@ -402,7 +406,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(audio, "ended", () => {
       stopHighlightLoop();
       if (readerSettings.get().autoNextChapter) {
-        sessionStorage.setItem(AUTO_PLAY_HANDOFF_KEY, "1");
+        sessionStorage.setItem(AUTO_NEXT_HANDSHAKE_KEY, "1");
         ctx.pushEvent("next_chapter");
       }
     });
@@ -413,7 +417,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         scrollFollow.resume();
         if (currentWordIndex >= 0 && textContainer) {
           const el = textContainer.querySelector<HTMLElement>(
-            `[data-word-index="${currentWordIndex}"]`,
+            wordSelector(currentWordIndex),
           );
           el?.scrollIntoView({ behavior: "smooth", block: "center" });
         }

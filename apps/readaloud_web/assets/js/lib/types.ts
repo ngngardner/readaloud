@@ -9,6 +9,16 @@ export const ChapterId = (s: string): ChapterId => s as ChapterId;
 export const WordIndex = (n: number): WordIndex => n as WordIndex;
 export const Milliseconds = (n: number): Milliseconds => n as Milliseconds;
 
+// Cross-runtime contract: chapter text is rendered server-side as
+// <span class="word" data-word-index="N">. The Elixir helper that emits the
+// span lives at ReadaloudWebWeb.LiveHelpers.word_span/2 — keep both in sync
+// if you rename the attribute.
+export const WORD_INDEX_ATTR = "data-word-index";
+
+export function wordSelector(index: number): string {
+  return `[${WORD_INDEX_ATTR}="${index}"]`;
+}
+
 export interface Chapter {
   readonly id: ChapterId;
   readonly title: string | null;

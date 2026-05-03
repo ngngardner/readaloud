@@ -1,6 +1,10 @@
 import { defineHook } from "../lib/hook";
 
-export const ThemeHook = defineHook(() => {
-  // Theme persistence is handled by the inline <script> in root.html.heex.
-  // This hook exists as a mount point for JS commands.
+const THEME_STORAGE_KEY = "phx:theme";
+
+export const ThemeHook = defineHook((ctx) => {
+  ctx.on(window, "readaloud:set-theme", ({ theme }) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  });
 });

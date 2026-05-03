@@ -14,16 +14,12 @@
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
     <script>
-      // Restore theme before first paint to prevent flash
+      // Restore theme before first paint to prevent flash. The runtime listener
+      // for readaloud:set-theme lives in ThemeHook (assets/js/hooks/theme.ts).
       (function() {
         var theme = localStorage.getItem("phx:theme");
         if (theme) document.documentElement.setAttribute("data-theme", theme);
       })();
-      // Theme swatches dispatch this directly via JS.dispatch — no LV round-trip.
-      window.addEventListener("readaloud:set-theme", (e) => {
-        document.documentElement.setAttribute("data-theme", e.detail.theme);
-        localStorage.setItem("phx:theme", e.detail.theme);
-      });
     </script>
   </head>
   <body class="antialiased">

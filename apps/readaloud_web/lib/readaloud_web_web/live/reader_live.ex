@@ -125,6 +125,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
+  # When the audio player auto-advances on chapter end, it stashes a
+  # sessionStorage handshake key (AUTO_NEXT_HANDSHAKE_KEY in
+  # assets/js/hooks/audio_player.ts) before pushing this event. The next
+  # chapter's hook consumes the key on mount to resume playback.
   def handle_event("next_chapter", _params, socket) do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
@@ -376,6 +380,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <%!-- Reader settings popover --%>
       <div
         id="reader-settings"
+        phx-hook="ReaderSettingsControlsHook"
         data-pill-popover="settings"
         class="fixed top-16 right-4 z-50 hidden
                bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72"
@@ -460,7 +465,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       <%!-- 2. Reading area --%>
       <div
         id="reader-content"
-        phx-hook="ReaderSettingsHook"
+        phx-hook="ReaderStylesHook"
         data-initial-scroll={@initial_scroll}
         class="max-w-[700px] mx-auto px-4 pt-16 pb-32"
       >
@@ -796,8 +801,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
               if String.match?(word, ~r/^\s*$/) do
                 {i, [wacc, word]}
               else
-                span = "<span class=\"word\" data-word-index=\"#{i}\">#{word}</span>"
-                {i + 1, [wacc, span]}
+                {i + 1, [wacc, ReadaloudWebWeb.LiveHelpers.word_span(word, i)]}
               end
             end)
 

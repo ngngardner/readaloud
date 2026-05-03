@@ -11,7 +11,7 @@ export interface ReadaloudWindowEvents {
   "word-action": { kind: "play"; index: WordIndex };
   "toggle-pill": undefined;
   "chapter-bar-close": undefined;
-  "phx:persist_sort": { sort: string };
+  "readaloud:set-theme": { theme: string };
   "phx:live_reload:attached": LiveReloader;
 }
 
@@ -30,6 +30,8 @@ export interface ReadaloudPushEvents {
   jump_to_chapter: { chapter_id: ChapterId };
 }
 
-export interface ReadaloudHandleEvents {
-  persist_sort: { sort: string };
-}
+// LV → JS socket pushes. Currently unused; add an entry here before calling
+// ctx.handleEvent in a hook so the contract stays typed. Keeping the channel
+// declared (even when empty) is the contract — keyof {} is never, so calls
+// are unreachable until something is added.
+export interface ReadaloudHandleEvents {}

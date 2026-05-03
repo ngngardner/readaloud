@@ -48,9 +48,7 @@ defmodule ReadaloudWebWeb.LibraryLive do
     books = ReadaloudLibrary.list_books_sorted(sort_by)
 
     {:noreply,
-     socket
-     |> assign(books: books, sort: sort_by, progress_map: build_progress_map(books))
-     |> push_event("persist_sort", %{sort: sort_by})}
+     assign(socket, books: books, sort: sort_by, progress_map: build_progress_map(books))}
   end
 
   # Existing upload handlers preserved from original implementation
@@ -110,7 +108,7 @@ defmodule ReadaloudWebWeb.LibraryLive do
           </form>
 
           <%!-- Sort --%>
-          <form phx-change="sort">
+          <form id="library-sort-form" phx-hook="LibrarySortHook" phx-change="sort">
             <select name="sort" class="select select-sm select-bordered">
               <option value="recent" selected={@sort == "recent"}>Recently Read</option>
               <option value="title" selected={@sort == "title"}>Title</option>

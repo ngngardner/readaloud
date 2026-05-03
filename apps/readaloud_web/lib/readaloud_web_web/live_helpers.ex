@@ -1,6 +1,17 @@
 defmodule ReadaloudWebWeb.LiveHelpers do
   @moduledoc "Shared helpers for all LiveViews."
 
+  # Cross-runtime contract: every word in chapter text is wrapped in a span
+  # carrying this attribute. The TS side reads it via wordSelector(i) in
+  # assets/js/lib/types.ts — keep the string in sync if you rename it.
+  @word_index_attr "data-word-index"
+
+  def word_index_attr, do: @word_index_attr
+
+  def word_span(text, index) do
+    ~s(<span class="word" #{@word_index_attr}="#{index}">#{text}</span>)
+  end
+
   def active_task_count do
     import_count =
       ReadaloudImporter.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))

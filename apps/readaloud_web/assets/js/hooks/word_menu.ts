@@ -1,4 +1,4 @@
-import { WordIndex } from "../lib/types";
+import { WordIndex, WORD_INDEX_ATTR } from "../lib/types";
 
 const LONG_PRESS_MS = 500;
 const MOVE_THRESHOLD_PX = 10;
@@ -74,7 +74,7 @@ export function attachWordMenu(container: HTMLElement | null): () => void {
 
   const findWord = (target: EventTarget | null): HTMLElement | null => {
     if (!(target instanceof Element)) return null;
-    return target.closest<HTMLElement>("[data-word-index]");
+    return target.closest<HTMLElement>(`[${WORD_INDEX_ATTR}]`);
   };
 
   const onContextMenu = (e: MouseEvent): void => {

@@ -63,7 +63,7 @@ export interface HookContext<
 }
 
 const READALOUD_EVENT_PREFIX_RE =
-  /^(audio:|manual-scroll$|auto-scroll-|word-action$|toggle-pill$|chapter-bar-close$|phx:)/;
+  /^(audio:|manual-scroll$|auto-scroll-|word-action$|toggle-pill$|chapter-bar-close$|readaloud:|phx:)/;
 
 function isReadaloudEvent(event: string): boolean {
   return READALOUD_EVENT_PREFIX_RE.test(event);
