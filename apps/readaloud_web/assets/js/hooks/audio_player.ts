@@ -5,11 +5,7 @@ import { attachScrubber, fractionAt } from "../lib/scrubber";
 import { scrollFollow } from "../lib/scroll_follow";
 import { readerSettings } from "../lib/reader_settings_store";
 import { cycleOption } from "../lib/cycle_option";
-import {
-  type WordTiming,
-  parseWordTimings,
-  wordSelector,
-} from "../lib/types";
+import { type WordTiming, parseWordTimings, wordSelector } from "../lib/types";
 import { attachWordMenu } from "./word_menu";
 
 interface AudioPlayerDataset {
