@@ -2,6 +2,7 @@ defmodule ReadaloudWebWeb.BookLive do
   use ReadaloudWebWeb, :live_view
 
   alias ReadaloudImporter.CoverResolver
+  alias ReadaloudLibrary.TtsProfile
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -138,7 +139,7 @@ defmodule ReadaloudWebWeb.BookLive do
     chapters = socket.assigns.chapters
     progress = socket.assigns.progress
 
-    if task.status == "completed" do
+    if ReadaloudLibrary.Tasks.completed?(task) do
       ReadaloudAudiobook.ensure_audio_generated(
         book,
         chapters_needing_audio(chapters, progress),
@@ -176,7 +177,7 @@ defmodule ReadaloudWebWeb.BookLive do
         <div class="flex-1">
           <div class="flex items-center gap-2">
             <h1 class="text-2xl font-bold tracking-tight">{@book.title}</h1>
-            <%= if @book.audio_preferences do %>
+            <%= if not TtsProfile.empty?(@book.audio_preferences) do %>
               <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square">
                   <.icon name="hero-cog-6-tooth" class="w-4 h-4" />
@@ -228,7 +229,7 @@ defmodule ReadaloudWebWeb.BookLive do
             <span class="badge badge-outline">
               {read_count(@chapter_statuses)}/{length(@chapters)} read
             </span>
-            <%= if @book.audio_preferences do %>
+            <%= if not TtsProfile.empty?(@book.audio_preferences) do %>
               <span class="badge badge-outline">
                 {audio_pending_ready(@audio_map, @chapter_statuses)}/{audio_pending_total(
                   @chapter_statuses
@@ -247,20 +248,18 @@ defmodule ReadaloudWebWeb.BookLive do
               {if @hide_read, do: "Read hidden", else: "All shown"}
             </button>
           </div>
-          <%= if @book.audio_preferences do %>
+          <%= if not TtsProfile.empty?(@book.audio_preferences) do %>
             <p class="text-xs text-base-content/50 mt-2">
               {audio_pending_ready(@audio_map, @chapter_statuses)}/{audio_pending_total(
                 @chapter_statuses
-              )} chapters ready · {@book.audio_preferences["model"]} / {@book.audio_preferences[
-                "voice"
-              ]}
+              )} chapters ready · {@book.audio_preferences.model} / {@book.audio_preferences.voice}
             </p>
           <% end %>
           <div class="flex flex-wrap gap-2 mt-4">
             <.link navigate={resume_path(@book, @progress, @chapters)} class="btn btn-primary btn-sm">
               Continue Reading
             </.link>
-            <%= if !@book.audio_preferences do %>
+            <%= if TtsProfile.empty?(@book.audio_preferences) do %>
               <div class="dropdown dropdown-end">
                 <div tabindex="0" role="button" class="btn btn-sm btn-outline">
                   Set up audio
@@ -368,19 +367,21 @@ defmodule ReadaloudWebWeb.BookLive do
   # --- Private helpers ---
 
   defp build_audio_map(chapters, book) do
+    alias ReadaloudLibrary.Tasks
     chapter_ids = Enum.map(chapters, & &1.id)
     audios = ReadaloudAudiobook.list_chapter_audio_for_chapters(chapter_ids)
     tasks = ReadaloudAudiobook.list_tasks_for_chapters(chapter_ids)
 
-    model = get_in(book.audio_preferences || %{}, ["model"])
-    voice = get_in(book.audio_preferences || %{}, ["voice"])
+    prefs = book.audio_preferences || %TtsProfile{}
+    model = prefs.model
+    voice = prefs.voice
 
     audio_by_chapter = Map.new(audios, &{&1.chapter_id, &1})
 
     # Active tasks indexed by chapter
     active_by_chapter =
       tasks
-      |> Enum.filter(&(&1.status in ["pending", "processing"]))
+      |> Enum.filter(&Tasks.active?/1)
       |> Map.new(&{&1.chapter_id, &1})
 
     failed_by_chapter = ReadaloudAudiobook.failed_tasks_by_chapter(tasks, model, voice)
@@ -393,16 +394,16 @@ defmodule ReadaloudWebWeb.BookLive do
 
       cond do
         # Priority 1: Active task exists
-        active_task != nil && active_task.status == "processing" && audio != nil && !audio_matches ->
+        Tasks.processing?(active_task) && audio != nil && !audio_matches ->
           {id, {:generating, audio.duration_seconds}}
 
-        active_task != nil && active_task.status == "pending" && audio != nil && !audio_matches ->
+        Tasks.pending?(active_task) && audio != nil && !audio_matches ->
           {id, {:queued, audio.duration_seconds}}
 
-        active_task != nil && active_task.status == "processing" ->
+        Tasks.processing?(active_task) ->
           {id, :processing}
 
-        active_task != nil && active_task.status == "pending" ->
+        Tasks.pending?(active_task) ->
           {id, :queued}
 
         # Priority 2: Audio matches profile

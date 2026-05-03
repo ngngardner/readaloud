@@ -11,7 +11,7 @@ defmodule ReadaloudLibraryTest do
       assert {:ok, book} = ReadaloudLibrary.create_book(attrs)
       assert book.title == "Dune"
       assert book.author == "Frank Herbert"
-      assert book.source_type == "epub"
+      assert book.source_type == :epub
       assert book.total_chapters == 0
     end
 

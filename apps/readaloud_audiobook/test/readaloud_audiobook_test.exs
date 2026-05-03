@@ -22,8 +22,7 @@ defmodule ReadaloudAudiobookTest do
   describe "generate_for_chapter/2" do
     test "creates task and enqueues job", %{book: book, ch1: ch1} do
       assert {:ok, task} = ReadaloudAudiobook.generate_for_chapter(book.id, ch1.id)
-      assert task.status == "pending"
-      assert task.scope == "chapter"
+      assert task.status == :pending
       assert_enqueued(worker: ReadaloudAudiobook.GenerateJob, args: %{task_id: task.id})
     end
   end
@@ -40,7 +39,7 @@ defmodule ReadaloudAudiobookTest do
       changeset =
         ReadaloudAudiobook.AudiobookTask.changeset(
           %ReadaloudAudiobook.AudiobookTask{},
-          %{book_id: 1, scope: "chapter", attempt_number: 2}
+          %{book_id: 1, attempt_number: 2}
         )
 
       assert changeset.changes[:attempt_number] == 2
@@ -50,7 +49,7 @@ defmodule ReadaloudAudiobookTest do
       changeset =
         ReadaloudAudiobook.AudiobookTask.changeset(
           %ReadaloudAudiobook.AudiobookTask{},
-          %{book_id: 1, scope: "chapter", attempt_number: 5}
+          %{book_id: 1, attempt_number: 5}
         )
 
       assert changeset.changes[:attempt_number] == 5
@@ -174,10 +173,9 @@ defmodule ReadaloudAudiobookTest do
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
         book_id: book.id,
         chapter_id: ch1.id,
-        scope: "chapter",
         model: "kokoro",
         voice: "af_heart",
-        status: "failed",
+        status: :failed,
         attempt_number: 3,
         error_message: "permanent failure"
       })
@@ -194,10 +192,9 @@ defmodule ReadaloudAudiobookTest do
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
         book_id: book.id,
         chapter_id: ch1.id,
-        scope: "chapter",
         model: "kokoro",
         voice: "bf_emma",
-        status: "failed",
+        status: :failed,
         attempt_number: 3,
         error_message: "permanent failure"
       })
@@ -238,10 +235,9 @@ defmodule ReadaloudAudiobookTest do
       |> ReadaloudAudiobook.AudiobookTask.changeset(%{
         book_id: book.id,
         chapter_id: ch1.id,
-        scope: "chapter",
         model: "kokoro",
         voice: "af_heart",
-        status: "failed",
+        status: :failed,
         attempt_number: 1,
         error_message: "transient error"
       })
@@ -252,7 +248,7 @@ defmodule ReadaloudAudiobookTest do
 
       # Find the new task for ch1
       tasks = ReadaloudAudiobook.list_tasks()
-      ch1_task = Enum.find(tasks, &(&1.chapter_id == ch1.id && &1.status == "pending"))
+      ch1_task = Enum.find(tasks, &(&1.chapter_id == ch1.id && &1.status == :pending))
       assert ch1_task.attempt_number == 2
     end
   end

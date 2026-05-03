@@ -13,13 +13,10 @@ defmodule ReadaloudWebWeb.LiveHelpers do
   end
 
   def active_task_count do
-    import_count =
-      ReadaloudImporter.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
+    alias ReadaloudLibrary.Tasks.Query, as: TaskQuery
 
-    audio_count =
-      ReadaloudAudiobook.list_tasks() |> Enum.count(&(&1.status in ["pending", "processing"]))
-
-    import_count + audio_count
+    TaskQuery.active_count(ReadaloudImporter.ImportTask) +
+      TaskQuery.active_count(ReadaloudAudiobook.AudiobookTask)
   end
 
   def fetch_models do
@@ -30,16 +27,16 @@ defmodule ReadaloudWebWeb.LiveHelpers do
   end
 
   def default_model(book, models) do
-    prefs = book.audio_preferences || %{}
-    prefs["model"] || List.first(models)[:id] || ReadaloudTTS.Config.from_env().tts_model
+    prefs = book.audio_preferences || %ReadaloudLibrary.TtsProfile{}
+    prefs.model || List.first(models)[:id] || ReadaloudTTS.Config.from_env().tts_model
   end
 
   def default_voice(book, models) do
-    prefs = book.audio_preferences || %{}
-    model_id = prefs["model"] || List.first(models)[:id]
+    prefs = book.audio_preferences || %ReadaloudLibrary.TtsProfile{}
+    model_id = prefs.model || List.first(models)[:id]
     model = Enum.find(models, &(&1[:id] == model_id)) || %{}
 
-    prefs["voice"] || get_in(model, [:voices]) |> List.wrap() |> List.first() ||
+    prefs.voice || get_in(model, [:voices]) |> List.wrap() |> List.first() ||
       ReadaloudTTS.Config.from_env().voice
   end
 end

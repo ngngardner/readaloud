@@ -3,6 +3,8 @@ defmodule ReadaloudWebWeb.TasksLive do
 
   import Ecto.Query
 
+  alias ReadaloudLibrary.Tasks
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -25,7 +27,7 @@ defmodule ReadaloudWebWeb.TasksLive do
   end
 
   @impl true
-  def handle_event("cancel_task", %{"task-id" => task_id_str, "type" => type}, socket) do
+  def handle_event("cancel_task", %{"task-id" => task_id_str}, socket) do
     task_id = String.to_integer(task_id_str)
 
     query =
@@ -39,47 +41,26 @@ defmodule ReadaloudWebWeb.TasksLive do
       Oban.cancel_job(job.id)
     end)
 
-    case type do
-      "audiobook" ->
-        if task = ReadaloudAudiobook.get_task(task_id) do
-          task
-          |> Ecto.Changeset.change(%{status: "failed", error_message: "Cancelled by user"})
-          |> ReadaloudLibrary.Repo.update()
-        end
-
-      "import" ->
-        if task = ReadaloudImporter.get_task(task_id) do
-          task
-          |> Ecto.Changeset.change(%{status: "failed", error_message: "Cancelled by user"})
-          |> ReadaloudLibrary.Repo.update()
-        end
-
-      _ ->
-        :ok
-    end
+    if task = lookup_task(task_id), do: Tasks.fail(task, "Cancelled by user")
 
     {:noreply, reload_tasks(socket)}
   end
 
   @impl true
-  def handle_event("retry_task", %{"task-id" => task_id_str, "type" => type}, socket) do
+  def handle_event("retry_task", %{"task-id" => task_id_str}, socket) do
     task_id = String.to_integer(task_id_str)
 
-    case type do
-      "audiobook" ->
-        if task = ReadaloudAudiobook.get_task(task_id) do
-          ReadaloudAudiobook.generate_for_chapter(task.book_id, task.chapter_id,
-            model: task.model,
-            voice: task.voice
-          )
-        end
+    case lookup_task(task_id) do
+      %ReadaloudAudiobook.AudiobookTask{} = task ->
+        ReadaloudAudiobook.generate_for_chapter(task.book_id, task.chapter_id,
+          model: task.model,
+          voice: task.voice
+        )
 
-      "import" ->
-        if task = ReadaloudImporter.get_task(task_id) do
-          ReadaloudImporter.import_file(task.file_path, task.file_type)
-        end
+      %ReadaloudImporter.ImportTask{} = task ->
+        ReadaloudImporter.import_file(task.file_path, task.file_type)
 
-      _ ->
+      nil ->
         :ok
     end
 
@@ -138,7 +119,6 @@ defmodule ReadaloudWebWeb.TasksLive do
               <button
                 phx-click="cancel_task"
                 phx-value-task-id={task.id}
-                phx-value-type={task_type(task)}
                 class="btn btn-xs btn-ghost text-error shrink-0"
                 title="Cancel"
               >
@@ -177,12 +157,12 @@ defmodule ReadaloudWebWeb.TasksLive do
             class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors"
           >
             <.icon
-              :if={task.status == "completed"}
+              :if={Tasks.completed?(task)}
               name="hero-check-circle"
               class="size-5 text-success shrink-0"
             />
             <.icon
-              :if={task.status != "completed"}
+              :if={not Tasks.completed?(task)}
               name="hero-exclamation-circle"
               class="size-5 text-error shrink-0"
             />
@@ -197,7 +177,7 @@ defmodule ReadaloudWebWeb.TasksLive do
                 {book_name(task)}
               </div>
               <div
-                :if={task.status != "completed" && task.error_message}
+                :if={not Tasks.completed?(task) && task.error_message}
                 class="text-xs text-error truncate"
               >
                 {task.error_message}
@@ -207,10 +187,9 @@ defmodule ReadaloudWebWeb.TasksLive do
               {relative_time(task.updated_at)}
             </span>
             <button
-              :if={task.status == "failed"}
+              :if={Tasks.failed?(task)}
               phx-click="retry_task"
               phx-value-task-id={task.id}
-              phx-value-type={task_type(task)}
               class="text-xs text-primary hover:underline shrink-0"
             >
               Retry
@@ -233,12 +212,12 @@ defmodule ReadaloudWebWeb.TasksLive do
   defp split_tasks(tasks) do
     active =
       tasks
-      |> Enum.filter(&(&1.status in ["pending", "processing"]))
+      |> Enum.filter(&Tasks.active?/1)
       |> Enum.sort_by(& &1.inserted_at, {:asc, NaiveDateTime})
 
     completed =
       tasks
-      |> Enum.filter(&(&1.status in ["completed", "failed"]))
+      |> Enum.filter(&Tasks.terminal?/1)
       |> Enum.sort_by(& &1.updated_at, {:desc, NaiveDateTime})
 
     {active, completed}
@@ -256,8 +235,9 @@ defmodule ReadaloudWebWeb.TasksLive do
     )
   end
 
-  defp task_type(%ReadaloudAudiobook.AudiobookTask{}), do: "audiobook"
-  defp task_type(_), do: "import"
+  defp lookup_task(task_id) do
+    ReadaloudAudiobook.get_task(task_id) || ReadaloudImporter.get_task(task_id)
+  end
 
   defp task_type_label(%ReadaloudAudiobook.AudiobookTask{}), do: "audio"
   defp task_type_label(_), do: "import"

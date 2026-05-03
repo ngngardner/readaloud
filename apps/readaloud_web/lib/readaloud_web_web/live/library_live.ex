@@ -61,16 +61,19 @@ defmodule ReadaloudWebWeb.LibraryLive do
   def handle_event("import", _params, socket) do
     [{file_path, file_type}] =
       consume_uploaded_entries(socket, :book_file, fn %{path: path}, entry ->
-        ext = Path.extname(entry.client_name) |> String.trim_leading(".")
+        ext = Path.extname(entry.client_name)
         dest = Path.join(upload_dir(), entry.client_name)
         File.mkdir_p!(Path.dirname(dest))
         File.cp!(path, dest)
         {:ok, {dest, ext}}
       end)
 
-    case ReadaloudImporter.import_file(file_path, file_type) do
-      {:ok, _task} ->
-        {:noreply, put_flash(socket, :info, "Import started!")}
+    with {:ok, format} <- ReadaloudLibrary.SourceFormat.cast_extension(file_type),
+         {:ok, _task} <- ReadaloudImporter.import_file(file_path, format) do
+      {:noreply, put_flash(socket, :info, "Import started!")}
+    else
+      :error ->
+        {:noreply, put_flash(socket, :error, "Unsupported file format")}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Import failed")}
@@ -78,10 +81,16 @@ defmodule ReadaloudWebWeb.LibraryLive do
   end
 
   @impl true
-  def handle_info({:import_completed, _book_id}, socket) do
+  def handle_info(
+        {:task_updated, %ReadaloudImporter.ImportTask{status: :completed}},
+        socket
+      ) do
     books = ReadaloudLibrary.list_books_sorted(socket.assigns.sort)
     {:noreply, assign(socket, books: books, progress_map: build_progress_map(books))}
   end
+
+  @impl true
+  def handle_info({:task_updated, _task}, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do

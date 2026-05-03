@@ -1,13 +1,14 @@
 defmodule ReadaloudAudiobook do
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob}
-  alias ReadaloudLibrary.Repo
+  alias ReadaloudLibrary.{Repo, Tasks, TtsProfile}
+  alias ReadaloudLibrary.Tasks.Query, as: TaskQuery
   import Ecto.Query
 
   @max_attempts 3
 
   def generate_for_chapter(book_id, chapter_id, opts \\ []) do
     attrs =
-      %{book_id: book_id, chapter_id: chapter_id, scope: "chapter"}
+      %{book_id: book_id, chapter_id: chapter_id}
       |> maybe_put(:voice, Keyword.get(opts, :voice))
       |> maybe_put(:speed, Keyword.get(opts, :speed))
       |> maybe_put(:model, Keyword.get(opts, :model))
@@ -32,17 +33,16 @@ defmodule ReadaloudAudiobook do
     end
   end
 
-  def ensure_audio_generated(book, chapters, progress \\ nil)
+  def ensure_audio_generated(book, chapters, progress \\ nil) do
+    if TtsProfile.empty?(book.audio_preferences) do
+      {:ok, 0}
+    else
+      do_ensure_audio_generated(book, chapters, progress)
+    end
+  end
 
-  def ensure_audio_generated(%{audio_preferences: nil}, _chapters, _progress), do: {:ok, 0}
-
-  def ensure_audio_generated(%{audio_preferences: prefs}, _chapters, _progress)
-      when map_size(prefs) == 0,
-      do: {:ok, 0}
-
-  def ensure_audio_generated(book, chapters, progress) do
-    model = book.audio_preferences["model"]
-    voice = book.audio_preferences["voice"]
+  defp do_ensure_audio_generated(book, chapters, progress) do
+    %TtsProfile{model: model, voice: voice} = book.audio_preferences
     chapter_ids = Enum.map(chapters, & &1.id)
     current_number = current_chapter_number(chapters, progress)
 
@@ -55,7 +55,7 @@ defmodule ReadaloudAudiobook do
 
     pending_chapter_ids =
       tasks
-      |> Enum.filter(&(&1.status in ["pending", "processing"]))
+      |> Enum.filter(&Tasks.active?/1)
       |> Enum.map(& &1.chapter_id)
       |> MapSet.new()
 
@@ -107,7 +107,8 @@ defmodule ReadaloudAudiobook do
 
     pending_tasks =
       AudiobookTask
-      |> where([t], t.chapter_id in ^chapter_ids and t.status == "pending")
+      |> where([t], t.chapter_id in ^chapter_ids)
+      |> TaskQuery.pending()
       |> select([t], {t.id, t.chapter_id})
       |> Repo.all()
 
@@ -164,8 +165,7 @@ defmodule ReadaloudAudiobook do
   def get_task(id), do: Repo.get(AudiobookTask, id)
 
   def clear_completed_tasks do
-    from(t in AudiobookTask, where: t.status in ["completed", "failed"])
-    |> Repo.delete_all()
+    AudiobookTask |> TaskQuery.terminal() |> Repo.delete_all()
   end
 
   def get_chapter_audio(chapter_id) do
@@ -178,24 +178,14 @@ defmodule ReadaloudAudiobook do
 
   def list_tasks_for_chapters(chapter_ids) when is_list(chapter_ids) do
     AudiobookTask
-    |> where(
-      [t],
-      t.chapter_id in ^chapter_ids and t.status in ["pending", "processing", "failed"]
-    )
+    |> where([t], t.chapter_id in ^chapter_ids)
+    |> TaskQuery.in_progress_or_failed()
     |> Repo.all()
-  end
-
-  def task_stats do
-    AudiobookTask
-    |> group_by(:status)
-    |> select([t], {t.status, count(t.id)})
-    |> Repo.all()
-    |> Map.new()
   end
 
   def failed_tasks_by_chapter(tasks, model, voice) do
     tasks
-    |> Enum.filter(&(&1.status == "failed" && &1.model == model && &1.voice == voice))
+    |> Enum.filter(&(Tasks.failed?(&1) && &1.model == model && &1.voice == voice))
     |> Enum.group_by(& &1.chapter_id)
     |> Map.new(fn {ch_id, ch_tasks} ->
       {ch_id, Enum.max_by(ch_tasks, & &1.updated_at)}

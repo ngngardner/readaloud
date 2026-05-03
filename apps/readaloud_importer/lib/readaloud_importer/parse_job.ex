@@ -2,20 +2,20 @@ defmodule ReadaloudImporter.ParseJob do
   use Oban.Worker, queue: :import, max_attempts: 3
 
   alias ReadaloudImporter.{CoverJob, CoverResolver, EpubParser, ImportTask, PdfParser}
-  alias ReadaloudLibrary.Repo
+  alias ReadaloudLibrary.{Repo, Tasks}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"task_id" => task_id}}) do
     task = Repo.get!(ImportTask, task_id)
-    update_status(task, "processing")
+    {:ok, task} = Tasks.start(task)
 
     storage_dir = storage_path(task)
     File.mkdir_p!(storage_dir)
 
     result =
       case task.file_type do
-        "epub" -> EpubParser.parse(task.file_path, storage_dir)
-        "pdf" -> PdfParser.parse(task.file_path, storage_dir)
+        :epub -> EpubParser.parse(task.file_path, storage_dir)
+        :pdf -> PdfParser.parse(task.file_path, storage_dir)
       end
 
     case result do
@@ -63,32 +63,13 @@ defmodule ReadaloudImporter.ParseJob do
             |> Oban.insert()
         end
 
-        update_status(task, "completed", book.id)
-
-        Phoenix.PubSub.broadcast(
-          ReadaloudWeb.PubSub,
-          "tasks:import",
-          {:import_completed, book.id}
-        )
-
+        {:ok, _task} = Tasks.complete(task, %{book_id: book.id})
         :ok
 
       {:error, reason} ->
-        update_status(task, "failed", nil, "#{reason}")
-        Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:import", {:import_failed, task.id})
+        Tasks.fail(task, "#{reason}")
         {:error, reason}
     end
-  end
-
-  defp update_status(task, status, book_id \\ nil, error \\ nil) do
-    task
-    |> ImportTask.changeset(%{
-      status: status,
-      book_id: book_id,
-      error_message: error,
-      progress: if(status == "completed", do: 1.0, else: task.progress)
-    })
-    |> Repo.update!()
   end
 
   defp storage_path(task) do

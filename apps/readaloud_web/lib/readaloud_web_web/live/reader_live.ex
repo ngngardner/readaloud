@@ -265,7 +265,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_info({:task_updated, task}, socket) do
-    if task.chapter_id == socket.assigns.chapter.id and task.status == "completed" do
+    if task.chapter_id == socket.assigns.chapter.id and ReadaloudLibrary.Tasks.completed?(task) do
       audio = ReadaloudAudiobook.get_chapter_audio(socket.assigns.chapter.id)
       {:noreply, assign(socket, audio: audio, audio_state: :ready)}
     else
@@ -762,12 +762,12 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   defp has_active_task?(chapter_id) do
     ReadaloudAudiobook.list_tasks()
-    |> Enum.any?(&(&1.chapter_id == chapter_id && &1.status in ["pending", "processing"]))
+    |> Enum.any?(&(&1.chapter_id == chapter_id && ReadaloudLibrary.Tasks.active?(&1)))
   end
 
   defp cancel_active_tasks(chapter_id) do
     ReadaloudAudiobook.list_tasks()
-    |> Enum.filter(&(&1.chapter_id == chapter_id && &1.status in ["pending", "processing"]))
+    |> Enum.filter(&(&1.chapter_id == chapter_id && ReadaloudLibrary.Tasks.active?(&1)))
     |> Enum.each(fn task ->
       import Ecto.Query
 

@@ -2,7 +2,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
-  alias ReadaloudLibrary.Repo
+  alias ReadaloudLibrary.{Repo, Tasks}
   alias ReadaloudTTS.{Config, TextChunker}
 
   require Logger
@@ -11,17 +11,17 @@ defmodule ReadaloudAudiobook.GenerateJob do
   def perform(%Oban.Job{args: %{"task_id" => task_id}} = job) do
     task = Repo.get!(AudiobookTask, task_id)
 
-    # Crash recovery: if task is still "processing", the previous run was killed
+    # Crash recovery: a still-:processing row means the previous run was killed
     # by a restart. Compensate Oban's attempt counter so crashes don't burn
     # real attempts — only genuine TTS failures should count.
-    if task.status == "processing" do
+    if Tasks.processing?(task) do
       import Ecto.Query
 
       from(j in "oban_jobs", where: j.id == ^job.id)
       |> Repo.update_all(inc: [max_attempts: 1])
     end
 
-    update_task(task, %{status: "processing"})
+    {:ok, task} = Tasks.start(task)
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
 
@@ -49,25 +49,20 @@ defmodule ReadaloudAudiobook.GenerateJob do
       })
       |> Repo.insert!(on_conflict: :replace_all, conflict_target: :chapter_id)
 
-      task = update_task(task, %{status: "completed", progress: 1.0})
-      broadcast_task_update(task)
+      {:ok, _task} = Tasks.complete(task)
       :ok
     else
       {:error, reason} ->
-        task = update_task(task, %{status: "failed", error_message: "#{inspect(reason)}"})
-        broadcast_task_update(task)
+        {:ok, _task} = Tasks.fail(task, "#{inspect(reason)}")
         {:error, reason}
     end
   rescue
     exception ->
-      # Prevent zombie tasks: ensure status transitions to "failed" even on
-      # unexpected exceptions (e.g., crashes outside the with block).
-      # Fresh lookup — task_id is bound from function head, always safe.
+      # Prevent zombie tasks: ensure transition to :failed even on unexpected
+      # exceptions outside the `with` block. Fresh lookup — task_id is bound
+      # from the function head, always safe.
       if failed_task = Repo.get(AudiobookTask, task_id) do
-        update_task(failed_task, %{
-          status: "failed",
-          error_message: "Unexpected error: #{Exception.message(exception)}"
-        })
+        Tasks.fail(failed_task, "Unexpected error: #{Exception.message(exception)}")
       end
 
       reraise exception, __STACKTRACE__
@@ -227,20 +222,6 @@ defmodule ReadaloudAudiobook.GenerateJob do
     |> String.replace("\u2013", " ")
     |> String.replace(~r/\s+/, " ")
     |> String.trim()
-  end
-
-  defp update_task(task, attrs) do
-    task |> AudiobookTask.changeset(attrs) |> Repo.update!()
-  end
-
-  defp broadcast_task_update(task) do
-    Phoenix.PubSub.broadcast(
-      ReadaloudWeb.PubSub,
-      "tasks:audiobook:#{task.book_id}",
-      {:task_updated, task}
-    )
-
-    Phoenix.PubSub.broadcast(ReadaloudWeb.PubSub, "tasks:audiobook", {:task_updated, task})
   end
 
   defp audio_storage_path(chapter) do

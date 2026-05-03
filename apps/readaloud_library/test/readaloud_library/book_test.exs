@@ -1,7 +1,7 @@
 defmodule ReadaloudLibrary.BookTest do
   use ExUnit.Case, async: true
 
-  alias ReadaloudLibrary.Book
+  alias ReadaloudLibrary.{Book, TtsProfile}
 
   describe "changeset/2" do
     test "accepts audio_preferences as a map" do
@@ -14,10 +14,8 @@ defmodule ReadaloudLibrary.BookTest do
       changeset = Book.changeset(%Book{}, attrs)
       assert changeset.valid?
 
-      assert Ecto.Changeset.get_change(changeset, :audio_preferences) == %{
-               "model" => "kokoro",
-               "voice" => "af_heart"
-             }
+      assert Ecto.Changeset.get_change(changeset, :audio_preferences) ==
+               %TtsProfile{model: "kokoro", voice: "af_heart"}
     end
 
     test "audio_preferences defaults to nil" do
