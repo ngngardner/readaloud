@@ -52,10 +52,6 @@ in
         name = "HEX_HOME";
         eval = "$PWD/.hex";
       }
-      {
-        name = "MIX_ENV";
-        value = "dev";
-      }
     ];
 
     commands = [
