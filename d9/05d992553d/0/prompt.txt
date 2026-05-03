@@ -1,0 +1,1 @@
+clicking a theme in the selector does not change the theme
