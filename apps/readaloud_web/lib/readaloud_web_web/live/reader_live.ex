@@ -22,6 +22,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
     audio = ReadaloudAudiobook.get_chapter_audio(chapter_id)
     audio_state = determine_audio_state(chapter_id, audio)
 
+    progress_matches_chapter? = progress && progress.current_chapter_id == chapter.id
+
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
       send(self(), :fetch_models)
@@ -45,8 +47,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
        show_conflict_modal: false,
        conflict_chapter: nil,
        generation_progress: 0,
-       initial_scroll: (progress && progress.scroll_position) || 0.0,
-       initial_position_ms: (progress && progress.audio_position_ms) || 0,
+       initial_scroll: (progress_matches_chapter? && progress.scroll_position) || 0.0,
+       initial_position_ms: (progress_matches_chapter? && progress.audio_position_ms) || 0,
        page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
      )}
   end
@@ -171,6 +173,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
+  def handle_event("scroll", _params, %{assigns: %{show_conflict_modal: true}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("scroll", %{"position" => pos}, socket) do
     ReadaloudReader.upsert_progress(%{
       book_id: socket.assigns.book.id,
@@ -182,6 +187,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
   end
 
   @impl true
+  def handle_event("audio_position", _params, %{assigns: %{show_conflict_modal: true}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("audio_position", %{"position_ms" => ms}, socket) do
     ReadaloudReader.upsert_progress(%{
       book_id: socket.assigns.book.id,
@@ -194,10 +202,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_event("dismiss_conflict", _params, socket) do
-    ReadaloudReader.upsert_progress(%{
-      book_id: socket.assigns.book.id,
-      current_chapter_id: socket.assigns.chapter.id
-    })
+    reset_progress_for_chapter(socket.assigns.book.id, socket.assigns.chapter.id)
 
     {:noreply, assign(socket, show_conflict_modal: false, conflict_chapter: nil)}
   end
