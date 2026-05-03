@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "56bd115bdf69",
+  "strategy": "manual-commit",
+  "branch": "claude/flamboyant-colden-022277",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex"
+  ],
+  "sessions": [
+    {
+      "metadata": "/56/bd115bdf69/0/metadata.json",
+      "transcript": "/56/bd115bdf69/0/full.jsonl",
+      "content_hash": "/56/bd115bdf69/0/content_hash.txt",
+      "prompt": "/56/bd115bdf69/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 103,
+    "cache_creation_tokens": 157062,
+    "cache_read_tokens": 9044942,
+    "output_tokens": 39051,
+    "api_call_count": 78
+  }
+}
