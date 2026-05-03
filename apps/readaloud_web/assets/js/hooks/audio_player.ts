@@ -253,7 +253,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     if (volSlider) volSlider.value = String(playerPrefs.get().volume);
     updateSpeedBadge(playerPrefs.get().speed);
 
+    // The <audio> element has phx-update="ignore" so it's preserved across
+    // same-LV navigation (auto-next chapter). Reassigning .src alone doesn't
+    // reliably refetch on iOS Safari — call load() explicitly to invoke the
+    // resource selection algorithm and reset the element's media state.
     audio.src = ctx.dataset.audioUrl;
+    audio.load();
     applyAudioPrefs();
 
     ctx.on(audio, "loadedmetadata", () => {
