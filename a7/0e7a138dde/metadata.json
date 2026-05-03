@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "a70e7a138dde",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "apps/readaloud_audiobook/lib/readaloud_audiobook.ex",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/audiobook_task.ex",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/generate_job.ex",
+    "apps/readaloud_audiobook/test/readaloud_audiobook_test.exs",
+    "apps/readaloud_importer/lib/readaloud_importer.ex",
+    "apps/readaloud_importer/lib/readaloud_importer/import_task.ex",
+    "apps/readaloud_importer/lib/readaloud_importer/parse_job.ex",
+    "apps/readaloud_importer/test/readaloud_importer_test.exs",
+    "apps/readaloud_library/lib/readaloud_library/book.ex",
+    "apps/readaloud_library/lib/readaloud_library/source_format.ex",
+    "apps/readaloud_library/lib/readaloud_library/tasks.ex",
+    "apps/readaloud_library/lib/readaloud_library/tasks/query.ex",
+    "apps/readaloud_library/lib/readaloud_library/tasks/status.ex",
+    "apps/readaloud_library/lib/readaloud_library/tts_profile.ex",
+    "apps/readaloud_library/mix.exs",
+    "apps/readaloud_library/priv/repo/migrations/20260503000000_drop_task_progress.exs",
+    "apps/readaloud_library/priv/repo/migrations/20260503000001_drop_audiobook_task_scope.exs",
+    "apps/readaloud_library/test/readaloud_library/book_test.exs",
+    "apps/readaloud_library/test/readaloud_library_test.exs",
+    "apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/library_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/tasks_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live_helpers.ex"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a7/0e7a138dde/0/metadata.json",
+      "transcript": "/a7/0e7a138dde/0/full.jsonl",
+      "content_hash": "/a7/0e7a138dde/0/content_hash.txt",
+      "prompt": "/a7/0e7a138dde/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 171,
+    "cache_creation_tokens": 361278,
+    "cache_read_tokens": 21185662,
+    "output_tokens": 106768,
+    "api_call_count": 122
+  }
+}
