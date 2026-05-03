@@ -123,3 +123,23 @@ If a skill's instructions reference local files or env vars that don't exist
 in the current project (e.g., `jason` needs a target, `improve` needs a
 project to improve), report the mismatch instead of guessing. The skill
 definitions are project-agnostic; the *invocation context* may not be.
+
+---
+
+proceed
+
+---
+
+approved. i want to do 2 and 6 but no strong feelings on 2
+
+---
+
+[Request interrupted by user]
+
+---
+
+did you finish all the checkpoints?
+
+---
+
+ah ok continue
