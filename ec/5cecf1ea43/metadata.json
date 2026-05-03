@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "ec5cecf1ea43",
+  "strategy": "manual-commit",
+  "branch": "claude/flamboyant-colden-022277",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "cells/app/devshells.nix"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ec/5cecf1ea43/0/metadata.json",
+      "transcript": "/ec/5cecf1ea43/0/full.jsonl",
+      "content_hash": "/ec/5cecf1ea43/0/content_hash.txt",
+      "prompt": "/ec/5cecf1ea43/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 104,
+    "cache_creation_tokens": 158376,
+    "cache_read_tokens": 9200318,
+    "output_tokens": 39420,
+    "api_call_count": 79
+  }
+}
