@@ -16,9 +16,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
     <div class="flex flex-wrap gap-1 mb-2">
       <button
         :for={theme <- @themes}
-        phx-click={
-          Phoenix.LiveView.JS.dispatch("readaloud:set-theme", to: "window", detail: %{theme: theme})
-        }
+        phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", detail: %{theme: theme})}
         class="theme-swatch"
         title={theme}
       >
@@ -53,12 +51,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button
               :for={theme <- @dark_themes}
-              phx-click={
-                Phoenix.LiveView.JS.dispatch("readaloud:set-theme",
-                  to: "window",
-                  detail: %{theme: theme}
-                )
-              }
+              phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", detail: %{theme: theme})}
               class="btn btn-sm btn-ghost justify-start gap-2"
             >
               <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
@@ -77,12 +70,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
           <div class="grid grid-cols-3 gap-2">
             <button
               :for={theme <- @light_themes}
-              phx-click={
-                Phoenix.LiveView.JS.dispatch("readaloud:set-theme",
-                  to: "window",
-                  detail: %{theme: theme}
-                )
-              }
+              phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", detail: %{theme: theme})}
               class="btn btn-sm btn-ghost justify-start gap-2"
             >
               <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>
