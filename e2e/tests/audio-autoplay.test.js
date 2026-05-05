@@ -135,15 +135,10 @@ describe("Audio auto-next-chapter", () => {
 			`audio src should be the current chapter's URL, got ${before.audioSrc}`,
 		);
 
-		// Mark the audio element so we can prove identity after the swap.
-		await page.evaluate(() => {
-			const a = document.getElementById("audio-element");
-			if (a) a.dataset.testId = "same-node-marker";
-		});
-
-		// Auto-next-chapter is a user-controlled reader setting. The hook
-		// reads it from localStorage via reader_settings_store. Force-enable
-		// it for this test.
+		// Auto-next-chapter is a user-controlled reader setting persisted in
+		// localStorage. The hook reads it via PersistedRecord, which caches
+		// the value at module-load time — so we must set localStorage *and
+		// reload* for the new value to be picked up.
 		await page.evaluate(() => {
 			const cur = (() => {
 				try {
@@ -157,6 +152,19 @@ describe("Audio auto-next-chapter", () => {
 			cur.autoNextChapter = true;
 			localStorage.setItem("readaloud-reader-settings", JSON.stringify(cur));
 		});
+		await page.reload({ waitUntil: "networkidle2" });
+		await page.waitForSelector("#audio-element", { timeout: 10000 });
+		await sleep(300);
+
+		// Mark the (post-reload) audio element so we can prove identity
+		// after the swap. Use a JS expando property (not a DOM attribute)
+		// because morphdom strips attributes not declared in the server
+		// template — even on phx-update="ignore" elements (it preserves
+		// children, not custom attrs).
+		await page.evaluate(() => {
+			const a = document.getElementById("audio-element");
+			if (a) a.__readaloudTestMarker = "same-node-marker";
+		});
 
 		// Trigger the `ended` event on the audio element. The hook listens
 		// for this and is supposed to swap src to the next chapter and push
@@ -167,14 +175,14 @@ describe("Audio auto-next-chapter", () => {
 		});
 
 		// Wait for the JS swap + LV push_patch round-trip.
-		await sleep(1500);
+		await sleep(2000);
 
 		const after = await page.evaluate(() => {
 			const audio = document.getElementById("audio-element");
 			return {
 				url: window.location.pathname + window.location.search,
 				audioSrc: audio?.src ?? null,
-				audioNodeMarker: audio ? audio.dataset.testId : null,
+				audioNodeMarker: audio ? audio.__readaloudTestMarker : null,
 			};
 		});
 
