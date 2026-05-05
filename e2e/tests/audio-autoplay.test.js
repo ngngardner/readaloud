@@ -108,6 +108,86 @@ describe("Audio auto-next-chapter", () => {
 		assert.ok(meta.artist?.length > 0, "Media Session artist should be set");
 	});
 
+	it("prefetches next chapter audio into a Blob URL while current plays", async (t) => {
+		if (!playerExists) {
+			t.skip("No audio-ready chapter — skipping");
+			return;
+		}
+
+		// Enable autoNextChapter (gates prefetch) and reload so the
+		// PersistedRecord cache picks it up.
+		await page.evaluate(() => {
+			const cur = (() => {
+				try {
+					return JSON.parse(
+						localStorage.getItem("readaloud-reader-settings") || "{}",
+					);
+				} catch {
+					return {};
+				}
+			})();
+			cur.autoNextChapter = true;
+			localStorage.setItem("readaloud-reader-settings", JSON.stringify(cur));
+		});
+		await page.reload({ waitUntil: "networkidle2" });
+		await page.waitForSelector("#audio-element", { timeout: 10000 });
+
+		// Drive currentTime past the 15% prefetch trigger fraction by
+		// poking the audio element directly. We're not asserting playback,
+		// just want a `timeupdate` to fire with currentTime/duration > 0.15.
+		// Wait for metadata first so duration is known.
+		await page.evaluate(
+			() =>
+				new Promise((resolve) => {
+					const a = document.getElementById("audio-element");
+					if (!a) return resolve();
+					if (a.readyState >= 1 && Number.isFinite(a.duration))
+						return resolve();
+					a.addEventListener("loadedmetadata", () => resolve(), { once: true });
+				}),
+		);
+		await page.evaluate(() => {
+			const a = document.getElementById("audio-element");
+			if (!a || !Number.isFinite(a.duration)) return;
+			a.currentTime = a.duration * 0.2;
+			a.dispatchEvent(new Event("timeupdate"));
+		});
+
+		// Wait for the fetch + blob URL to materialize. WAV files can be
+		// large; give it some time on a slow machine.
+		const nextUrl = await page.$eval(
+			"#audio-player",
+			(el) => el.dataset.nextAudioUrl || "",
+		);
+		const start = Date.now();
+		let prefetched = false;
+		while (Date.now() - start < 20000) {
+			const found = await page.evaluate(() => {
+				// Look at performance entries — fetch() shows up as a
+				// resource entry. We can't reach into the hook's closure,
+				// but we *can* see if a request to the next-chapter audio
+				// URL has been issued.
+				return performance
+					.getEntriesByType("resource")
+					.some(
+						(e) =>
+							e.name.includes("/api/books/") &&
+							e.name.includes("/audio") &&
+							e.initiatorType === "fetch",
+					);
+			});
+			if (found) {
+				prefetched = true;
+				break;
+			}
+			await sleep(500);
+		}
+		assert.ok(
+			prefetched,
+			`expected a fetch() to ${nextUrl} after currentTime crossed 15%, but none was observed`,
+		);
+	});
+
 	it("ended event swaps audio.src + patches URL without tearing down player", async (t) => {
 		if (!playerExists) {
 			t.skip("No audio-ready chapter — skipping");

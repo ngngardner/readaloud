@@ -338,6 +338,60 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
     };
 
+    // --- Next-chapter prefetch -----------------------------------------
+    // Mobile browsers (iOS Safari especially) suspend network fetches
+    // when the screen locks. If we wait until `ended` to fetch the next
+    // chapter's audio, the request stalls and audio.play() never gets a
+    // valid resource — exactly the bug we're chasing. So while the
+    // current chapter is still playing (and the device presumably
+    // awake), download the next chapter's audio fully into a Blob URL.
+    // On `ended` we swap to the in-memory blob — no network needed.
+    let currentBlobUrl: string | null = null; // points to in-use audio.src
+    let prefetchedBlobUrl: string | null = null;
+    let prefetchedFor: string | null = null;
+    let prefetchAbort: AbortController | null = null;
+
+    const tryStartPrefetch = (): void => {
+      if (!readerSettings.get().autoNextChapter) return;
+      const url = ctx.dataset.nextAudioUrl;
+      if (!url) return;
+      // Already done or in flight for the same URL? Skip.
+      if (prefetchedBlobUrl && prefetchedFor === url) return;
+      if (prefetchAbort && prefetchedFor === url) return;
+      // Target URL changed (e.g. user manually jumped chapters) — drop
+      // any in-flight or stale-blob state and restart.
+      if (prefetchAbort) {
+        prefetchAbort.abort();
+        prefetchAbort = null;
+      }
+      if (prefetchedBlobUrl) {
+        URL.revokeObjectURL(prefetchedBlobUrl);
+        prefetchedBlobUrl = null;
+      }
+      prefetchedFor = url;
+      const abort = new AbortController();
+      prefetchAbort = abort;
+      fetch(url, { signal: abort.signal })
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.blob();
+        })
+        .then((blob) => {
+          prefetchAbort = null;
+          if (prefetchedFor !== url) return; // target changed mid-flight
+          prefetchedBlobUrl = URL.createObjectURL(blob);
+        })
+        .catch((err: unknown) => {
+          prefetchAbort = null;
+          if ((err as Error)?.name !== "AbortError") {
+            console.warn("AudioPlayer: next-chapter prefetch failed", err);
+            // Reset prefetchedFor so we can retry later (e.g. on next
+            // timeupdate) instead of being stuck thinking we're done.
+            if (prefetchedFor === url) prefetchedFor = null;
+          }
+        });
+    };
+
     // Swap to a different chapter without unmounting the player. Used by
     // both the auto-next-on-ended path and (if invoked from outside) by
     // server-pushed chapter changes. Critically: same <audio> element, so
@@ -366,11 +420,34 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     };
 
     const goToNextChapter = (): boolean => {
-      const url = ctx.dataset.nextAudioUrl;
+      const networkUrl = ctx.dataset.nextAudioUrl;
       const timingsUrl = ctx.dataset.nextTimingsUrl;
       const title = ctx.dataset.nextChapterTitle ?? "";
-      if (!url || !timingsUrl) return false;
-      swapToChapter(url, timingsUrl, title);
+      if (!networkUrl || !timingsUrl) return false;
+
+      // Use the prefetched in-memory blob if it's for THIS URL — this is
+      // the whole point of prefetch and is what makes background-tab
+      // autoplay actually work. Fall back to the network URL otherwise
+      // (e.g. desktop user who never triggered prefetch).
+      const useBlob =
+        prefetchedBlobUrl !== null && prefetchedFor === networkUrl;
+      const audioUrl = useBlob ? (prefetchedBlobUrl as string) : networkUrl;
+
+      // The blob currently in use as audio.src (if any) is being replaced
+      // — revoke it so we don't leak ~tens of MB per chapter swap.
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+      currentBlobUrl = useBlob ? audioUrl : null;
+      // Detach the prefetched-blob slot since it's now the current one
+      // (or we didn't use it). Either way, the next prefetch (for the
+      // chapter after this) starts fresh.
+      prefetchedBlobUrl = null;
+      prefetchedFor = null;
+      if (prefetchAbort) {
+        prefetchAbort.abort();
+        prefetchAbort = null;
+      }
+
+      swapToChapter(audioUrl, timingsUrl, title);
       // Tell the server to push_patch the URL + reload chapter assigns.
       // Fire-and-forget: if the WebSocket is asleep (locked phone), the
       // event queues until reconnect — audio playback doesn't depend on it.
@@ -511,7 +588,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       ctx.onDestroy(dispose);
     }
 
-    // Time updates: progress bars + time display + position report
+    // Time updates: progress bars + time display + position report.
+    // Also kicks off the next-chapter prefetch once the user has clearly
+    // committed to this chapter (>15% through). Doing it here, gated on
+    // playback progress, means we don't waste bandwidth on chapters the
+    // user opens and immediately abandons.
+    const PREFETCH_TRIGGER_FRACTION = 0.15;
     ctx.on(audio, "timeupdate", () => {
       if (!audio.duration) return;
       const pct = (audio.currentTime / audio.duration) * 100;
@@ -522,6 +604,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       );
       if (fillMini) fillMini.style.width = `${pct}%`;
       updateTimeDisplay();
+
+      if (audio.currentTime / audio.duration > PREFETCH_TRIGGER_FRACTION) {
+        tryStartPrefetch();
+      }
 
       const nowMs = Math.round(audio.currentTime * 1000);
       if (
@@ -618,6 +704,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       stopHighlightLoop();
       audio.pause();
       wordMenuCleanup?.();
+      if (prefetchAbort) prefetchAbort.abort();
+      if (prefetchedBlobUrl) URL.revokeObjectURL(prefetchedBlobUrl);
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
     });
   },
 );
