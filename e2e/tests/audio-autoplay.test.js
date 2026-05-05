@@ -273,12 +273,25 @@ describe("Audio auto-next-chapter", () => {
 			"audio element must be the SAME node — push_navigate would replace it",
 		);
 
-		// audio.src now points at the next chapter.
-		assert.strictEqual(
-			after.audioSrc,
-			before.nextAudioUrl && new URL(before.nextAudioUrl, BASE_URL).toString(),
-			`audio.src should be next chapter URL after ended, got ${after.audioSrc}`,
-		);
+		// audio.src now points at the next chapter — either as the network
+		// URL or as a `blob:` URL when the prefetch beat us to it. The
+		// blob path is the one that actually fixes sleeping-mobile
+		// autoplay, so when it's chosen we just verify the prefix.
+		const expectedNetworkUrl =
+			before.nextAudioUrl && new URL(before.nextAudioUrl, BASE_URL).toString();
+		const isBlob = after.audioSrc?.startsWith("blob:");
+		if (isBlob) {
+			assert.ok(
+				after.audioSrc?.startsWith(`blob:${BASE_URL}`),
+				`expected a blob: URL on the page origin, got ${after.audioSrc}`,
+			);
+		} else {
+			assert.strictEqual(
+				after.audioSrc,
+				expectedNetworkUrl,
+				`audio.src should be next chapter URL after ended, got ${after.audioSrc}`,
+			);
+		}
 
 		// URL got patched to the next chapter.
 		assert.ok(
