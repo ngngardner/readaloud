@@ -12,6 +12,17 @@ interface AudioPlayerDataset {
   audioUrl: string;
   timingsUrl: string;
   initialPosition?: string;
+  bookTitle?: string;
+  chapterTitle?: string;
+  chapterId?: string;
+  nextChapterId?: string;
+  nextAudioUrl?: string;
+  nextTimingsUrl?: string;
+  nextChapterTitle?: string;
+  prevChapterId?: string;
+  prevAudioUrl?: string;
+  prevTimingsUrl?: string;
+  prevChapterTitle?: string;
 }
 
 interface PlayerPrefs {
@@ -33,13 +44,6 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 const POSITION_REPORT_INTERVAL_MS = 5000;
 const SKIP_SECONDS = 10;
 const AUTO_SCROLL_GRACE_MS = 800;
-
-// Cross-runtime handshake: when an "auto-next-chapter" navigation is in
-// flight, the old hook (about to unmount) sets this sessionStorage key, and
-// the new hook (mounting on the next chapter's LV) consumes it to start
-// playback on loadedmetadata. The Elixir side at ReaderLive.handle_event
-// "next_chapter" is intentionally unaware — it just navigates.
-const AUTO_NEXT_HANDSHAKE_KEY = "readaloud-audio-autoplay";
 
 function coercePlayerPrefs(raw: unknown): Partial<PlayerPrefs> {
   if (!raw || typeof raw !== "object") return {};
@@ -254,9 +258,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     updateSpeedBadge(playerPrefs.get().speed);
 
     // The <audio> element has phx-update="ignore" so it's preserved across
-    // same-LV navigation (auto-next chapter). Reassigning .src alone doesn't
-    // reliably refetch on iOS Safari — call load() explicitly to invoke the
-    // resource selection algorithm and reset the element's media state.
+    // chapter switches (push_patch). Reassigning .src alone doesn't reliably
+    // refetch on iOS Safari — call load() explicitly to invoke the resource
+    // selection algorithm and reset the element's media state.
     audio.src = ctx.dataset.audioUrl;
     audio.load();
     applyAudioPrefs();
@@ -264,19 +268,27 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(audio, "loadedmetadata", () => {
       applyAudioPrefs();
       updateTimeDisplay();
+      updateMediaSessionPosition();
     });
     ctx.on(audio, "durationchange", updateTimeDisplay);
 
-    // Word timings
-    fetch(ctx.dataset.timingsUrl)
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        timings = parseWordTimings(data);
-        if (textContainer) wordMenuCleanup = attachWordMenu(textContainer);
-      })
-      .catch((err: unknown) =>
-        console.error("AudioPlayer: failed to load timings", err),
-      );
+    // Word timings — fetched on mount and re-fetched whenever we swap to a
+    // new chapter via swapToChapter().
+    const fetchTimings = (url: string): void => {
+      timings = [];
+      currentWordIndex = -1;
+      fetch(url)
+        .then((r) => r.json())
+        .then((data: unknown) => {
+          timings = parseWordTimings(data);
+          if (textContainer && !wordMenuCleanup)
+            wordMenuCleanup = attachWordMenu(textContainer);
+        })
+        .catch((err: unknown) =>
+          console.error("AudioPlayer: failed to load timings", err),
+        );
+    };
+    fetchTimings(ctx.dataset.timingsUrl);
 
     // Restore initial position
     const initialMs = Number.parseInt(ctx.dataset.initialPosition ?? "0", 10);
@@ -291,21 +303,157 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       );
     }
 
-    // Auto-play handoff: if the previous chapter ended with auto-next-chapter
-    // enabled, the ended handler stashed a flag in sessionStorage. Consume it
-    // and start playback once metadata is loaded.
-    if (sessionStorage.getItem(AUTO_NEXT_HANDSHAKE_KEY) === "1") {
-      sessionStorage.removeItem(AUTO_NEXT_HANDSHAKE_KEY);
-      ctx.on(
-        audio,
-        "loadedmetadata",
-        () => {
-          audio.play().catch((err: unknown) => {
-            console.warn("AudioPlayer: auto-play blocked by browser", err);
-          });
-        },
-        { once: true },
-      );
+    // --- Media Session API ----------------------------------------------
+    // Registers the OS-level lock-screen / notification controls. Without
+    // this, a sleeping mobile device has no native "next chapter" button
+    // and the WebSocket-bound LV nav often fails when the device wakes.
+    // With this, the OS gives us a working next/prev button even when JS
+    // is throttled, and the audio session keeps the lock screen UI alive
+    // across chapter swaps (since we reuse the same <audio> element).
+    const ms =
+      typeof navigator !== "undefined" && "mediaSession" in navigator
+        ? navigator.mediaSession
+        : null;
+
+    const updateMediaSessionMetadata = (): void => {
+      if (!ms) return;
+      ms.metadata = new MediaMetadata({
+        title: ctx.dataset.chapterTitle ?? "",
+        artist: ctx.dataset.bookTitle ?? "",
+        album: ctx.dataset.bookTitle ?? "",
+      });
+    };
+
+    const updateMediaSessionPosition = (): void => {
+      if (!ms || !ms.setPositionState) return;
+      if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      try {
+        ms.setPositionState({
+          duration: audio.duration,
+          position: Math.min(audio.currentTime, audio.duration),
+          playbackRate: audio.playbackRate || 1,
+        });
+      } catch {
+        // Some browsers throw on invalid positions; ignore.
+      }
+    };
+
+    // Swap to a different chapter without unmounting the player. Used by
+    // both the auto-next-on-ended path and (if invoked from outside) by
+    // server-pushed chapter changes. Critically: same <audio> element, so
+    // the OS audio session is preserved and lock-screen playback continues
+    // without requiring a new user gesture.
+    const swapToChapter = (
+      audioUrl: string,
+      timingsUrl: string,
+      chapterTitle: string,
+    ): void => {
+      audio.src = audioUrl;
+      audio.load();
+      // Update title eagerly so the lock screen shows the new chapter name
+      // even before the LV push_patch round-trip lands.
+      if (ms) {
+        ms.metadata = new MediaMetadata({
+          title: chapterTitle,
+          artist: ctx.dataset.bookTitle ?? "",
+          album: ctx.dataset.bookTitle ?? "",
+        });
+      }
+      fetchTimings(timingsUrl);
+      audio.play().catch((err: unknown) => {
+        console.warn("AudioPlayer: chapter-swap play blocked", err);
+      });
+    };
+
+    const goToNextChapter = (): boolean => {
+      const url = ctx.dataset.nextAudioUrl;
+      const timingsUrl = ctx.dataset.nextTimingsUrl;
+      const title = ctx.dataset.nextChapterTitle ?? "";
+      if (!url || !timingsUrl) return false;
+      swapToChapter(url, timingsUrl, title);
+      // Tell the server to push_patch the URL + reload chapter assigns.
+      // Fire-and-forget: if the WebSocket is asleep (locked phone), the
+      // event queues until reconnect — audio playback doesn't depend on it.
+      ctx.pushEvent("next_chapter");
+      return true;
+    };
+
+    const goToPrevChapter = (): boolean => {
+      const url = ctx.dataset.prevAudioUrl;
+      const timingsUrl = ctx.dataset.prevTimingsUrl;
+      const title = ctx.dataset.prevChapterTitle ?? "";
+      if (!url || !timingsUrl) return false;
+      swapToChapter(url, timingsUrl, title);
+      ctx.pushEvent("prev_chapter");
+      return true;
+    };
+
+    if (ms) {
+      updateMediaSessionMetadata();
+      const safeSet = (
+        action: MediaSessionAction,
+        handler: MediaSessionActionHandler | null,
+      ): void => {
+        try {
+          ms.setActionHandler(action, handler);
+        } catch {
+          // Browser may not support this action — fine, skip it.
+        }
+      };
+      safeSet("play", () => {
+        audio.play().catch(() => {});
+      });
+      safeSet("pause", () => audio.pause());
+      safeSet("seekbackward", (details) => {
+        const delta = details.seekOffset ?? SKIP_SECONDS;
+        audio.currentTime = Math.max(0, audio.currentTime - delta);
+      });
+      safeSet("seekforward", (details) => {
+        const delta = details.seekOffset ?? SKIP_SECONDS;
+        const max = Number.isFinite(audio.duration)
+          ? audio.duration
+          : Number.POSITIVE_INFINITY;
+        audio.currentTime = Math.min(max, audio.currentTime + delta);
+      });
+      safeSet("seekto", (details) => {
+        if (typeof details.seekTime === "number") {
+          audio.currentTime = details.seekTime;
+        }
+      });
+      // Only register next/prev when there's actually a target; otherwise
+      // the OS UI shows greyed-out buttons (or nothing) which is correct.
+      if (ctx.dataset.nextAudioUrl) {
+        safeSet("nexttrack", () => {
+          goToNextChapter();
+        });
+      } else {
+        safeSet("nexttrack", null);
+      }
+      if (ctx.dataset.prevAudioUrl) {
+        safeSet("previoustrack", () => {
+          goToPrevChapter();
+        });
+      } else {
+        safeSet("previoustrack", null);
+      }
+      ctx.onDestroy(() => {
+        // Clear handlers + metadata so a stale player on a different page
+        // doesn't get media-key events meant for nothing.
+        for (const a of [
+          "play",
+          "pause",
+          "nexttrack",
+          "previoustrack",
+          "seekbackward",
+          "seekforward",
+          "seekto",
+        ] as MediaSessionAction[]) {
+          try {
+            ms.setActionHandler(a, null);
+          } catch {}
+        }
+        ms.metadata = null;
+      });
     }
 
     // Controls
@@ -390,11 +538,14 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       playPauseBtn.innerHTML = "&#10074;&#10074;";
       scrollFollow.setPlaying(true);
       startHighlightLoop();
+      if (ms) ms.playbackState = "playing";
+      updateMediaSessionPosition();
     });
     ctx.on(audio, "pause", () => {
       playPauseBtn.innerHTML = "&#9654;";
       scrollFollow.setPlaying(false);
       stopHighlightLoop();
+      if (ms) ms.playbackState = "paused";
       ctx.pushEvent("audio_position", {
         position_ms: Math.round(audio.currentTime * 1000),
       });
@@ -402,8 +553,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(audio, "ended", () => {
       stopHighlightLoop();
       if (readerSettings.get().autoNextChapter) {
-        sessionStorage.setItem(AUTO_NEXT_HANDSHAKE_KEY, "1");
-        ctx.pushEvent("next_chapter");
+        // JS-side chapter swap on the same <audio> element. This is the
+        // critical path for sleeping-mobile autoplay: a full LV navigation
+        // would tear down the OS audio session and silently fail when the
+        // device is locked. Same-element src swap keeps the lock-screen
+        // controls live and the audio session uninterrupted.
+        goToNextChapter();
       }
     });
 

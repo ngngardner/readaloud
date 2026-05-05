@@ -9,20 +9,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
     chapter_id = String.to_integer(chapter_id)
 
     book = ReadaloudLibrary.get_book!(book_id)
-    chapter = ReadaloudLibrary.get_chapter!(chapter_id)
     chapters = ReadaloudLibrary.list_chapters(book_id)
-
-    content =
-      case ReadaloudLibrary.get_chapter_content(chapter) do
-        {:ok, c} -> c
-        {:error, _} -> nil
-      end
-
-    progress = ReadaloudReader.get_progress(book_id)
-    audio = ReadaloudAudiobook.get_chapter_audio(chapter_id)
-    audio_state = determine_audio_state(chapter_id, audio)
-
-    progress_matches_chapter? = progress && progress.current_chapter_id == chapter.id
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
@@ -35,27 +22,84 @@ defmodule ReadaloudWebWeb.ReaderLive do
        active_nav: :reader,
        task_count: 0,
        book: book,
-       chapter: chapter,
        chapters: chapters,
-       content: content,
-       progress: progress,
-       audio: audio,
-       audio_state: audio_state,
        models: [],
        selected_model: default_model(book, []),
        selected_voice: default_voice(book, []),
        show_conflict_modal: false,
        conflict_chapter: nil,
-       generation_progress: 0,
-       initial_scroll: (progress_matches_chapter? && progress.scroll_position) || 0.0,
-       initial_position_ms: (progress_matches_chapter? && progress.audio_position_ms) || 0,
-       page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
-     )}
+       generation_progress: 0
+     )
+     |> assign_chapter(chapter_id, restore_progress?: true)}
+  end
+
+  # Load chapter-scoped assigns (chapter, content, audio_state, next/prev audio
+  # availability, initial scroll/position from saved progress). Called from
+  # mount and from handle_params when chapter_id changes via push_patch.
+  defp assign_chapter(socket, chapter_id, opts) do
+    book = socket.assigns.book
+    chapters = socket.assigns.chapters
+
+    chapter = ReadaloudLibrary.get_chapter!(chapter_id)
+
+    content =
+      case ReadaloudLibrary.get_chapter_content(chapter) do
+        {:ok, c} -> c
+        {:error, _} -> nil
+      end
+
+    audio = ReadaloudAudiobook.get_chapter_audio(chapter_id)
+    audio_state = determine_audio_state(chapter_id, audio)
+
+    next_audio_chapter =
+      case next_chapter(chapter, chapters) do
+        nil -> nil
+        ch -> if ReadaloudAudiobook.get_chapter_audio(ch.id), do: ch, else: nil
+      end
+
+    prev_audio_chapter =
+      case prev_chapter(chapter, chapters) do
+        nil -> nil
+        ch -> if ReadaloudAudiobook.get_chapter_audio(ch.id), do: ch, else: nil
+      end
+
+    restore? = Keyword.get(opts, :restore_progress?, false)
+    progress = if restore?, do: ReadaloudReader.get_progress(book.id), else: nil
+
+    progress_matches? =
+      restore? && progress && progress.current_chapter_id == chapter.id
+
+    socket
+    |> assign(
+      chapter: chapter,
+      content: content,
+      audio: audio,
+      audio_state: audio_state,
+      progress: progress || socket.assigns[:progress],
+      next_audio_chapter: next_audio_chapter,
+      prev_audio_chapter: prev_audio_chapter,
+      initial_scroll: (progress_matches? && progress.scroll_position) || 0.0,
+      initial_position_ms: (progress_matches? && progress.audio_position_ms) || 0,
+      page_title: "#{chapter.title || "Chapter #{chapter.number}"} — #{book.title}"
+    )
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
+  def handle_params(%{"chapter_id" => chapter_id_param} = params, _uri, socket) do
     if connected?(socket) do
+      chapter_id = String.to_integer(chapter_id_param)
+
+      # If the URL chapter_id changed (push_patch from auto-next, manual
+      # chapter switch, etc.) reload chapter-scoped assigns. Skip
+      # restore_progress so we don't seek/scroll-jump for an in-flight
+      # autoplay.
+      socket =
+        if chapter_id != socket.assigns.chapter.id do
+          assign_chapter(socket, chapter_id, restore_progress?: false)
+        else
+          socket
+        end
+
       progress = socket.assigns.progress
       is_internal = params["nav"] == "internal"
 
@@ -120,17 +164,20 @@ defmodule ReadaloudWebWeb.ReaderLive do
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
 
         {:noreply,
-         push_navigate(socket,
+         push_patch(socket,
            to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
          )}
     end
   end
 
   @impl true
-  # When the audio player auto-advances on chapter end, it stashes a
-  # sessionStorage handshake key (AUTO_NEXT_HANDSHAKE_KEY in
-  # assets/js/hooks/audio_player.ts) before pushing this event. The next
-  # chapter's hook consumes the key on mount to resume playback.
+  # Chapter advance — used for the manual next button and for the audio
+  # player's auto-next-on-ended path. Uses push_patch (not push_navigate) so
+  # the LiveView and the <audio> element survive the chapter switch. That
+  # matters most on mobile with the screen locked: a full page navigation
+  # would tear down the OS audio session and require a fresh user gesture
+  # to resume playback. With push_patch the audio_player JS hook owns
+  # playback continuity and we just patch the URL + reload chapter assigns.
   def handle_event("next_chapter", _params, socket) do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
@@ -140,7 +187,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
 
         {:noreply,
-         push_navigate(socket,
+         push_patch(socket,
            to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
          )}
     end
@@ -222,7 +269,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
     reset_progress_for_chapter(socket.assigns.book.id, chapter_id)
 
     {:noreply,
-     push_navigate(socket,
+     push_patch(socket,
        to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}?nav=internal"
      )}
   end
@@ -573,6 +620,35 @@ defmodule ReadaloudWebWeb.ReaderLive do
         data-audio-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/audio"}
         data-timings-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/timings"}
         data-initial-position={@initial_position_ms}
+        data-book-title={@book.title}
+        data-chapter-title={@chapter.title || "Chapter #{@chapter.number}"}
+        data-chapter-id={@chapter.id}
+        data-next-chapter-id={if @next_audio_chapter, do: @next_audio_chapter.id}
+        data-next-audio-url={
+          if @next_audio_chapter,
+            do: ~p"/api/books/#{@book.id}/chapters/#{@next_audio_chapter.id}/audio"
+        }
+        data-next-timings-url={
+          if @next_audio_chapter,
+            do: ~p"/api/books/#{@book.id}/chapters/#{@next_audio_chapter.id}/timings"
+        }
+        data-next-chapter-title={
+          if @next_audio_chapter,
+            do: @next_audio_chapter.title || "Chapter #{@next_audio_chapter.number}"
+        }
+        data-prev-chapter-id={if @prev_audio_chapter, do: @prev_audio_chapter.id}
+        data-prev-audio-url={
+          if @prev_audio_chapter,
+            do: ~p"/api/books/#{@book.id}/chapters/#{@prev_audio_chapter.id}/audio"
+        }
+        data-prev-timings-url={
+          if @prev_audio_chapter,
+            do: ~p"/api/books/#{@book.id}/chapters/#{@prev_audio_chapter.id}/timings"
+        }
+        data-prev-chapter-title={
+          if @prev_audio_chapter,
+            do: @prev_audio_chapter.title || "Chapter #{@prev_audio_chapter.number}"
+        }
         class="fixed bottom-0 inset-x-0 z-40 bg-base-200/95 backdrop-blur-xl border-t border-base-content/6 transition-all duration-300"
       >
         <audio id="audio-element" phx-update="ignore" preload="auto"></audio>
