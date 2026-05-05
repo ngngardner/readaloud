@@ -258,11 +258,29 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     updateSpeedBadge(playerPrefs.get().speed);
 
     // The <audio> element has phx-update="ignore" so it's preserved across
-    // chapter switches (push_patch). Reassigning .src alone doesn't reliably
-    // refetch on iOS Safari — call load() explicitly to invoke the resource
-    // selection algorithm and reset the element's media state.
-    audio.src = ctx.dataset.audioUrl;
-    audio.load();
+    // chapter switches (push_patch) AND across LV reconnect/re-mount. The
+    // hook itself, however, is destroyed and re-mounted on a re-mount —
+    // so on mount we may find an <audio> element that's already loaded
+    // (and possibly mid-playback) from a previous hook instance. In that
+    // case we MUST NOT touch its src — doing so would interrupt the
+    // user's listening session, which is exactly the bug we're chasing
+    // with sleeping-mobile autoplay (LV WebSocket times out → re-mount on
+    // wake → forced reload → 00:00/00:00).
+    //
+    // Heuristic: only set src if the element doesn't have one yet (or
+    // has the page URL, the default for an unset <audio>). If it has
+    // any other src — network URL, or a `blob:` URL prefetched by a
+    // previous hook instance — leave it alone.
+    const wantSrc = ctx.dataset.audioUrl;
+    const existingSrc = audio.src;
+    const hasMeaningfulSrc =
+      existingSrc !== "" &&
+      existingSrc !== window.location.href &&
+      existingSrc !== window.location.origin + "/";
+    if (!hasMeaningfulSrc) {
+      audio.src = wantSrc;
+      audio.load();
+    }
     applyAudioPrefs();
 
     ctx.on(audio, "loadedmetadata", () => {
@@ -290,9 +308,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     };
     fetchTimings(ctx.dataset.timingsUrl);
 
-    // Restore initial position
+    // Restore initial position — only on a fresh load. On re-mount of an
+    // already-playing element we'd otherwise rewind the user back to a
+    // saved position from a different LV session.
     const initialMs = Number.parseInt(ctx.dataset.initialPosition ?? "0", 10);
-    if (initialMs > 0) {
+    if (initialMs > 0 && !hasMeaningfulSrc) {
       ctx.on(
         audio,
         "loadedmetadata",
@@ -699,14 +719,24 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       cycleSpeed(direction),
     );
 
-    // Final cleanup not covered by ctx.on
+    // Final cleanup not covered by ctx.on. Important: do NOT pause the
+    // audio or revoke its current blob URL here. Destroy fires on LV
+    // reconnect/re-mount (long phone sleep → server LV process times out
+    // → client re-mount on wake) — and the <audio> element survives
+    // (phx-update="ignore"). Pausing or revoking would interrupt the
+    // user's listening session at exactly the moment they wake the phone
+    // hoping playback continues. If the player is genuinely going away
+    // (user navigates off the reader), the <audio> element gets removed
+    // from the DOM, which auto-pauses it — no explicit pause needed.
+    //
+    // We do still abort and revoke the *prefetch* slot: that blob is not
+    // tied to the playing audio element, so leaking it across re-mount
+    // would just waste memory.
     ctx.onDestroy(() => {
       stopHighlightLoop();
-      audio.pause();
       wordMenuCleanup?.();
       if (prefetchAbort) prefetchAbort.abort();
       if (prefetchedBlobUrl) URL.revokeObjectURL(prefetchedBlobUrl);
-      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
     });
   },
 );
