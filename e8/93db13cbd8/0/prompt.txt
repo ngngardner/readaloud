@@ -1,0 +1,9 @@
+Check the status of both Nix builds (b3d2njmkw = e2e VM, bmnb3y8sv = coverage). Tail the logs and report progress. If both have finished (success or fail), diagnose. If still running, schedule another check.
+Check the status of both Nix builds (b3d2njmkw = e2e VM, bifbh7cec = coverage retry). Tail logs and report. If both finished, diagnose. If still running, wait again.
+Check status of e2e VM build (b3d2njmkw) and coverage build (bpzn60zyl). Tail both logs. Diagnose any failures or report success.
+Check status of e2e VM build (b3d2njmkw) and coverage build attempt 4 (bphyupxbj). Tail both logs. Diagnose any failures or report success.
+Check both Nix builds: e2e VM (b3d2njmkw) and coverage attempt 5 (bex02ljxn). Tail logs, diagnose, or report success.
+Check both Nix builds: e2e VM (b3d2njmkw) and coverage attempt 6 (bshqolekt). Tail logs, diagnose, or report success.
+Check e2e VM build (b3d2njmkw). Tail log, diagnose, or report success.
+Check e2e VM build (bbop0a0l9). Tail log; count test pass/fail. If improved meaningfully, report. If not, diagnose. Coverage build status is also worth noting if anything new.
+Check e2e VM build (bvt06rk9b). Tail log; count test pass/fail compared to previous run (41 pass / 55 fail). Report what improved and what's still broken so we can decide next steps.
