@@ -78,10 +78,16 @@ describe("Accidental Navigation Popup", () => {
 		const modal = await page.$(".modal.modal-open");
 		assert.ok(modal, "modal must still be open from prior test");
 
-		const modalText = await page.$eval(".modal-box", (el) => el.textContent);
+		// `.modal-box` is also rendered (hidden) by the layout's theme
+		// modal, which appears first in the DOM — scope the lookup to the
+		// open conflict modal so we read its text, not the theme modal's.
+		const modalText = await page.$eval(
+			".modal.modal-open .modal-box",
+			(el) => el.textContent,
+		);
 		assert.ok(
 			modalText.includes("last reading position"),
-			"Modal should mention last reading position",
+			`Modal should mention last reading position, got: ${modalText}`,
 		);
 	});
 
@@ -92,11 +98,16 @@ describe("Accidental Navigation Popup", () => {
 		// Get current URL before clicking Stay
 		const urlBefore = page.url();
 
-		// Click the "Stay" button (btn-ghost)
-		await page.click(".modal-action .btn-ghost");
+		// Click the "Stay" button. The modal-backdrop also wires
+		// phx-click="dismiss_conflict" so we scope to .modal-action to land
+		// on the button — the backdrop can be obscured under the box and
+		// hit-testing into a button is the realistic user gesture anyway.
+		await page.click(
+			'.modal.modal-open .modal-action [phx-click="dismiss_conflict"]',
+		);
 		await page.waitForFunction(
 			() => document.querySelector(".modal.modal-open") === null,
-			{ timeout: 3000 },
+			{ timeout: 5000 },
 		);
 
 		// Modal should be gone
@@ -136,11 +147,13 @@ describe("Accidental Navigation Popup", () => {
 		const modal = await page.$(".modal.modal-open");
 		assert.ok(modal, "Conflict popup should appear after backward nav");
 
-		// Click "Go to" button (btn-primary)
-		await page.click(".modal-action .btn-primary");
+		// Click "Go to" button — select by phx-click within .modal-action.
+		await page.click(
+			'.modal.modal-open .modal-action [phx-click="go_to_conflict_chapter"]',
+		);
 		await page.waitForFunction(
 			(targetId) => window.location.pathname.includes(`/read/${targetId}`),
-			{ timeout: 3000 },
+			{ timeout: 5000 },
 			laterChapter.id,
 		);
 

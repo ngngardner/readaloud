@@ -96,13 +96,28 @@ export async function openSettings(page) {
 	if (!isElement) {
 		throw new Error("openSettings: gear button (hero-cog) not found in pill");
 	}
+	// Already open? `JS.toggle` would close it. Skip the click in that
+	// case — tests call openSettings repeatedly across describe blocks.
+	const alreadyOpen = await page.evaluate(() => {
+		const el = document.getElementById("reader-settings");
+		return el ? getComputedStyle(el).display !== "none" : false;
+	});
+	if (alreadyOpen) return;
 	// Click via puppeteer's API so we get a real CDP click event that
 	// Phoenix LV's phx-click handler responds to (synthetic `el.click()`
 	// can race the LV command pipeline).
 	await gearHandle.click();
-	await page.waitForSelector("#reader-settings:not(.hidden)", {
-		timeout: 3000,
-	});
+	// `JS.toggle` flips the inline `display` style — it does NOT remove
+	// the Tailwind `hidden` class (Tailwind's `display: none` is overridden
+	// by the inline `display: block`, so `:not(.hidden)` would never match).
+	// Wait on the actual visibility instead.
+	await page.waitForFunction(
+		() => {
+			const el = document.getElementById("reader-settings");
+			return el && getComputedStyle(el).display !== "none";
+		},
+		{ timeout: 3000 },
+	);
 }
 
 /** Get all chapter IDs for a book by reading the chapter bar data attribute. */

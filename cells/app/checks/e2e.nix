@@ -97,13 +97,20 @@ pkgs.testers.nixosTest {
     # Run the full e2e suite. --test-reporter=spec surfaces skip
     # messages and per-test timing in the build log; the default 'tap'
     # reporter buries them.
+    #
+    # --test-concurrency=1 forces files to run sequentially. Files share
+    # the BEAM/SQLite — accidental-navigation.test.js's modal triggers
+    # are gated on `ReadingProgress` being a known chapter at a known
+    # moment, which races horribly when reader-styles-persist or audio
+    # tests rewrite progress in parallel. Sequential is ~2× slower but
+    # deterministic, which is the tradeoff this suite is for.
     server.succeed(
         "cd /tmp/e2e && "
         "PUPPETEER_EXECUTABLE_PATH=\"${pkgs.chromium}/bin/chromium\" "
         "BASE_URL=\"http://localhost:4000\" "
         "BOOK_ID=\"1\" "
         "HEADLESS=\"true\" "
-        "node --test --test-reporter=spec tests/*.test.js"
+        "node --test --test-concurrency=1 --test-reporter=spec tests/*.test.js"
     )
   '';
 }

@@ -113,27 +113,21 @@ defmodule ReadaloudWebWeb.ReaderLive do
       progress = socket.assigns.progress
       is_internal = params["nav"] == "internal"
 
-      if !is_internal && progress && progress.current_chapter_id &&
-           progress.current_chapter_id != socket.assigns.chapter.id do
-        conflict_chapter =
-          Enum.find(socket.assigns.chapters, &(&1.id == progress.current_chapter_id))
+      # Only flag a conflict on backward navigation: saved progress points
+      # at a chapter *ahead* of the current one. Forward (or same/unknown)
+      # navigation just advances the saved position — opening a later
+      # chapter from a bookmark or external link should "just work."
+      conflict_chapter =
+        if !is_internal && progress && progress.current_chapter_id &&
+             progress.current_chapter_id != socket.assigns.chapter.id do
+          saved =
+            Enum.find(socket.assigns.chapters, &(&1.id == progress.current_chapter_id))
 
-        if conflict_chapter do
-          {:noreply,
-           assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
-        else
-          ReadaloudReader.upsert_progress(%{
-            book_id: socket.assigns.book.id,
-            current_chapter_id: socket.assigns.chapter.id
-          })
-
-          ReadaloudAudiobook.reprioritize_pending_jobs(
-            socket.assigns.chapters,
-            socket.assigns.chapter.number
-          )
-
-          {:noreply, socket}
+          if saved && saved.number > socket.assigns.chapter.number, do: saved
         end
+
+      if conflict_chapter do
+        {:noreply, assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
       else
         ReadaloudReader.upsert_progress(%{
           book_id: socket.assigns.book.id,
@@ -457,7 +451,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         phx-hook="ReaderSettingsControlsHook"
         data-pill-popover="settings"
         class="fixed top-16 right-4 z-50 hidden
-               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72"
+               bg-base-200 rounded-xl shadow-xl border border-base-content/10 p-4 w-72
+               max-h-[80vh] overflow-y-auto"
       >
         <h3 class="text-sm font-semibold mb-3">Reading Settings</h3>
 
@@ -810,7 +805,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         <div class="modal-box">
           <h3 class="font-bold text-lg">Continue reading?</h3>
           <p class="py-4">
-            Your last position was on <strong>
+            Your last reading position was on <strong>
               {if @conflict_chapter,
                 do: @conflict_chapter.title || "Chapter #{@conflict_chapter.number}",
                 else: "another chapter"}

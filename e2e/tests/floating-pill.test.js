@@ -259,11 +259,14 @@ describe("Chapter Bar", () => {
 			const currentIdx = await page.$eval("#chapter-bar", (el) =>
 				parseInt(el.dataset.currentIndex),
 			);
+			// daisyUI's `btn-primary` resolves to the primary background +
+			// content color via component CSS — there's no literal `bg-primary`
+			// utility on the element. Assert against the class we render.
 			const isHighlighted = await page.$eval(
 				`[data-chapter-pill="${currentIdx}"]`,
-				(el) => el.classList.contains("bg-primary"),
+				(el) => el.classList.contains("btn-primary"),
 			);
-			assert.ok(isHighlighted, "Current chapter pill should have bg-primary");
+			assert.ok(isHighlighted, "Current chapter pill should have btn-primary");
 		});
 
 		it("strip is horizontally scrollable", async () => {

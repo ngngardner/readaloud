@@ -78,6 +78,7 @@ export const ReaderSettingsControlsHook = defineHook<HTMLDivElement>((ctx) => {
   }
 
   syncControls(readerSettings.get());
+  syncActiveSwatches();
 
   function syncControls(s: Readonly<ReaderSettings>): void {
     for (const key of RANGE_KEYS) {
@@ -87,5 +88,19 @@ export const ReaderSettingsControlsHook = defineHook<HTMLDivElement>((ctx) => {
       if (input) input.value = String(s[key]);
     }
     if (autoNext) autoNext.checked = s.autoNextChapter;
+  }
+
+  // Theme swatches live in this popover but the active state is tracked
+  // on documentElement (set by ThemeHook + bootstrap inline script). The
+  // hook is on app-shell, mounting before LV renders the popover, so it
+  // can't see swatches at its own mount time — sync them here instead.
+  function syncActiveSwatches(): void {
+    const current =
+      document.documentElement.getAttribute("data-theme") ?? "dark";
+    for (const el of ctx.el.querySelectorAll<HTMLElement>(
+      "[data-set-theme]",
+    )) {
+      el.classList.toggle("active", el.dataset.setTheme === current);
+    }
   }
 });

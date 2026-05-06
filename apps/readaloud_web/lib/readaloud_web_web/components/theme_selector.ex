@@ -18,6 +18,7 @@ defmodule ReadaloudWebWeb.ThemeSelector do
         :for={theme <- @themes}
         phx-click={Phoenix.LiveView.JS.dispatch("readaloud:set-theme", detail: %{theme: theme})}
         class="theme-swatch"
+        data-set-theme={theme}
         title={theme}
       >
         <div class="flex gap-0.5 !bg-transparent" data-theme={theme}>

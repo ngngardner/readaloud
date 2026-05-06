@@ -69,25 +69,36 @@ describe("Speed Badge", () => {
 	});
 
 	it("speed persists to localStorage", async () => {
-		const stored = await page.evaluate(() =>
-			localStorage.getItem("readaloud-playback-speed"),
-		);
-		assert.ok(stored, "Speed should be stored in localStorage");
+		// Player prefs (speed/volume/collapsed) live under a single JSON
+		// key — the legacy `readaloud-playback-speed` key is migrated
+		// once on boot and never written to again.
+		const speed = await page.evaluate(() => {
+			const raw = localStorage.getItem("readaloud-player-prefs");
+			if (!raw) return null;
+			try {
+				return JSON.parse(raw).speed;
+			} catch {
+				return null;
+			}
+		});
+		assert.ok(speed != null, "Speed should be stored in player prefs");
 		assert.ok(
-			parseFloat(stored) > 0,
-			"Stored speed should be a positive number",
+			speed > 0,
+			`Stored speed should be a positive number, got ${speed}`,
 		);
 	});
 
 	it("badge uses tabular-nums for stable width", async () => {
+		// `tabular-nums` is a Tailwind utility class — it emits a CSS
+		// rule, not an inline style — so check the computed value.
 		const fontVariant = await page.$eval(
 			"#speed-badge",
-			(el) => el.style.fontVariantNumeric,
+			(el) => getComputedStyle(el).fontVariantNumeric,
 		);
-		assert.strictEqual(
+		assert.match(
 			fontVariant,
-			"tabular-nums",
-			"Badge should use tabular-nums",
+			/tabular-nums/,
+			`Badge should use tabular-nums, got ${fontVariant}`,
 		);
 	});
 
