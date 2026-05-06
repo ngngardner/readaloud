@@ -1,6 +1,8 @@
 defmodule ReadaloudWebWeb.ReaderLive do
   use ReadaloudWebWeb, :live_view
 
+  require Logger
+
   alias ReadaloudWebWeb.ThemeSelector
 
   @impl true
@@ -12,6 +14,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
     chapters = ReadaloudLibrary.list_chapters(book_id)
 
     if connected?(socket) do
+      Logger.info(
+        "[autoplay] reader-live mount connected book_id=#{book_id} chapter_id=#{chapter_id}"
+      )
+
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
       send(self(), :fetch_models)
     end
@@ -95,6 +101,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
       # autoplay.
       socket =
         if chapter_id != socket.assigns.chapter.id do
+          Logger.info(
+            "[autoplay] handle_params chapter switch book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id} to=#{chapter_id} nav=#{inspect(params["nav"])}"
+          )
+
           assign_chapter(socket, chapter_id, restore_progress?: false)
         else
           socket
@@ -156,11 +166,17 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_event("prev_chapter", _params, socket) do
+    Logger.info(
+      "[autoplay] prev_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
+    )
+
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
+        Logger.info("[autoplay] prev_chapter no-op (no previous)")
         {:noreply, socket}
 
       ch ->
+        Logger.info("[autoplay] prev_chapter push_patch to=#{ch.id}")
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
 
         {:noreply,
@@ -179,11 +195,17 @@ defmodule ReadaloudWebWeb.ReaderLive do
   # to resume playback. With push_patch the audio_player JS hook owns
   # playback continuity and we just patch the URL + reload chapter assigns.
   def handle_event("next_chapter", _params, socket) do
+    Logger.info(
+      "[autoplay] next_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
+    )
+
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
+        Logger.info("[autoplay] next_chapter no-op (no next)")
         {:noreply, socket}
 
       ch ->
+        Logger.info("[autoplay] next_chapter push_patch to=#{ch.id}")
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
 
         {:noreply,

@@ -118,6 +118,11 @@ function formatTime(secs: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+// Monotonically increasing player-instance ID. Each hook mount gets one;
+// shows up in every log line so we can tell apart pre-/post-remount
+// instances when reading the browser console after the fact.
+let nextPlayerId = 1;
+
 export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
   (ctx) => {
     const audio = requireElement(DOM_IDS.AUDIO_ELEMENT, HTMLAudioElement);
@@ -128,6 +133,26 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     const speedBadge = findElement(DOM_IDS.SPEED_BADGE, HTMLElement);
 
     if (!audio || !playPauseBtn) return;
+
+    const playerId = nextPlayerId++;
+    // Detailed always-on logging for autoplay debugging. When the user
+    // reports a symptom ("phone woke up at 11:07 and audio was at 0:00")
+    // these lines + the chapter/book ids let us line up the JS-side state
+    // machine with server logs (see reader_live.ex Logger.info calls).
+    const log = (event: string, extra?: Record<string, unknown>): void => {
+      const wall = new Date().toISOString();
+      const t =
+        typeof performance !== "undefined"
+          ? Math.round(performance.now())
+          : Date.now();
+      const base: Record<string, unknown> = {
+        player: playerId,
+        chapter: ctx.dataset.chapterId,
+        t,
+      };
+      if (extra) Object.assign(base, extra);
+      console.log(`[autoplay ${wall}] ${event}`, base);
+    };
 
     let timings: ReadonlyArray<WordTiming> = [];
     let currentWordIndex = -1;
@@ -277,9 +302,28 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       existingSrc !== "" &&
       existingSrc !== window.location.href &&
       existingSrc !== window.location.origin + "/";
+    log("mount", {
+      hasMeaningfulSrc,
+      existingSrcKind: existingSrc.startsWith("blob:")
+        ? "blob"
+        : existingSrc === "" || existingSrc === window.location.href
+          ? "empty"
+          : "url",
+      audioPaused: audio.paused,
+      audioCurrentTime: audio.currentTime,
+      audioReadyState: audio.readyState,
+      autoNextChapter: readerSettings.get().autoNextChapter,
+      hasNext: !!ctx.dataset.nextAudioUrl,
+      hasPrev: !!ctx.dataset.prevAudioUrl,
+      bookTitle: ctx.dataset.bookTitle,
+      chapterTitle: ctx.dataset.chapterTitle,
+    });
     if (!hasMeaningfulSrc) {
+      log("set-initial-src");
       audio.src = wantSrc;
       audio.load();
+    } else {
+      log("preserve-existing-src");
     }
     applyAudioPrefs();
 
@@ -381,16 +425,20 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // Target URL changed (e.g. user manually jumped chapters) — drop
       // any in-flight or stale-blob state and restart.
       if (prefetchAbort) {
+        log("prefetch-abort-stale", { for: prefetchedFor });
         prefetchAbort.abort();
         prefetchAbort = null;
       }
       if (prefetchedBlobUrl) {
+        log("prefetch-revoke-stale", { for: prefetchedFor });
         URL.revokeObjectURL(prefetchedBlobUrl);
         prefetchedBlobUrl = null;
       }
       prefetchedFor = url;
       const abort = new AbortController();
       prefetchAbort = abort;
+      log("prefetch-start", { url });
+      const startedAt = performance.now();
       fetch(url, { signal: abort.signal })
         .then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -398,16 +446,30 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         })
         .then((blob) => {
           prefetchAbort = null;
-          if (prefetchedFor !== url) return; // target changed mid-flight
+          if (prefetchedFor !== url) {
+            log("prefetch-discard-target-changed", {
+              completedFor: url,
+              currentTarget: prefetchedFor,
+            });
+            return;
+          }
           prefetchedBlobUrl = URL.createObjectURL(blob);
+          log("prefetch-done", {
+            url,
+            bytes: blob.size,
+            durationMs: Math.round(performance.now() - startedAt),
+          });
         })
         .catch((err: unknown) => {
           prefetchAbort = null;
           if ((err as Error)?.name !== "AbortError") {
+            log("prefetch-fail", { url, error: String(err) });
             console.warn("AudioPlayer: next-chapter prefetch failed", err);
             // Reset prefetchedFor so we can retry later (e.g. on next
             // timeupdate) instead of being stuck thinking we're done.
             if (prefetchedFor === url) prefetchedFor = null;
+          } else {
+            log("prefetch-aborted", { url });
           }
         });
     };
@@ -422,6 +484,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       timingsUrl: string,
       chapterTitle: string,
     ): void => {
+      log("swap-to-chapter", {
+        srcKind: audioUrl.startsWith("blob:") ? "blob" : "url",
+        chapterTitle,
+        audioPaused: audio.paused,
+      });
       audio.src = audioUrl;
       audio.load();
       // Update title eagerly so the lock screen shows the new chapter name
@@ -434,16 +501,26 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         });
       }
       fetchTimings(timingsUrl);
-      audio.play().catch((err: unknown) => {
-        console.warn("AudioPlayer: chapter-swap play blocked", err);
-      });
+      audio
+        .play()
+        .then(() => log("swap-play-ok"))
+        .catch((err: unknown) => {
+          log("swap-play-blocked", { error: String(err) });
+          console.warn("AudioPlayer: chapter-swap play blocked", err);
+        });
     };
 
     const goToNextChapter = (): boolean => {
       const networkUrl = ctx.dataset.nextAudioUrl;
       const timingsUrl = ctx.dataset.nextTimingsUrl;
       const title = ctx.dataset.nextChapterTitle ?? "";
-      if (!networkUrl || !timingsUrl) return false;
+      if (!networkUrl || !timingsUrl) {
+        log("next-chapter-blocked-no-target", {
+          hasUrl: !!networkUrl,
+          hasTimings: !!timingsUrl,
+        });
+        return false;
+      }
 
       // Use the prefetched in-memory blob if it's for THIS URL — this is
       // the whole point of prefetch and is what makes background-tab
@@ -452,6 +529,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       const useBlob =
         prefetchedBlobUrl !== null && prefetchedFor === networkUrl;
       const audioUrl = useBlob ? (prefetchedBlobUrl as string) : networkUrl;
+      log("go-to-next-chapter", {
+        useBlob,
+        prefetchedFor,
+        prefetchInFlight: prefetchAbort !== null,
+        toTitle: title,
+      });
 
       // The blob currently in use as audio.src (if any) is being replaced
       // — revoke it so we don't leak ~tens of MB per chapter swap.
@@ -471,6 +554,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // Tell the server to push_patch the URL + reload chapter assigns.
       // Fire-and-forget: if the WebSocket is asleep (locked phone), the
       // event queues until reconnect — audio playback doesn't depend on it.
+      log("push-event", { event: "next_chapter" });
       ctx.pushEvent("next_chapter");
       return true;
     };
@@ -479,8 +563,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       const url = ctx.dataset.prevAudioUrl;
       const timingsUrl = ctx.dataset.prevTimingsUrl;
       const title = ctx.dataset.prevChapterTitle ?? "";
-      if (!url || !timingsUrl) return false;
+      if (!url || !timingsUrl) {
+        log("prev-chapter-blocked-no-target");
+        return false;
+      }
+      log("go-to-prev-chapter", { toTitle: title });
       swapToChapter(url, timingsUrl, title);
+      log("push-event", { event: "prev_chapter" });
       ctx.pushEvent("prev_chapter");
       return true;
     };
@@ -521,6 +610,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // the OS UI shows greyed-out buttons (or nothing) which is correct.
       if (ctx.dataset.nextAudioUrl) {
         safeSet("nexttrack", () => {
+          log("media-session-nexttrack");
           goToNextChapter();
         });
       } else {
@@ -528,6 +618,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
       if (ctx.dataset.prevAudioUrl) {
         safeSet("previoustrack", () => {
+          log("media-session-previoustrack");
           goToPrevChapter();
         });
       } else {
@@ -641,6 +732,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
 
     // Play/pause state — drives scrollFollow + button icon + position report
     ctx.on(audio, "play", () => {
+      log("audio-play", {
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+      });
       playPauseBtn.innerHTML = "&#10074;&#10074;";
       scrollFollow.setPlaying(true);
       startHighlightLoop();
@@ -648,6 +743,14 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       updateMediaSessionPosition();
     });
     ctx.on(audio, "pause", () => {
+      log("audio-pause", {
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+        atEnd:
+          Number.isFinite(audio.duration) &&
+          audio.duration > 0 &&
+          audio.currentTime >= audio.duration - 0.5,
+      });
       playPauseBtn.innerHTML = "&#9654;";
       scrollFollow.setPlaying(false);
       stopHighlightLoop();
@@ -657,6 +760,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       });
     });
     ctx.on(audio, "ended", () => {
+      log("audio-ended", {
+        autoNext: readerSettings.get().autoNextChapter,
+        hasPrefetchedBlob: prefetchedBlobUrl !== null,
+        prefetchInFlight: prefetchAbort !== null,
+        prefetchedFor,
+        nextUrl: ctx.dataset.nextAudioUrl ?? null,
+      });
       stopHighlightLoop();
       if (readerSettings.get().autoNextChapter) {
         // JS-side chapter swap on the same <audio> element. This is the
@@ -667,6 +777,23 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         goToNextChapter();
       }
     });
+    ctx.on(audio, "error", () => {
+      const err = audio.error;
+      log("audio-error", {
+        code: err?.code ?? null,
+        message: err?.message ?? null,
+        currentSrc: audio.currentSrc?.startsWith("blob:") ? "blob" : "url",
+      });
+    });
+    ctx.on(audio, "stalled", () =>
+      log("audio-stalled", { currentTime: audio.currentTime }),
+    );
+    ctx.on(audio, "waiting", () =>
+      log("audio-waiting", { currentTime: audio.currentTime }),
+    );
+    ctx.on(audio, "loadedmetadata", () =>
+      log("audio-loadedmetadata", { duration: audio.duration }),
+    );
 
     // Re-sync UX
     if (resyncBtn) {
@@ -733,6 +860,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // tied to the playing audio element, so leaking it across re-mount
     // would just waste memory.
     ctx.onDestroy(() => {
+      log("destroy", {
+        audioPaused: audio.paused,
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+        prefetchInFlight: prefetchAbort !== null,
+        hasPrefetchedBlob: prefetchedBlobUrl !== null,
+      });
       stopHighlightLoop();
       wordMenuCleanup?.();
       if (prefetchAbort) prefetchAbort.abort();
