@@ -60,6 +60,7 @@ export interface HookContext<
   ): void;
 
   onDestroy(fn: () => void): void;
+  onUpdate(fn: () => void): void;
 }
 
 const READALOUD_EVENT_PREFIX_RE =
@@ -76,6 +77,7 @@ export function defineHook<
   return {
     mounted(this: ViewHookInternal): void {
       const disposers: Array<() => void> = [];
+      const updateHandlers: Array<() => void> = [];
       const lv = this;
 
       const ctx: HookContext<TEl, TDataset> = {
@@ -119,10 +121,17 @@ export function defineHook<
         onDestroy(fn: () => void): void {
           disposers.push(fn);
         },
+
+        onUpdate(fn: () => void): void {
+          updateHandlers.push(fn);
+        },
       };
 
       (this as unknown as { _ctxDisposers: Array<() => void> })._ctxDisposers =
         disposers;
+      (
+        this as unknown as { _ctxUpdateHandlers: Array<() => void> }
+      )._ctxUpdateHandlers = updateHandlers;
 
       try {
         setup(ctx);
@@ -133,6 +142,20 @@ export function defineHook<
           } catch {}
         }
         throw err;
+      }
+    },
+
+    updated(this: ViewHookInternal): void {
+      const handlers = (
+        this as unknown as { _ctxUpdateHandlers?: Array<() => void> }
+      )._ctxUpdateHandlers;
+      if (!handlers) return;
+      for (const fn of handlers) {
+        try {
+          fn();
+        } catch (err) {
+          console.error("hook update handler threw:", err);
+        }
       }
     },
 

@@ -36,6 +36,9 @@ export const ReaderStylesHook = defineHook<HTMLDivElement>((ctx) => {
 
   apply(readerSettings.get());
   ctx.onDestroy(readerSettings.subscribe(apply));
+  // LiveView patches (chapter swap) wipe runtime-set inline style attrs
+  // via morphdom — re-apply current settings after every patch.
+  ctx.onUpdate(() => apply(readerSettings.get()));
 });
 
 // Lives on #reader-settings (the popover). Owns the form controls inside
