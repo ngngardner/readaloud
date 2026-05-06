@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "a7eab4d65466",
+  "session_id": "990360d7-95d9-487d-8f2e-53193a3729fd",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T20:31:16.43165118Z",
+  "branch": "claude/peaceful-ellis-1e893b",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/hooks/reader_settings.ts",
+    "apps/readaloud_web/assets/js/hooks/theme.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/components/theme_selector.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "cells/app/checks/e2e.nix",
+    "e2e/helpers.js",
+    "e2e/tests/accidental-navigation.test.js",
+    "e2e/tests/floating-pill.test.js",
+    "e2e/tests/speed-badge.test.js"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "0b37c72e76e0",
+  "token_usage": {
+    "input_tokens": 378,
+    "cache_creation_tokens": 484490,
+    "cache_read_tokens": 94313035,
+    "output_tokens": 143047,
+    "api_call_count": 348
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T20:31:15.947779585Z",
+    "agent_lines": 113,
+    "human_added": 3,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 117,
+    "agent_percentage": 96.58119658119658
+  }
+}
