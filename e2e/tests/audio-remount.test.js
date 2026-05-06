@@ -16,16 +16,15 @@
  * The fix makes mount idempotent: skip the src reset if the audio
  * element already has a meaningful src. These tests pin that behavior.
  *
- * Skipped automatically when no audio-ready chapter exists (NixOS VM
- * smoke environment).
+ * Requires the canonical e2e fixture: at least one chapter with audio
+ * (default `audio_for: [1, 2]` in `ReadaloudAudiobook.Fixtures.E2E.seed!/1`).
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import { setup, teardown, openReader, sleep, BASE_URL } from "../helpers.js";
+import { setup, teardown, openReader, BASE_URL } from "../helpers.js";
 
 describe("Audio player re-mount idempotency", () => {
 	let browser, page;
-	let playerExists = false;
 
 	before(async () => {
 		({ browser, page } = await setup());
@@ -36,32 +35,40 @@ describe("Audio player re-mount idempotency", () => {
 			return bar ? JSON.parse(bar.dataset.chapters) : [];
 		});
 		const bookId = page.url().match(/\/books\/(\d+)\/read/)?.[1];
-		if (!bookId || chapters.length === 0) return;
+		assert.ok(bookId, "openReader must land on a /books/:id/read/:cid URL");
+		assert.ok(
+			chapters.length > 0,
+			"fixture must seed ≥1 chapter; check ReadaloudAudiobook.Fixtures.E2E.seed!/1",
+		);
 
+		let found = false;
 		for (const ch of chapters) {
 			await page.goto(
 				`${BASE_URL}/books/${bookId}/read/${ch.id}?nav=internal`,
 				{ waitUntil: "networkidle2" },
 			);
 			await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-			await sleep(300);
-			if (await page.$("#audio-player")) {
-				playerExists = true;
+			await page.waitForSelector("#chapter-text", { timeout: 10000 });
+			const player = await page
+				.waitForSelector("#audio-player", { timeout: 1000 })
+				.catch(() => null);
+			if (player) {
+				found = true;
 				break;
 			}
 		}
+		assert.ok(
+			found,
+			"fixture must seed ≥1 audio-ready chapter; check `audio_for` " +
+				"in ReadaloudAudiobook.Fixtures.E2E.seed!/1.",
+		);
 	});
 
 	after(async () => {
 		await teardown(browser);
 	});
 
-	it("audio.src is preserved when the hook is destroyed and re-mounted", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter — skipping");
-			return;
-		}
-
+	it("audio.src is preserved when the hook is destroyed and re-mounted", async () => {
 		// Wait for the initial mount to actually set audio.src.
 		await page.waitForFunction(
 			() => {
@@ -98,11 +105,14 @@ describe("Audio player re-mount idempotency", () => {
 			el.remove();
 		});
 
-		// Give the destroyed callback (and any internal LV bookkeeping) a
-		// tick to run before re-attaching. Without this, the destroy and
-		// mount can collapse into a single MutationObserver flush and
+		// Wait for the MutationObserver to actually flush the removal —
+		// observable as #audio-player being gone from the DOM. Without this
+		// gap, destroy and mount can collapse into a single flush and
 		// short-circuit the lifecycle we're trying to exercise.
-		await sleep(100);
+		await page.waitForFunction(
+			() => document.getElementById("audio-player") === null,
+			{ timeout: 1000 },
+		);
 
 		await page.evaluate(() => {
 			const { el, parent, nextSibling } = window.__remountSaved;
@@ -110,7 +120,8 @@ describe("Audio player re-mount idempotency", () => {
 			delete window.__remountSaved;
 		});
 
-		await sleep(500); // mount + any async setup
+		// Wait for the re-mount to complete — the audio-player div is back.
+		await page.waitForSelector("#audio-player", { timeout: 5000 });
 
 		const afterSrc = await page.$eval("#audio-element", (el) => el.src);
 		assert.strictEqual(
@@ -122,12 +133,7 @@ describe("Audio player re-mount idempotency", () => {
 		);
 	});
 
-	it("audio.currentTime is preserved across destroy/mount (proves load() was not called)", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter — skipping");
-			return;
-		}
-
+	it("audio.currentTime is preserved across destroy/mount (proves load() was not called)", async () => {
 		// Restore real audio src (previous test left a sentinel) and wait
 		// for metadata so we have a valid duration to seek into.
 		await page.evaluate(() => {
@@ -153,7 +159,16 @@ describe("Audio player re-mount idempotency", () => {
 			const a = document.getElementById("audio-element");
 			a.currentTime = t;
 		}, SEEK_SECONDS);
-		await sleep(50);
+		// `currentTime =` is synchronous on the element, but the seeking
+		// state takes a frame to settle. Wait for the seek to commit.
+		await page.waitForFunction(
+			(target) => {
+				const a = document.getElementById("audio-element");
+				return a && Math.abs(a.currentTime - target) < 1;
+			},
+			{ timeout: 2000 },
+			SEEK_SECONDS,
+		);
 
 		const beforeTime = await page.$eval(
 			"#audio-element",
@@ -174,13 +189,16 @@ describe("Audio player re-mount idempotency", () => {
 			};
 			el.remove();
 		});
-		await sleep(100);
+		await page.waitForFunction(
+			() => document.getElementById("audio-player") === null,
+			{ timeout: 1000 },
+		);
 		await page.evaluate(() => {
 			const { el, parent, nextSibling } = window.__remountSaved;
 			parent.insertBefore(el, nextSibling);
 			delete window.__remountSaved;
 		});
-		await sleep(500);
+		await page.waitForSelector("#audio-player", { timeout: 5000 });
 
 		const afterTime = await page.$eval(
 			"#audio-element",

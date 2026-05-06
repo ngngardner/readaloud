@@ -1,13 +1,6 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import {
-	setup,
-	teardown,
-	openReader,
-	sleep,
-	BASE_URL,
-	BOOK_ID,
-} from "../helpers.js";
+import { setup, teardown, openReader, BASE_URL, BOOK_ID } from "../helpers.js";
 
 describe("Accidental Navigation Popup", () => {
 	let browser, page, chapters;
@@ -24,11 +17,11 @@ describe("Accidental Navigation Popup", () => {
 			return bar ? JSON.parse(bar.dataset.chapters) : [];
 		});
 
-		if (chapters.length < 3) {
-			console.log(
-				"  (book has fewer than 3 chapters — some tests will be skipped)",
-			);
-		}
+		assert.ok(
+			chapters.length >= 3,
+			`fixture must seed ≥3 chapters to exercise back-nav conflict; ` +
+				`got ${chapters.length}. Check ReadaloudAudiobook.Fixtures.E2E.seed!/1.`,
+		);
 	});
 
 	after(async () => {
@@ -38,44 +31,52 @@ describe("Accidental Navigation Popup", () => {
 	it("no popup on initial page load with nav=internal", async () => {
 		// Navigate to first chapter with ?nav=internal
 		const ch = chapters[0];
-		if (!ch) return;
-
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${ch.id}?nav=internal`, {
 			waitUntil: "networkidle2",
 		});
-		await sleep(500);
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
+		// nav=internal suppresses the conflict modal — assert that, after
+		// any plausible mount work has settled, the modal hasn't appeared.
+		// We can't wait for an event that *won't* fire, so we wait briefly
+		// then check; this is a negative assertion, not a sleep-for-state.
+		await page.waitForFunction(() => document.readyState === "complete", {
+			timeout: 2000,
+		});
 
 		const modal = await page.$(".modal.modal-open");
 		assert.strictEqual(modal, null, "No popup should appear with nav=internal");
 	});
 
 	it("popup appears when navigating backward without nav=internal", async () => {
-		if (chapters.length < 3) return;
-
-		// First, establish progress at a later chapter (e.g., chapter 3)
+		// First, establish progress at a later chapter (e.g., chapter 3).
+		// `?nav=internal` triggers `upsert_progress` synchronously in
+		// `handle_params` server-side; that completes before the LV reply.
+		// We can't observe the reply directly, but waiting for the chapter
+		// content to render is a strong proxy.
 		const laterChapter = chapters[Math.min(2, chapters.length - 1)];
 		await page.goto(
 			`${BASE_URL}/books/${BOOK_ID}/read/${laterChapter.id}?nav=internal`,
 			{ waitUntil: "networkidle2" },
 		);
 		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(1000); // Wait for progress to save
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
-		// Now navigate to chapter 1 WITHOUT nav=internal (simulating stale tab)
+		// Now navigate to chapter 1 WITHOUT nav=internal — should trigger
+		// the conflict modal because saved progress points elsewhere.
 		const firstChapter = chapters[0];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}`, {
 			waitUntil: "networkidle2",
 		});
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(500);
+		await page.waitForSelector(".modal.modal-open", { timeout: 5000 });
 
 		const modal = await page.$(".modal.modal-open");
 		assert.ok(modal, "Conflict popup should appear when navigating backward");
 	});
 
 	it("popup shows correct chapter information", async () => {
+		// Modal still open from the previous test in this describe block.
 		const modal = await page.$(".modal.modal-open");
-		if (!modal) return; // skip if popup didn't show (from previous test)
+		assert.ok(modal, "modal must still be open from prior test");
 
 		const modalText = await page.$eval(".modal-box", (el) => el.textContent);
 		assert.ok(
@@ -86,14 +87,17 @@ describe("Accidental Navigation Popup", () => {
 
 	it("'Stay' button dismisses popup and stays on current chapter", async () => {
 		const modal = await page.$(".modal.modal-open");
-		if (!modal) return;
+		assert.ok(modal, "modal must still be open from prior test");
 
 		// Get current URL before clicking Stay
 		const urlBefore = page.url();
 
 		// Click the "Stay" button (btn-ghost)
 		await page.click(".modal-action .btn-ghost");
-		await sleep(500);
+		await page.waitForFunction(
+			() => document.querySelector(".modal.modal-open") === null,
+			{ timeout: 3000 },
+		);
 
 		// Modal should be gone
 		const modalAfter = await page.$(".modal.modal-open");
@@ -114,8 +118,6 @@ describe("Accidental Navigation Popup", () => {
 	});
 
 	it("'Go to' button navigates to the conflict chapter", async () => {
-		if (chapters.length < 3) return;
-
 		// Re-trigger the conflict: go to later chapter, then navigate back without nav=internal
 		const laterChapter = chapters[Math.min(2, chapters.length - 1)];
 		await page.goto(
@@ -123,24 +125,24 @@ describe("Accidental Navigation Popup", () => {
 			{ waitUntil: "networkidle2" },
 		);
 		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(1000);
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const firstChapter = chapters[0];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}`, {
 			waitUntil: "networkidle2",
 		});
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(500);
+		await page.waitForSelector(".modal.modal-open", { timeout: 5000 });
 
 		const modal = await page.$(".modal.modal-open");
-		if (!modal) {
-			console.log("  (skipped: popup didn't appear)");
-			return;
-		}
+		assert.ok(modal, "Conflict popup should appear after backward nav");
 
 		// Click "Go to" button (btn-primary)
 		await page.click(".modal-action .btn-primary");
-		await sleep(1000);
+		await page.waitForFunction(
+			(targetId) => window.location.pathname.includes(`/read/${targetId}`),
+			{ timeout: 3000 },
+			laterChapter.id,
+		);
 
 		// Should have navigated to the later chapter
 		const newUrl = page.url();
@@ -151,24 +153,23 @@ describe("Accidental Navigation Popup", () => {
 	});
 
 	it("no popup on forward navigation without nav=internal", async () => {
-		if (chapters.length < 2) return;
-
-		// Navigate to first chapter, establish progress
+		// Navigate to first chapter, establish progress.
 		const firstChapter = chapters[0];
 		await page.goto(
 			`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}?nav=internal`,
 			{ waitUntil: "networkidle2" },
 		);
 		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(1000);
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
-		// Navigate forward to chapter 2 without nav=internal
+		// Navigate forward to chapter 2 without nav=internal — should NOT
+		// trigger the conflict modal (we're moving forward, not back).
 		const secondChapter = chapters[1];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${secondChapter.id}`, {
 			waitUntil: "networkidle2",
 		});
 		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(500);
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const modal = await page.$(".modal.modal-open");
 		assert.strictEqual(
@@ -182,14 +183,15 @@ describe("Accidental Navigation Popup", () => {
 		// Get current chapter
 		const url = page.url();
 		const chapterMatch = url.match(/\/read\/(\d+)/);
-		if (!chapterMatch) return;
+		assert.ok(chapterMatch, `expected reader URL, got ${url}`);
 
-		// Reload without nav=internal
+		// Reload without nav=internal — should NOT trigger conflict modal
+		// because the chapter we're reloading matches saved progress.
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${chapterMatch[1]}`, {
 			waitUntil: "networkidle2",
 		});
 		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-		await sleep(500);
+		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const modal = await page.$(".modal.modal-open");
 		assert.strictEqual(modal, null, "No popup on same chapter reload");

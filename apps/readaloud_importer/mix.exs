@@ -11,6 +11,7 @@ defmodule ReadaloudImporter.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
+      test_coverage: [threshold: 0],
       deps: deps()
     ]
   end

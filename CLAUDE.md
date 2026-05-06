@@ -90,15 +90,46 @@ custom classes must fully style the input
 - To debug test failures, run tests in a specific file with `mix test test/my_test.exs` or run all previously failed tests with `mix test --failed`
 - `mix deps.clean --all` is **almost never needed**. **Avoid** using it unless you have good reason
 
-## Test guidelines
+## Tests
 
-- **Always use `start_supervised!/1`** to start processes in tests as it guarantees cleanup between tests
+Three commands, three scopes. Reach for the smallest one that proves the change.
+
+### Elixir behavior — `mix test`
+
+Runs the full umbrella ExUnit suite (~1s).
+
+- `mix test` — everything across the umbrella.
+- `mix test --failed` — only what just broke.
+- `mix test apps/<app>/test/path/to/_test.exs` — scope to one file.
+- `mix test.reset` — drops and re-migrates the test SQLite if state goes weird.
+- `mix test.cover` — same suite, prints per-app line-coverage tables. Visibility-only; the umbrella-wide 80% gate is enforced by `nix build .#checks.x86_64-linux.coverage` (which is part of `nix flake check`).
+
+**Test guidelines:**
+
+- **Always use `start_supervised!/1`** to start processes in tests as it guarantees cleanup between tests.
 - Instead of sleeping to wait for a process to finish, use `Process.monitor/1` and assert on the DOWN message:
 
       ref = Process.monitor(pid)
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
 
-- Instead of sleeping to synchronize before the next call, use `_ = :sys.get_state/1` to ensure the process has handled prior messages
+- Instead of sleeping to synchronize before the next call, use `_ = :sys.get_state/1` to ensure the process has handled prior messages.
+- Tests that touch the DB go through `ReadaloudWebWeb.ConnCase` (sandboxed `ReadaloudLibrary.Repo`) or set up sandbox manually — never against the live `readaloud_dev.db`.
+
+### UI behavior — `mix test.e2e`
+
+Boots a sandboxed NixOS VM with a real Phoenix release on port 4000, seeds the canonical fixture (`ReadaloudAudiobook.Fixtures.E2E.seed!/1` — one book, three chapters, the first two with silent audio), and runs the full Puppeteer suite under `e2e/tests/*.test.js` against it.
+
+**Use this instead of pushing to pylon for any regression that lives under `e2e/tests/`.** The VM is hermetic — no dev server, no manual seed, no port collisions. First run on a cold cache is ~2 min (VM provisioning); subsequent runs ~30–60s.
+
+The fixture shape is the contract: every e2e test asserts its preconditions against it. To add a test that needs new data (a fourth chapter, a third audio chapter, a different book), extend `seed!/1` first — don't add a `t.skip` for missing data.
+
+After changing `e2e/package.json`, set `npmDepsHash = ""` in `cells/app/checks/e2e.nix` and re-run `mix test.e2e`; the build error gives the new hash to paste back.
+
+### Full pre-PR — `nix flake check`
+
+CI parity. Runs every check in `cells/app/checks/`: formatting, credo, ast-grep, lint-grep, biome-lint, deadnix, statix, **e2e VM**, and **coverage** (fails below 80% line coverage). Use before opening a PR or after touching `cells/`.
+
+`mix precommit` is the lighter pre-commit gate: warnings-as-errors compile + format + unused-deps + ExUnit. It does *not* include `assets.typecheck`, the e2e VM, or coverage — those are intentionally separate gates.
 <!-- phoenix:elixir-end -->
 
 <!-- phoenix:phoenix-start -->

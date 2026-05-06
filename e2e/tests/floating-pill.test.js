@@ -5,7 +5,6 @@ import {
 	teardown,
 	openReader,
 	showPill,
-	sleep,
 	getChapters,
 } from "../helpers.js";
 
@@ -155,7 +154,15 @@ describe("Chapter Bar", () => {
 		it("clicking chapter indicator opens the bar", async () => {
 			await showPill(page);
 			await page.click("#chapter-indicator");
-			await sleep(300); // wait for animation
+			// The CSS class transition is what we're really waiting for —
+			// observable directly, no need to time-box the animation.
+			await page.waitForFunction(
+				() =>
+					document
+						.getElementById("chapter-bar")
+						?.classList.contains("opacity-100"),
+				{ timeout: 2000 },
+			);
 
 			const open = await page.$eval("#chapter-bar", (el) =>
 				el.classList.contains("opacity-100"),
@@ -165,7 +172,13 @@ describe("Chapter Bar", () => {
 
 		it("clicking indicator again closes the bar", async () => {
 			await page.click("#chapter-indicator");
-			await sleep(300);
+			await page.waitForFunction(
+				() =>
+					document
+						.getElementById("chapter-bar")
+						?.classList.contains("scale-y-0"),
+				{ timeout: 2000 },
+			);
 
 			const closed = await page.$eval("#chapter-bar", (el) =>
 				el.classList.contains("scale-y-0"),
@@ -177,11 +190,23 @@ describe("Chapter Bar", () => {
 			// Open it
 			await showPill(page);
 			await page.click("#chapter-indicator");
-			await sleep(300);
+			await page.waitForFunction(
+				() =>
+					document
+						.getElementById("chapter-bar")
+						?.classList.contains("opacity-100"),
+				{ timeout: 2000 },
+			);
 
 			// Click outside (on the reader content area)
 			await page.click("#reader-content");
-			await sleep(300);
+			await page.waitForFunction(
+				() =>
+					document
+						.getElementById("chapter-bar")
+						?.classList.contains("scale-y-0"),
+				{ timeout: 2000 },
+			);
 
 			const closed = await page.$eval("#chapter-bar", (el) =>
 				el.classList.contains("scale-y-0"),

@@ -1,8 +1,12 @@
-# NixOS VM test that starts the readaloud service, seeds test data,
-# and runs puppeteer-based smoke/e2e tests against it.
+# NixOS VM test that starts the readaloud service, seeds the canonical
+# e2e fixture via a release rpc call, and runs the full puppeteer suite
+# against it. Single source of truth for the fixture shape lives in
+# `ReadaloudAudiobook.Fixtures.E2E.seed!/1` — this check just calls it.
 {
   self,
   pkgs,
+  package,
+  readaloudModule,
 }:
 let
   # Pre-build node_modules for the e2e test suite.
@@ -29,8 +33,6 @@ let
   };
 
   secretKeyFile = pkgs.writeText "test-secret-key" "this-is-a-test-secret-key-base-that-is-at-least-sixty-four-bytes-long-for-phoenix";
-
-  chapterContent = pkgs.writeText "chapter-1.html" "<p>Test content for e2e testing.</p>";
 in
 pkgs.testers.nixosTest {
   name = "readaloud-e2e";
@@ -38,7 +40,7 @@ pkgs.testers.nixosTest {
   nodes.server =
     { pkgs, ... }:
     {
-      imports = [ self.nixosModules.readaloud ];
+      imports = [ readaloudModule ];
 
       services.readaloud = {
         enable = true;
@@ -67,46 +69,41 @@ pkgs.testers.nixosTest {
     server.wait_for_unit("readaloud.service")
     server.wait_for_open_port(4000)
 
-    # Basic smoke test: service responds to HTTP
+    # Sanity: the service responds to HTTP before we touch the DB.
     server.succeed("curl -sf http://localhost:4000/ > /dev/null")
 
-    # Seed test data: insert a book and a chapter with content file
-    server.succeed("""
-      sqlite3 /var/lib/readaloud/readaloud.db "
-        INSERT INTO books (title, author, source_type, total_chapters, inserted_at, updated_at)
-        VALUES ('Test Book', 'Test Author', 'epub', 3, datetime('now'), datetime('now'));
+    # Seed the canonical e2e fixture via release rpc. This runs inside
+    # the running BEAM node, so the writes share the service's view of
+    # the filesystem (PrivateTmp namespace) and the SQLite pool.
+    server.succeed(
+        "runuser -u readaloud -- env "
+        "RELEASE_COOKIE=readaloud "
+        "HOME=/var/lib/readaloud "
+        "${package}/bin/readaloud rpc "
+        "'ReadaloudAudiobook.Fixtures.E2E.seed!()'"
+    )
 
-        INSERT INTO chapters (book_id, title, number, content_path, word_count, inserted_at, updated_at)
-        VALUES (1, 'Chapter 1', 1, '${chapterContent}', 5, datetime('now'), datetime('now'));
-
-        INSERT INTO chapters (book_id, title, number, content_path, word_count, inserted_at, updated_at)
-        VALUES (1, 'Chapter 2', 2, '${chapterContent}', 5, datetime('now'), datetime('now'));
-
-        INSERT INTO chapters (book_id, title, number, content_path, word_count, inserted_at, updated_at)
-        VALUES (1, 'Chapter 3', 3, '${chapterContent}', 5, datetime('now'), datetime('now'));
-      "
-    """)
-
-    # Verify seeded data
-    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM books;' | grep -q 1")
-    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapters;' | grep -q 3")
-
-    # Verify the app can serve the book page with chapters
+    # Verify seeded data — defensive sanity, not a substitute for the suite.
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM books;' | grep -q '^1$'")
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapters;' | grep -q '^3$'")
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapter_audios;' | grep -q '^2$'")
     server.succeed("curl -sf http://localhost:4000/books/1 | grep -q 'Chapter 1'")
 
-    # Set up the e2e test directory with pre-built node_modules
+    # Set up the e2e test directory with pre-built node_modules.
     server.succeed("cp -r ${self}/e2e /tmp/e2e")
     server.succeed("chmod -R u+w /tmp/e2e")
     server.succeed("ln -sf ${e2eNodeModules}/lib/node_modules /tmp/e2e/node_modules")
 
-    # Run the smoke test suite via puppeteer
-    server.succeed("""
-      cd /tmp/e2e && \
-      PUPPETEER_EXECUTABLE_PATH="${pkgs.chromium}/bin/chromium" \
-      BASE_URL="http://localhost:4000" \
-      BOOK_ID="1" \
-      HEADLESS="true" \
-      node --test tests/smoke.test.js
-    """)
+    # Run the full e2e suite. --test-reporter=spec surfaces skip
+    # messages and per-test timing in the build log; the default 'tap'
+    # reporter buries them.
+    server.succeed(
+        "cd /tmp/e2e && "
+        "PUPPETEER_EXECUTABLE_PATH=\"${pkgs.chromium}/bin/chromium\" "
+        "BASE_URL=\"http://localhost:4000\" "
+        "BOOK_ID=\"1\" "
+        "HEADLESS=\"true\" "
+        "node --test --test-reporter=spec tests/*.test.js"
+    )
   '';
 }

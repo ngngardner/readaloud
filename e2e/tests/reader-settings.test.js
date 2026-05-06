@@ -1,12 +1,6 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import {
-	setup,
-	teardown,
-	openReader,
-	openSettings,
-	sleep,
-} from "../helpers.js";
+import { setup, teardown, openReader, openSettings } from "../helpers.js";
 
 describe("Reader Settings", () => {
 	let browser, page;
@@ -95,7 +89,10 @@ describe("Reader Settings", () => {
 
 			// Click the 'dracula' theme swatch
 			await page.click('[data-set-theme="dracula"]');
-			await sleep(200);
+			await page.waitForFunction(
+				() => document.documentElement.getAttribute("data-theme") === "dracula",
+				{ timeout: 2000 },
+			);
 
 			const themeAfter = await page.evaluate(() =>
 				document.documentElement.getAttribute("data-theme"),

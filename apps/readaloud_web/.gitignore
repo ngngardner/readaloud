@@ -35,3 +35,9 @@ readaloud_web-*.tar
 npm-debug.log
 /assets/node_modules/
 
+
+# nixago: ignore-linked-files
+/.editorconfig
+/.conform.yaml
+/lefthook.yml
+/treefmt.toml

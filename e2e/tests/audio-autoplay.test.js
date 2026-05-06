@@ -6,24 +6,24 @@
  * mobile-lock-screen fix: a full navigation tears down the OS audio
  * session, which is why autoplay used to fail when the phone was asleep.
  *
- * Skipped automatically if the test book has no audio-ready chapter
- * (e.g. the NixOS VM smoke environment, which seeds chapters without
- * generated audio).
+ * Requires the canonical e2e fixture: a chapter with audio that *also*
+ * has a next chapter with audio (so `next_audio_url` is populated).
+ * `seed_e2e_book!/1` defaults to `audio_for: [1, 2]` — chapter 1 sees
+ * chapter 2 as the next audio-ready chapter.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import { setup, teardown, openReader, sleep, BASE_URL } from "../helpers.js";
+import { setup, teardown, openReader, BASE_URL } from "../helpers.js";
 
 describe("Audio auto-next-chapter", () => {
 	let browser, page;
-	let playerExists = false;
 
 	before(async () => {
 		({ browser, page } = await setup());
 
-		// Find a chapter that actually has audio. We don't know the exact id,
-		// so walk chapters from the book and stop at the first one whose
-		// reader page renders the #audio-player element.
+		// Find a chapter that has audio AND a next-chapter audio URL.
+		// The fixture guarantees chapter 1 satisfies this; we still walk
+		// the bar in case the test ordering shifted.
 		await openReader(page);
 		const chapters = await page.evaluate(() => {
 			const bar = document.getElementById("chapter-bar");
@@ -31,38 +31,50 @@ describe("Audio auto-next-chapter", () => {
 		});
 
 		const bookId = page.url().match(/\/books\/(\d+)\/read/)?.[1];
-		if (!bookId || chapters.length === 0) return;
+		assert.ok(bookId, "openReader must land on a /books/:id/read/:cid URL");
+		assert.ok(
+			chapters.length > 0,
+			"fixture must seed ≥1 chapter; check ReadaloudAudiobook.Fixtures.E2E.seed!/1",
+		);
 
+		let found = false;
 		for (const ch of chapters) {
 			await page.goto(
 				`${BASE_URL}/books/${bookId}/read/${ch.id}?nav=internal`,
 				{ waitUntil: "networkidle2" },
 			);
 			await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
-			await sleep(300);
-			const player = await page.$("#audio-player");
+			await page.waitForSelector("#chapter-text", { timeout: 10000 });
+			// `#audio-player` is gated by audio_state == :ready; absence after
+			// chapter-text renders means this chapter has no audio. Don't fail —
+			// just walk to the next chapter.
+			const player = await page
+				.waitForSelector("#audio-player", { timeout: 1000 })
+				.catch(() => null);
 			if (player) {
 				const nextUrl = await page.$eval(
 					"#audio-player",
 					(el) => el.dataset.nextAudioUrl || "",
 				);
 				if (nextUrl) {
-					playerExists = true;
+					found = true;
 					break;
 				}
 			}
 		}
+		assert.ok(
+			found,
+			"fixture must seed ≥2 contiguous audio-ready chapters; the audio-* " +
+				"tests need both a current chapter and a next chapter with audio. " +
+				"Check `audio_for` in ReadaloudAudiobook.Fixtures.E2E.seed!/1.",
+		);
 	});
 
 	after(async () => {
 		await teardown(browser);
 	});
 
-	it("player exposes next-chapter data attrs", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter with a next chapter — skipping");
-			return;
-		}
+	it("player exposes next-chapter data attrs", async () => {
 		const attrs = await page.$eval("#audio-player", (el) => ({
 			audioUrl: el.dataset.audioUrl,
 			nextAudioUrl: el.dataset.nextAudioUrl,
@@ -86,20 +98,24 @@ describe("Audio auto-next-chapter", () => {
 	});
 
 	it("Media Session metadata is registered", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter — skipping");
-			return;
-		}
-		// Wait a tick for the hook to mount and call new MediaMetadata().
-		await sleep(200);
+		// Wait for the hook to populate MediaMetadata (or for the browser
+		// to declare it doesn't support MediaSession at all).
+		await page
+			.waitForFunction(
+				() =>
+					!("mediaSession" in navigator) ||
+					navigator.mediaSession.metadata !== null,
+				{ timeout: 5000 },
+			)
+			.catch(() => {});
 		const meta = await page.evaluate(() => {
 			if (!("mediaSession" in navigator)) return null;
 			const m = navigator.mediaSession.metadata;
 			if (!m) return null;
 			return { title: m.title, artist: m.artist, album: m.album };
 		});
-		// Headless Chromium supports MediaSession; if it doesn't on a given
-		// runtime, treat as a soft skip rather than a hard failure.
+		// MediaSession is a runtime browser capability, not a fixture
+		// precondition — soft-skip if the headless chromium build lacks it.
 		if (meta === null) {
 			t.skip("MediaSession not available in this browser");
 			return;
@@ -108,12 +124,7 @@ describe("Audio auto-next-chapter", () => {
 		assert.ok(meta.artist?.length > 0, "Media Session artist should be set");
 	});
 
-	it("prefetches next chapter audio into a Blob URL while current plays", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter — skipping");
-			return;
-		}
-
+	it("prefetches next chapter audio into a Blob URL while current plays", async () => {
 		// Enable autoNextChapter (gates prefetch) and reload so the
 		// PersistedRecord cache picks it up.
 		await page.evaluate(() => {
@@ -153,47 +164,35 @@ describe("Audio auto-next-chapter", () => {
 			a.dispatchEvent(new Event("timeupdate"));
 		});
 
-		// Wait for the fetch + blob URL to materialize. WAV files can be
-		// large; give it some time on a slow machine.
+		// Wait for the fetch to fire. fetch() shows up as a `resource`
+		// performance entry; we can't reach into the hook's closure, but
+		// we *can* observe the request itself.
 		const nextUrl = await page.$eval(
 			"#audio-player",
 			(el) => el.dataset.nextAudioUrl || "",
 		);
-		const start = Date.now();
-		let prefetched = false;
-		while (Date.now() - start < 20000) {
-			const found = await page.evaluate(() => {
-				// Look at performance entries — fetch() shows up as a
-				// resource entry. We can't reach into the hook's closure,
-				// but we *can* see if a request to the next-chapter audio
-				// URL has been issued.
-				return performance
-					.getEntriesByType("resource")
-					.some(
-						(e) =>
-							e.name.includes("/api/books/") &&
-							e.name.includes("/audio") &&
-							e.initiatorType === "fetch",
-					);
+		await page
+			.waitForFunction(
+				() =>
+					performance
+						.getEntriesByType("resource")
+						.some(
+							(e) =>
+								e.name.includes("/api/books/") &&
+								e.name.includes("/audio") &&
+								e.initiatorType === "fetch",
+						),
+				{ timeout: 20000 },
+			)
+			.catch(() => {
+				throw new Error(
+					`expected a fetch() to ${nextUrl} after currentTime crossed 15%, ` +
+						"but none was observed within 20s",
+				);
 			});
-			if (found) {
-				prefetched = true;
-				break;
-			}
-			await sleep(500);
-		}
-		assert.ok(
-			prefetched,
-			`expected a fetch() to ${nextUrl} after currentTime crossed 15%, but none was observed`,
-		);
 	});
 
-	it("ended event swaps audio.src + patches URL without tearing down player", async (t) => {
-		if (!playerExists) {
-			t.skip("No audio-ready chapter — skipping");
-			return;
-		}
-
+	it("ended event swaps audio.src + patches URL without tearing down player", async () => {
 		// Snapshot current state.
 		const before = await page.evaluate(() => {
 			const player = document.getElementById("audio-player");
@@ -234,7 +233,15 @@ describe("Audio auto-next-chapter", () => {
 		});
 		await page.reload({ waitUntil: "networkidle2" });
 		await page.waitForSelector("#audio-element", { timeout: 10000 });
-		await sleep(300);
+		// Wait for the hook to finish mount + apply the fresh
+		// PersistedRecord — observable as audio.src being populated.
+		await page.waitForFunction(
+			() => {
+				const a = document.getElementById("audio-element");
+				return a && a.src && a.src.length > 0;
+			},
+			{ timeout: 5000 },
+		);
 
 		// Mark the (post-reload) audio element so we can prove identity
 		// after the swap. Use a JS expando property (not a DOM attribute)
@@ -254,8 +261,20 @@ describe("Audio auto-next-chapter", () => {
 			if (a) a.dispatchEvent(new Event("ended"));
 		});
 
-		// Wait for the JS swap + LV push_patch round-trip.
-		await sleep(2000);
+		// Wait for the JS swap + LV push_patch round-trip — both observable.
+		// The URL changes via push_patch; the audio.src changes via the
+		// hook's ended handler.
+		await page.waitForFunction(
+			(targetChapterId) => {
+				const url = window.location.pathname + window.location.search;
+				const a = document.getElementById("audio-element");
+				const urlChanged = url.includes(`/read/${targetChapterId}`);
+				const srcChanged = a?.src && !a.src.includes(`/chapters/1/audio`);
+				return urlChanged && srcChanged;
+			},
+			{ timeout: 5000 },
+			before.nextChapterId,
+		);
 
 		const after = await page.evaluate(() => {
 			const audio = document.getElementById("audio-element");

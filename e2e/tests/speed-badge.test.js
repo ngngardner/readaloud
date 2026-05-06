@@ -1,6 +1,6 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
-import { setup, teardown, openReader, sleep } from "../helpers.js";
+import { setup, teardown, openReader } from "../helpers.js";
 
 describe("Speed Badge", () => {
 	let browser, page;
@@ -11,31 +11,30 @@ describe("Speed Badge", () => {
 		await page.evaluateOnNewDocument(() => {
 			localStorage.removeItem("readaloud-playback-speed");
 		});
-		await openReader(page);
+		// Pin to chapter 1: the fixture's `audio_for: [1, 2]` guarantees
+		// audio there. `openReader()` without args hits BookLive's Resume
+		// link, which can point at whichever chapter saved progress
+		// reflects — flaky across test ordering.
+		await openReader(page, { chapterId: 1 });
+		await page.waitForSelector("#audio-player", { timeout: 10000 });
 	});
 
 	after(async () => {
 		await teardown(browser);
 	});
 
+	// The badge only renders when audio_state == :ready, which requires
+	// a chapter_audios row. The fixture (`audio_for: [1, 2]`) guarantees
+	// chapter 1 has audio, and openReader() lands on chapter 1 by default.
 	it("speed badge exists in the audio player", async () => {
-		// The badge only shows when audio_state == :ready (audio player rendered).
-		// If no audio exists for this chapter, the badge won't be in the DOM.
 		const badge = await page.$("#speed-badge");
-		if (!badge) {
-			// Skip if no audio player (no audio generated for this chapter)
-			console.log(
-				"  (skipped: no audio player — generate audio for a chapter to test)",
-			);
-			return;
-		}
-		assert.ok(badge, "Speed badge should exist");
+		assert.ok(
+			badge,
+			"speed badge requires audio-ready chapter; check fixture `audio_for`",
+		);
 	});
 
 	it("badge shows current speed text", async () => {
-		const badge = await page.$("#speed-badge");
-		if (!badge) return; // skip if no audio
-
 		const text = await page.$eval("#speed-badge", (el) =>
 			el.textContent.trim(),
 		);
@@ -47,17 +46,17 @@ describe("Speed Badge", () => {
 	});
 
 	it("clicking badge cycles speed forward", async () => {
-		const badge = await page.$("#speed-badge");
-		if (!badge) return;
-
-		// Read initial speed
 		const initial = await page.$eval("#speed-badge", (el) =>
 			el.textContent.trim(),
 		);
 
-		// Click to cycle
 		await page.click("#speed-badge");
-		await sleep(100);
+		await page.waitForFunction(
+			(prev) =>
+				document.getElementById("speed-badge")?.textContent.trim() !== prev,
+			{ timeout: 2000 },
+			initial,
+		);
 
 		const next = await page.$eval("#speed-badge", (el) =>
 			el.textContent.trim(),
@@ -70,9 +69,6 @@ describe("Speed Badge", () => {
 	});
 
 	it("speed persists to localStorage", async () => {
-		const badge = await page.$("#speed-badge");
-		if (!badge) return;
-
 		const stored = await page.evaluate(() =>
 			localStorage.getItem("readaloud-playback-speed"),
 		);
@@ -84,9 +80,6 @@ describe("Speed Badge", () => {
 	});
 
 	it("badge uses tabular-nums for stable width", async () => {
-		const badge = await page.$("#speed-badge");
-		if (!badge) return;
-
 		const fontVariant = await page.$eval(
 			"#speed-badge",
 			(el) => el.style.fontVariantNumeric,
@@ -99,9 +92,6 @@ describe("Speed Badge", () => {
 	});
 
 	it("full cycle wraps back to 0.5x", async () => {
-		const badge = await page.$("#speed-badge");
-		if (!badge) return;
-
 		// Set speed to 2x (last in cycle), then click to wrap
 		await page.evaluate(() => {
 			const audio = document.getElementById("audio-element");
@@ -112,7 +102,11 @@ describe("Speed Badge", () => {
 		});
 
 		await page.click("#speed-badge");
-		await sleep(100);
+		await page.waitForFunction(
+			() =>
+				document.getElementById("speed-badge")?.textContent.trim() === "0.5x",
+			{ timeout: 2000 },
+		);
 
 		const text = await page.$eval("#speed-badge", (el) =>
 			el.textContent.trim(),

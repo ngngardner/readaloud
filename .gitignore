@@ -2,8 +2,9 @@
 /_build/
 /deps/
 
-# Database files
-/*.db
+# Database files (root + per-app — readaloud_web tests historically
+# leaked a stale SQLite into apps/readaloud_web/)
+*.db
 *.db-*
 
 # Generated docs and coverage
@@ -32,6 +33,8 @@ readaloud-*.tar
 
 # Git worktrees
 .worktrees/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Superpowers brainstorm sessions
 .superpowers/

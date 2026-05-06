@@ -2,6 +2,7 @@
 let
   inherit (inputs) nixpkgs self;
   l = nixpkgs.lib;
+  pkgs = nixpkgs;
   beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
 
   # Dev deps for checks (formatting, credo).
@@ -12,7 +13,17 @@ let
     version = "0.1.0";
     src = self;
     mixEnv = "dev";
-    hash = "sha256-pP65vt/zenhrpoaec1ASh671FSNWJG5tazgXBMSCJ1c=";
+    hash = "sha256-ekX7Y1t46jWlpAWHrIoJHOvtUqB5PibVZ6qWClSM/8M=";
+  };
+
+  # Test env adds `only: :test` deps (mox, lazy_html) on top of dev deps;
+  # used by the coverage check.
+  mixFodDepsTest = beamPackages.fetchMixDeps {
+    pname = "readaloud-deps-test";
+    version = "0.1.0";
+    src = self;
+    mixEnv = "test";
+    hash = "sha256-+zD+F9TcLuWUlTlifg4UnqiWVks/aimEqnPhSfSUGbU=";
   };
 
   treefmtData = {
@@ -48,5 +59,19 @@ in
       beamPackages
       mixFodDepsDev
       ;
+  };
+  e2e = import ./e2e.nix {
+    inherit self pkgs;
+    package = cell.packages.default;
+    readaloudModule = cell.nixosModules.readaloud;
+  };
+  coverage = import ./coverage.nix {
+    inherit
+      nixpkgs
+      self
+      beamPackages
+      ;
+    mixFodDeps = mixFodDepsTest;
+    threshold = 80;
   };
 }
