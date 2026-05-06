@@ -10,7 +10,7 @@ defmodule ReadaloudWebWeb.BookLive do
     chapters = ReadaloudLibrary.list_chapters(book.id)
     progress = ReadaloudReader.get_progress(book.id)
     audio_map = build_audio_map(chapters, book)
-    models = fetch_models()
+    catalog = fetch_catalog()
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
@@ -33,9 +33,9 @@ defmodule ReadaloudWebWeb.BookLive do
        progress: progress,
        audio_map: audio_map,
        hide_read: true,
-       models: models,
-       selected_model: default_model(book, models),
-       selected_voice: default_voice(book, models),
+       catalog: catalog,
+       selected_model: default_model(book, catalog),
+       selected_voice: default_voice(book, catalog),
        page_title: book.title
      )}
   end
@@ -119,9 +119,9 @@ defmodule ReadaloudWebWeb.BookLive do
     voice = params["voice"]
 
     voices =
-      case Enum.find(socket.assigns.models, &(&1[:id] == model_id)) do
+      case Enum.find(socket.assigns.catalog, &(&1.model == model_id)) do
         nil -> []
-        m -> m[:voices] || []
+        entry -> entry.voices
       end
 
     new_voice =
@@ -191,20 +191,20 @@ defmodule ReadaloudWebWeb.BookLive do
                       <label class="label label-text text-xs uppercase">Model</label>
                       <select name="model" class="select select-sm select-bordered w-full">
                         <option
-                          :for={m <- @models}
-                          value={m[:id]}
-                          selected={m[:id] == @selected_model}
+                          :for={e <- @catalog}
+                          value={e.model}
+                          selected={e.model == @selected_model}
                         >
-                          {m[:id]}
+                          {e.model}
                         </option>
                       </select>
                     </div>
                     <div class="form-control mb-3">
                       <label class="label label-text text-xs uppercase">Voice</label>
                       <select name="voice" class="select select-sm select-bordered w-full">
-                        <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                        <% current = Enum.find(@catalog, &(&1.model == @selected_model)) %>
                         <option
-                          :for={v <- (current_model && current_model[:voices]) || []}
+                          :for={v <- (current && current.voices) || []}
                           value={v}
                           selected={v == @selected_voice}
                         >
@@ -273,20 +273,20 @@ defmodule ReadaloudWebWeb.BookLive do
                       <label class="label label-text text-xs uppercase">Model</label>
                       <select name="model" class="select select-sm select-bordered w-full">
                         <option
-                          :for={m <- @models}
-                          value={m[:id]}
-                          selected={m[:id] == @selected_model}
+                          :for={e <- @catalog}
+                          value={e.model}
+                          selected={e.model == @selected_model}
                         >
-                          {m[:id]}
+                          {e.model}
                         </option>
                       </select>
                     </div>
                     <div class="form-control mb-3">
                       <label class="label label-text text-xs uppercase">Voice</label>
                       <select name="voice" class="select select-sm select-bordered w-full">
-                        <% current_model = Enum.find(@models, &(&1[:id] == @selected_model)) %>
+                        <% current = Enum.find(@catalog, &(&1.model == @selected_model)) %>
                         <option
-                          :for={v <- (current_model && current_model[:voices]) || []}
+                          :for={v <- (current && current.voices) || []}
                           value={v}
                           selected={v == @selected_voice}
                         >

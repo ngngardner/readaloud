@@ -3,7 +3,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
   alias ReadaloudLibrary.{Repo, Tasks}
-  alias ReadaloudTTS.{Config, TextChunker}
+  alias ReadaloudTTS.{TextChunker, Voice}
 
   require Logger
 
@@ -25,12 +25,10 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
 
-    config = Config.from_env()
-
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
          chunks = TextChunker.chunk(clean_text),
-         {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, task, config) do
+         {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, task) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
       File.write!(audio_path, audio)
@@ -68,16 +66,11 @@ defmodule ReadaloudAudiobook.GenerateJob do
       reraise exception, __STACKTRACE__
   end
 
-  defp synthesize_chunks(chunks, task, config) do
+  defp synthesize_chunks(chunks, task) do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
 
-    tts_config = %{
-      config
-      | voice: task.voice || config.voice,
-        speed: task.speed || config.speed,
-        tts_model: task.model || config.tts_model
-    }
+    voice = %Voice{model: task.model, voice: task.voice, speed: task.speed || 1.0}
 
     chunks
     |> Enum.with_index(1)
@@ -85,8 +78,8 @@ defmodule ReadaloudAudiobook.GenerateJob do
                                                 {:ok, audio_acc, timings_acc, offset_ms} ->
       Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
 
-      case ReadaloudTTS.synthesize(chunk, config: tts_config) do
-        {:ok, %{audio: chunk_audio}} ->
+      case ReadaloudTTS.synthesize(chunk, voice) do
+        {:ok, chunk_audio} ->
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 
           # Transcribe and align to source text

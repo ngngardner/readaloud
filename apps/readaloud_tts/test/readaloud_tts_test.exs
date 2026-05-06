@@ -2,25 +2,37 @@ defmodule ReadaloudTTSTest do
   use ExUnit.Case, async: true
   import Mox
 
+  alias ReadaloudTTS.{Catalog, Voice, WordTiming}
+
   setup :verify_on_exit!
 
-  describe "synthesize/2" do
-    test "calls provider and returns audio binary" do
+  describe "synthesize/3" do
+    test "dispatches to provider with voice and returns audio binary" do
+      voice = %Voice{model: "kokoro", voice: "af_heart"}
+
       ReadaloudTTS.MockProvider
-      |> expect(:synthesize, fn "Hello world", _opts ->
-        {:ok, %{audio: <<0, 1, 2, 3>>}}
+      |> expect(:synthesize, fn "Hello world", ^voice, _opts ->
+        {:ok, <<0, 1, 2, 3>>}
       end)
 
-      assert {:ok, %{audio: <<0, 1, 2, 3>>}} =
-               ReadaloudTTS.synthesize("Hello world", provider: ReadaloudTTS.MockProvider)
+      assert {:ok, <<0, 1, 2, 3>>} =
+               ReadaloudTTS.synthesize("Hello world", voice, provider: ReadaloudTTS.MockProvider)
+    end
+
+    test "raises FunctionClauseError when Voice has nil model" do
+      voice = %Voice{model: nil, voice: "af_heart"}
+
+      assert_raise FunctionClauseError, fn ->
+        ReadaloudTTS.synthesize("hi", voice, provider: ReadaloudTTS.MockProvider)
+      end
     end
   end
 
   describe "transcribe/2" do
-    test "calls provider and returns word timings" do
+    test "dispatches to provider and returns word timings" do
       timings = [
-        %{word: "Hello", start_ms: 0, end_ms: 500},
-        %{word: "world", start_ms: 500, end_ms: 1000}
+        %WordTiming{word: "Hello", start_ms: 0, end_ms: 500},
+        %WordTiming{word: "world", start_ms: 500, end_ms: 1000}
       ]
 
       ReadaloudTTS.MockProvider
@@ -31,14 +43,16 @@ defmodule ReadaloudTTSTest do
     end
   end
 
-  describe "list_voices/1" do
-    test "calls provider and returns voices" do
-      voices = [%{"id" => "af_heart", "name" => "Heart"}]
+  describe "catalog/1" do
+    test "dispatches to provider and returns catalog entries" do
+      entries = [
+        %Catalog.Entry{model: "kokoro", voices: ["af_heart", "am_adam"]}
+      ]
 
       ReadaloudTTS.MockProvider
-      |> expect(:list_voices, fn -> {:ok, voices} end)
+      |> expect(:catalog, fn _opts -> {:ok, entries} end)
 
-      assert {:ok, ^voices} = ReadaloudTTS.list_voices(provider: ReadaloudTTS.MockProvider)
+      assert {:ok, ^entries} = ReadaloudTTS.catalog(provider: ReadaloudTTS.MockProvider)
     end
   end
 end

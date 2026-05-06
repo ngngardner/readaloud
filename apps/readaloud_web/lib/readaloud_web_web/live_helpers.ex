@@ -19,24 +19,25 @@ defmodule ReadaloudWebWeb.LiveHelpers do
       TaskQuery.active_count(ReadaloudAudiobook.AudiobookTask)
   end
 
-  def fetch_models do
-    case ReadaloudTTS.list_models_and_voices() do
-      {:ok, models} -> models
+  def fetch_catalog do
+    case ReadaloudTTS.catalog() do
+      {:ok, entries} -> entries
       {:error, _} -> []
     end
   end
 
-  def default_model(book, models) do
+  def default_model(book, catalog) do
     prefs = book.audio_preferences || %ReadaloudLibrary.TtsProfile{}
-    prefs.model || List.first(models)[:id] || ReadaloudTTS.Config.from_env().tts_model
+    first = List.first(catalog)
+    prefs.model || (first && first.model)
   end
 
-  def default_voice(book, models) do
+  def default_voice(book, catalog) do
     prefs = book.audio_preferences || %ReadaloudLibrary.TtsProfile{}
-    model_id = prefs.model || List.first(models)[:id]
-    model = Enum.find(models, &(&1[:id] == model_id)) || %{}
+    first = List.first(catalog)
+    model_id = prefs.model || (first && first.model)
+    entry = Enum.find(catalog, &(&1.model == model_id))
 
-    prefs.voice || get_in(model, [:voices]) |> List.wrap() |> List.first() ||
-      ReadaloudTTS.Config.from_env().voice
+    prefs.voice || (entry && List.first(entry.voices))
   end
 end

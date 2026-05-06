@@ -11,12 +11,14 @@ defmodule ReadaloudAudiobook.TimingAligner do
   Ported from monorepo ep-ln-audiobook AlignmentService.
   """
 
+  alias ReadaloudTTS.WordTiming
+
   @doc """
   Align STT word timings to source text.
 
-  Returns a list of timing maps with `:word`, `:start_ms`, `:end_ms`,
-  one per word in the source text.
+  Returns one `%ReadaloudTTS.WordTiming{}` per word in the source text.
   """
+  @spec align([WordTiming.t()], String.t()) :: [WordTiming.t()]
   def align(_timings, ""), do: []
   def align([], _source), do: []
 
@@ -102,7 +104,7 @@ defmodule ReadaloudAudiobook.TimingAligner do
 
     if timing do
       [
-        %{word: source_word, start_ms: timing.start_ms, end_ms: timing.end_ms}
+        %WordTiming{word: source_word, start_ms: timing.start_ms, end_ms: timing.end_ms}
         | do_interpolate(preliminary, idx + 1, audio_start, audio_end)
       ]
     else
@@ -152,11 +154,18 @@ defmodule ReadaloudAudiobook.TimingAligner do
     available = end_ms - start_ms
 
     {entries, _} =
-      Enum.map_reduce(words, start_ms, fn word, current ->
+      Enum.map_reduce(words, start_ms * 1.0, fn word, current ->
         char_count = max(String.length(word), 1)
         duration = available * char_count / total_chars
-        entry = %{word: word, start_ms: current, end_ms: current + duration}
-        {entry, current + duration}
+        next = current + duration
+
+        entry = %WordTiming{
+          word: word,
+          start_ms: round(current),
+          end_ms: round(next)
+        }
+
+        {entry, next}
       end)
 
     entries

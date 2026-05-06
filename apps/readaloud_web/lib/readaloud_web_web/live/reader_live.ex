@@ -19,7 +19,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       )
 
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book_id}")
-      send(self(), :fetch_models)
+      send(self(), :fetch_catalog)
     end
 
     {:ok,
@@ -29,7 +29,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
        task_count: 0,
        book: book,
        chapters: chapters,
-       models: [],
+       catalog: [],
        selected_model: default_model(book, []),
        selected_voice: default_voice(book, []),
        show_conflict_modal: false,
@@ -296,9 +296,9 @@ defmodule ReadaloudWebWeb.ReaderLive do
     voice = params["voice"]
 
     voices =
-      case Enum.find(socket.assigns.models, &(&1[:id] == model_id)) do
+      case Enum.find(socket.assigns.catalog, &(&1.model == model_id)) do
         nil -> []
-        m -> m[:voices] || []
+        entry -> entry.voices
       end
 
     new_voice =
@@ -310,17 +310,17 @@ defmodule ReadaloudWebWeb.ReaderLive do
     {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}
   end
 
-  # -- Async model fetch --
+  # -- Async catalog fetch --
 
   @impl true
-  def handle_info(:fetch_models, socket) do
-    models = fetch_models()
+  def handle_info(:fetch_catalog, socket) do
+    catalog = fetch_catalog()
 
     {:noreply,
      assign(socket,
-       models: models,
-       selected_model: default_model(socket.assigns.book, models),
-       selected_voice: default_voice(socket.assigns.book, models)
+       catalog: catalog,
+       selected_model: default_model(socket.assigns.book, catalog),
+       selected_voice: default_voice(socket.assigns.book, catalog)
      )}
   end
 
@@ -600,12 +600,12 @@ defmodule ReadaloudWebWeb.ReaderLive do
           </div>
           <div class="hidden sm:flex items-center gap-2">
             <select name="model" class="select select-xs select-bordered">
-              <option :for={m <- @models} value={m[:id]} selected={m[:id] == @selected_model}>
-                {m[:id]}
+              <option :for={e <- @catalog} value={e.model} selected={e.model == @selected_model}>
+                {e.model}
               </option>
             </select>
             <select name="voice" class="select select-xs select-bordered">
-              <%= for m <- @models, m[:id] == @selected_model, v <- (m[:voices] || []) do %>
+              <%= for e <- @catalog, e.model == @selected_model, v <- e.voices do %>
                 <option value={v} selected={v == @selected_voice}>{v}</option>
               <% end %>
             </select>

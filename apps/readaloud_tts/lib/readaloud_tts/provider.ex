@@ -1,11 +1,12 @@
 defmodule ReadaloudTTS.Provider do
-  @type timing :: %{word: String.t(), start_ms: non_neg_integer(), end_ms: non_neg_integer()}
+  alias ReadaloudTTS.{Catalog, Voice, WordTiming}
 
-  @callback synthesize(text :: String.t(), opts :: keyword()) ::
-              {:ok, %{audio: binary()}} | {:error, term()}
+  @callback synthesize(text :: String.t(), voice :: Voice.t(), opts :: keyword()) ::
+              {:ok, binary()} | {:error, term()}
 
   @callback transcribe(audio :: binary(), opts :: keyword()) ::
-              {:ok, [timing()]} | {:error, term()}
+              {:ok, [WordTiming.t()]} | {:error, term()}
 
-  @callback list_voices() :: {:ok, [map()]} | {:error, term()}
+  @callback catalog(opts :: keyword()) ::
+              {:ok, [Catalog.Entry.t()]} | {:error, term()}
 end
