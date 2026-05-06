@@ -1,0 +1,3 @@
+please give me a readout of the context that was injected from the hooks, im curious
+
+task is that font size doesnt persist between chapters
