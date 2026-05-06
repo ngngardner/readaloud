@@ -1,0 +1,1 @@
+add detailed logging esp around autoplay so when i come with next symptoms we can line them up
