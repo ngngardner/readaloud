@@ -1,3 +1,234 @@
+Base directory for this skill: /home/noah/.claude/skills/skillserver
+
+# Skillserver Bridge
+
+Interact with the MCP skillserver (served over LiteLLM gateway on `pylon:4100`)
+to list, search, and invoke skills hosted there. Works from any project —
+requires only the `litellm-gateway` MCP server to be connected.
+
+## Setup: load the MCP tools
+
+The skillserver MCP tools are deferred. Before doing anything else, load them:
+
+```
+ToolSearch query: "+skillserver"
+```
+
+This exposes:
+
+- `mcp__litellm-gateway__skillserver-list_skills`
+- `mcp__litellm-gateway__skillserver-read_skill`
+- `mcp__litellm-gateway__skillserver-search_skills`
+- `mcp__litellm-gateway__skillserver-list_skill_resources`
+- `mcp__litellm-gateway__skillserver-read_skill_resource`
+- `mcp__litellm-gateway__skillserver-get_skill_resource_info`
+
+## Argument parsing
+
+Parse `jason refactor integration and e2e tests. is there friction in running them? are agents able to run them easily? how can we make the test surface more pleasant so agents reach for it more often?` and route:
+
+| Argument form             | Action                                         |
+| ------------------------- | ---------------------------------------------- |
+| (empty) or `list`         | List all skills                                |
+| `search <query>`          | Search skills by keyword                       |
+| `show <name>`             | Read and display the skill's SKILL.md          |
+| `status`                  | Health check                                   |
+| `<name>` (any other word) | **Invoke** that skill — read it and follow it  |
+
+The invoke form is the default for a bare name. `/skillserver jason` means
+"read the `jason` skill from the MCP server and execute its instructions as
+if it had been triggered locally." `/skillserver good-morning` runs the
+good-morning routine, etc.
+
+## Actions
+
+### List
+
+```
+mcp__litellm-gateway__skillserver-list_skills
+```
+
+Format as a table: skill name + one-line description. If the result is long,
+group by category or prefix.
+
+### Search
+
+```
+mcp__litellm-gateway__skillserver-search_skills(query: "<query>")
+```
+
+Show matches with relevance context.
+
+### Show
+
+```
+mcp__litellm-gateway__skillserver-read_skill(id: "<name>")
+```
+
+Dump the full skill content. Do NOT execute it.
+
+### Invoke
+
+1. Read the skill:
+   ```
+   mcp__litellm-gateway__skillserver-read_skill(id: "<name>")
+   ```
+2. If the skill references a `references/` folder or other resources, list
+   them and pull what's needed:
+   ```
+   mcp__litellm-gateway__skillserver-list_skill_resources(id: "<name>")
+   mcp__litellm-gateway__skillserver-read_skill_resource(id: "<name>", resource: "<path>")
+   ```
+3. Follow the skill's instructions as if it had been invoked directly.
+   Treat the returned SKILL.md body as authoritative — obey its workflow,
+   checkpoints, and constraints exactly.
+4. If the skill expects further arguments (e.g. `jason` expects
+   `refactor|design|review [target]`), pass through whatever the user
+   supplied after the skill name. Example: `/skillserver jason refactor src/foo.ts`
+   → invoke `jason` with `refactor src/foo.ts` as its arguments.
+
+### Status
+
+```
+mcp__litellm-gateway__skillserver-list_skills
+```
+
+If it returns results, report "Skillserver reachable, N skills available."
+If it errors, report the error and suggest checking:
+
+- `curl -s http://pylon:4100/health/liveliness`
+- Whether the `litellm-gateway` MCP server is connected in `~/.claude.json`
+
+## Error handling
+
+### Skill not found
+
+If `read_skill` returns an error for a name, fall back to:
+
+```
+mcp__litellm-gateway__skillserver-search_skills(query: "<name>")
+```
+
+Suggest the closest matches.
+
+### MCP server not connected
+
+If `ToolSearch` returns no skillserver tools, the `litellm-gateway` MCP server
+isn't attached. Tell the user to check `~/.claude.json` for the
+`litellm-gateway` entry and that pylon:4100 is reachable.
+
+### Skill pass-through fails
+
+If a skill's instructions reference local files or env vars that don't exist
+in the current project (e.g., `jason` needs a target, `improve` needs a
+project to improve), report the mismatch instead of guessing. The skill
+definitions are project-agnostic; the *invocation context* may not be.
+
+---
+
+what about nix? i thought nix was wired to take care of the e2e tests?
+
+---
+
+approved, we can replace agents.md with claude.md and sharpen it, no i havent been using any nix commands manually, i just want agents to have easy way to test e2e and we already have nix code in place. i think agents werent aware of the nix e2e test and would say things like "e2e test — written but not executed locally; the local dev server isn't running here. Per your test/commit/deploy memory, full verification happens on pylon. You can either run node --test e2e/tests/reader-styles-persist.test.js against a local Phoenix dev server, or push and verify in browser on pylon:4000."
+
+---
+
+looks right. not sure if i want either per-test or test_filter env var - just run them all? candidate 2 is right to me. also if we can get coverage in there too thatd be good
+
+---
+
+1b 4 ok 5 80 7 wire 10  skip. do them all
+
+---
+
+you dont need to ask for nix vm build
+
+---
+
+in general do not consider "nix build" as a "real job" its just a job do it
+address coverage then if that fails
+
+---
+
+<task-notification>
+<task-id>bpzn60zyl</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/bpzn60zyl.output</output-file>
+<status>failed</status>
+<summary>Background command "Coverage build attempt 3" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bphyupxbj</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/bphyupxbj.output</output-file>
+<status>failed</status>
+<summary>Background command "Coverage attempt 4" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bex02ljxn</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/bex02ljxn.output</output-file>
+<status>failed</status>
+<summary>Background command "Coverage attempt 5" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bshqolekt</task-id>
+<tool-use-id>toolu_01BzJ6CCNTNgLVg2H1vCvjUb</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/bshqolekt.output</output-file>
+<status>failed</status>
+<summary>Background command "Coverage attempt 6" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3d2njmkw</task-id>
+<tool-use-id>toolu_01JeQHssQ2ukBcxafAB1juRi</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/b3d2njmkw.output</output-file>
+<status>failed</status>
+<summary>Background command "Re-run e2e VM build" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+do we have to use sleeps or can we progmatically determine when theyre ready?
+
+---
+
+you can do whatever you want while waiting for tasks. i meant sleeps in tests
+
+---
+
+<task-notification>
+<task-id>b9l5d466v</task-id>
+<tool-use-id>toolu_016xYt1DYb2Zsti2SYETddjk</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/b9l5d466v.output</output-file>
+<status>failed</status>
+<summary>Background command "e2e VM with full sleep cleanup" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bx3stfsu1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/853aaf30-d524-40e6-a8d5-3f11a23528b3/tasks/bx3stfsu1.output</output-file>
+<status>failed</status>
+<summary>Background command "e2e VM with openSettings fix" failed with exit code 1</summary>
+</task-notification>
+
+---
+
 Check the status of both Nix builds (b3d2njmkw = e2e VM, bmnb3y8sv = coverage). Tail the logs and report progress. If both have finished (success or fail), diagnose. If still running, schedule another check.
 Check the status of both Nix builds (b3d2njmkw = e2e VM, bifbh7cec = coverage retry). Tail logs and report. If both finished, diagnose. If still running, wait again.
 Check status of e2e VM build (b3d2njmkw) and coverage build (bpzn60zyl). Tail both logs. Diagnose any failures or report success.
@@ -7,3 +238,7 @@ Check both Nix builds: e2e VM (b3d2njmkw) and coverage attempt 6 (bshqolekt). Ta
 Check e2e VM build (b3d2njmkw). Tail log, diagnose, or report success.
 Check e2e VM build (bbop0a0l9). Tail log; count test pass/fail. If improved meaningfully, report. If not, diagnose. Coverage build status is also worth noting if anything new.
 Check e2e VM build (bvt06rk9b). Tail log; count test pass/fail compared to previous run (41 pass / 55 fail). Report what improved and what's still broken so we can decide next steps.
+
+---
+
+commit and run one more pass. those "Check" messages werent me but the harness or the tools you used. commit things that also were not relevant to your changes that need to be committed.
