@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "7320dd4953a9",
+  "session_id": "853aaf30-d524-40e6-a8d5-3f11a23528b3",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-06T17:58:37.944670492Z",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "CLAUDE.md",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/fixtures/e2e.ex",
+    "apps/readaloud_audiobook/mix.exs",
+    "apps/readaloud_importer/mix.exs",
+    "apps/readaloud_library/mix.exs",
+    "apps/readaloud_reader/mix.exs",
+    "apps/readaloud_tts/mix.exs",
+    "apps/readaloud_web/mix.exs",
+    "apps/readaloud_web/test/support/conn_case.ex",
+    "apps/readaloud_web/test/test_helper.exs",
+    "cells/app/checks/coverage.nix",
+    "cells/app/checks/default.nix",
+    "cells/app/checks/e2e.nix",
+    "e2e/helpers.js",
+    "e2e/tests/accidental-navigation.test.js",
+    "e2e/tests/audio-autoplay.test.js",
+    "e2e/tests/audio-remount.test.js",
+    "e2e/tests/floating-pill.test.js",
+    "e2e/tests/reader-settings.test.js",
+    "e2e/tests/speed-badge.test.js",
+    "mix.exs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "4d2e824a220d",
+  "token_usage": {
+    "input_tokens": 443,
+    "cache_creation_tokens": 537861,
+    "cache_read_tokens": 96318051,
+    "output_tokens": 222353,
+    "api_call_count": 334
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-06T17:58:37.342629524Z",
+    "agent_lines": 1091,
+    "human_added": 8,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1099,
+    "agent_percentage": 99.27206551410373
+  }
+}

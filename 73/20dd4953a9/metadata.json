@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "7320dd4953a9",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".gitignore",
+    "CLAUDE.md",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/fixtures/e2e.ex",
+    "apps/readaloud_audiobook/mix.exs",
+    "apps/readaloud_importer/mix.exs",
+    "apps/readaloud_library/mix.exs",
+    "apps/readaloud_reader/mix.exs",
+    "apps/readaloud_tts/mix.exs",
+    "apps/readaloud_web/mix.exs",
+    "apps/readaloud_web/test/support/conn_case.ex",
+    "apps/readaloud_web/test/test_helper.exs",
+    "cells/app/checks/coverage.nix",
+    "cells/app/checks/default.nix",
+    "cells/app/checks/e2e.nix",
+    "e2e/helpers.js",
+    "e2e/tests/accidental-navigation.test.js",
+    "e2e/tests/audio-autoplay.test.js",
+    "e2e/tests/audio-remount.test.js",
+    "e2e/tests/floating-pill.test.js",
+    "e2e/tests/reader-settings.test.js",
+    "e2e/tests/speed-badge.test.js",
+    "mix.exs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/73/20dd4953a9/0/metadata.json",
+      "transcript": "/73/20dd4953a9/0/full.jsonl",
+      "content_hash": "/73/20dd4953a9/0/content_hash.txt",
+      "prompt": "/73/20dd4953a9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 443,
+    "cache_creation_tokens": 537861,
+    "cache_read_tokens": 96318051,
+    "output_tokens": 222353,
+    "api_call_count": 334
+  }
+}
