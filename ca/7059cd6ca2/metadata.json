@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "ca7059cd6ca2",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "e2e/tests/audio-autoplay-disconnect.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ca/7059cd6ca2/0/metadata.json",
+      "transcript": "/ca/7059cd6ca2/0/full.jsonl",
+      "content_hash": "/ca/7059cd6ca2/0/content_hash.txt",
+      "prompt": "/ca/7059cd6ca2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 174,
+    "cache_creation_tokens": 671234,
+    "cache_read_tokens": 16974272,
+    "output_tokens": 82868,
+    "api_call_count": 101
+  }
+}

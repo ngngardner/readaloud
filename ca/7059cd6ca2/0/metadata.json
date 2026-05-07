@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "ca7059cd6ca2",
+  "session_id": "bd624c69-1d74-429c-af78-aee1df15b2a4",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-07T20:26:19.995410581Z",
+  "branch": "master",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "e2e/tests/audio-autoplay-disconnect.test.js"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "4fe2deba066f",
+  "token_usage": {
+    "input_tokens": 174,
+    "cache_creation_tokens": 671234,
+    "cache_read_tokens": 16974272,
+    "output_tokens": 82868,
+    "api_call_count": 101
+  }
+}
