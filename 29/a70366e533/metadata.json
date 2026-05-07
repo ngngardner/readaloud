@@ -1,0 +1,49 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "29a70366e533",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "apps/readaloud_audiobook/lib/mix/tasks/retranscribe.ex",
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/hooks/floating_pill.ts",
+    "apps/readaloud_web/assets/js/hooks/reader_settings.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/hook.ts",
+    "apps/readaloud_web/assets/js/lib/persisted_record.ts",
+    "apps/readaloud_web/assets/js/lib/reader_settings_store.ts",
+    "apps/readaloud_web/assets/js/lib/types.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/live/book_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/library_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/router.ex",
+    "biome.json",
+    "cells/app/checks/default.nix",
+    "cells/app/checks/hex-audit.nix",
+    "cells/app/checks/sobelow.nix",
+    "mix.exs",
+    "rules/elixir/no-io-inspect.yml",
+    "rules/typescript/no-as-cast.yml",
+    "rules/typescript/no-console-log.yml",
+    "rules/typescript/no-ts-ignore.yml",
+    "rules/typescript/no-unknown-type.yml",
+    "sgconfig.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/29/a70366e533/0/metadata.json",
+      "transcript": "/29/a70366e533/0/full.jsonl",
+      "content_hash": "/29/a70366e533/0/content_hash.txt",
+      "prompt": "/29/a70366e533/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 348,
+    "cache_creation_tokens": 409328,
+    "cache_read_tokens": 65905218,
+    "output_tokens": 155151,
+    "api_call_count": 298
+  }
+}
