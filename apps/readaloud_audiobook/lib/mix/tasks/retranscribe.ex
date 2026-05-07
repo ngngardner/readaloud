@@ -103,7 +103,7 @@ defmodule Mix.Tasks.Readaloud.Retranscribe do
       aligned = TimingAligner.align(all_timings, clean_text)
       Mix.shell().info("Aligned to #{length(aligned)} source words")
 
-      if length(aligned) > 0 do
+      if aligned != [] do
         first = hd(aligned)
         last = List.last(aligned)
 

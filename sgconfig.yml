@@ -1,6 +1,7 @@
 ruleDirs:
   - rules/elixir
   - rules/heex
+  - rules/typescript
 languageGlobs:
   html:
     - "**/*.heex"

@@ -1,0 +1,6 @@
+id: no-console-log
+language: typescript
+severity: error
+rule:
+  pattern: console.log($$$)
+message: "Don't ship `console.log` — it's debug residue. Use `console.error`/`console.warn` for actual error reporting, or remove. For genuinely intentional always-on telemetry (e.g. autoplay debug log), suppress with `// ast-grep-ignore: no-console-log` and a why-comment."

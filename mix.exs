@@ -8,6 +8,7 @@ defmodule Readaloud.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      dialyzer: dialyzer(),
       # The umbrella `mix test.cover` is for visibility — the canonical
       # gate is `cells/app/checks/coverage.nix` (currently 80%). Setting
       # the Mix-level threshold to 0 keeps the local alias informational.
@@ -42,10 +43,23 @@ defmodule Readaloud.MixProject do
   # the apps folder.
   #
   # Run "mix help deps" for examples and options.
+  # Dialyzer needs :mix in the PLT to recognize Mix.Task callbacks used by
+  # custom mix tasks (e.g. apps/readaloud_audiobook/lib/mix/tasks/retranscribe.ex).
+  # `app_tree` builds a per-deps PLT instead of one giant blob — faster
+  # incremental rebuilds when a single dep changes.
+  defp dialyzer do
+    [
+      plt_add_apps: [:mix],
+      plt_add_deps: :app_tree,
+      flags: [:error_handling, :underspecs]
+    ]
+  end
+
   defp deps do
     [
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       {:deps_nix, "~> 0.4", only: :dev, runtime: false}
     ]
   end
@@ -67,6 +81,7 @@ defmodule Readaloud.MixProject do
         "compile --warnings-as-errors",
         "deps.unlock --unused",
         "format",
+        "dialyzer",
         "test"
       ]
     ]

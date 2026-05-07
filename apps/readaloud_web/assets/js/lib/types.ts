@@ -5,8 +5,13 @@ export type ChapterId = Brand<string, "ChapterId">;
 export type WordIndex = Brand<number, "WordIndex">;
 export type Milliseconds = Brand<number, "Milliseconds">;
 
+// Branded-type constructors are the canonical TS pattern: there is no other
+// way to mint a Brand<T, B> from a T. Suppressed locally; do NOT generalize.
+// ast-grep-ignore: no-as-cast
 export const ChapterId = (s: string): ChapterId => s as ChapterId;
+// ast-grep-ignore: no-as-cast
 export const WordIndex = (n: number): WordIndex => n as WordIndex;
+// ast-grep-ignore: no-as-cast
 export const Milliseconds = (n: number): Milliseconds => n as Milliseconds;
 
 // Cross-runtime contract: chapter text is rendered server-side as
@@ -30,40 +35,73 @@ export interface WordTiming {
   readonly endMs: Milliseconds;
 }
 
-interface WireWordTiming {
-  start_ms: number;
-  end_ms: number;
+// Strictly-typed JSON tree. Replaces ad-hoc `unknown` at parse boundaries —
+// downstream code must narrow with typeof / Array.isArray before reading
+// fields, which is exactly the discipline `unknown` was supposed to enforce
+// but routinely escaped via `as`.
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ReadonlyArray<JsonValue>
+  | { readonly [k: string]: JsonValue };
+
+// JSON.parse is typed `(s: string) => any`; `any` widens to JsonValue
+// without a cast, which is the whole point of routing parses through here.
+export function parseJson(s: string): JsonValue {
+  return JSON.parse(s);
 }
 
-interface WireChapter {
-  id: string;
-  title?: string | null;
-  number: number;
+// User-defined predicate for "is this string one of the literals in this
+// readonly tuple". Lets callers narrow `string` to a literal-union without
+// the `(TUPLE as readonly string[]).includes(s)` cast workaround.
+export function isOneOf<T extends string>(
+  haystack: readonly T[],
+  needle: string,
+): needle is T {
+  return haystack.some((x) => x === needle);
 }
 
-export function parseWordTimings(json: unknown): ReadonlyArray<WordTiming> {
-  if (!json || typeof json !== "object" || !("timings" in json)) return [];
-  const wire =
-    (json as { timings?: ReadonlyArray<WireWordTiming> }).timings ?? [];
-  return wire.map((t) => ({
-    startMs: Milliseconds(t.start_ms),
-    endMs: Milliseconds(t.end_ms),
-  }));
+export function isJsonObject(
+  v: JsonValue,
+): v is { readonly [k: string]: JsonValue } {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+export function parseWordTimings(json: JsonValue): ReadonlyArray<WordTiming> {
+  if (!isJsonObject(json)) return [];
+  const timings = json.timings;
+  if (!Array.isArray(timings)) return [];
+  const out: WordTiming[] = [];
+  for (const t of timings) {
+    if (!isJsonObject(t)) continue;
+    const startMs = t.start_ms;
+    const endMs = t.end_ms;
+    if (typeof startMs !== "number" || typeof endMs !== "number") continue;
+    out.push({ startMs: Milliseconds(startMs), endMs: Milliseconds(endMs) });
+  }
+  return out;
 }
 
 export function parseChapters(
   jsonString: string | undefined,
 ): ReadonlyArray<Chapter> {
   if (!jsonString) return [];
-  let wire: ReadonlyArray<WireChapter>;
+  let json: JsonValue;
   try {
-    wire = JSON.parse(jsonString) as ReadonlyArray<WireChapter>;
+    json = parseJson(jsonString);
   } catch {
     return [];
   }
-  return wire.map((c) => ({
-    id: ChapterId(c.id),
-    title: c.title ?? null,
-    number: c.number,
-  }));
+  if (!Array.isArray(json)) return [];
+  const out: Chapter[] = [];
+  for (const c of json) {
+    if (!isJsonObject(c)) continue;
+    if (typeof c.id !== "string") continue;
+    if (typeof c.number !== "number") continue;
+    const title = typeof c.title === "string" ? c.title : null;
+    out.push({ id: ChapterId(c.id), title, number: c.number });
+  }
+  return out;
 }

@@ -7,7 +7,23 @@ defmodule ReadaloudWebWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {ReadaloudWebWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    # CSP allows our own JS+CSS, inline LV bootstrap, blob:/data: URIs (used
+    # by the audio player for prefetched chapters and reader theme swatches),
+    # and same-origin media (audio + cover images). 'unsafe-inline' is
+    # required for LV's <script> bootstrap and Tailwind-emitted style attrs.
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" =>
+        "default-src 'self'; " <>
+          "script-src 'self' 'unsafe-inline'; " <>
+          "style-src 'self' 'unsafe-inline'; " <>
+          "img-src 'self' data: blob:; " <>
+          "media-src 'self' blob:; " <>
+          "connect-src 'self' ws: wss:; " <>
+          "font-src 'self' data:; " <>
+          "frame-ancestors 'none'; " <>
+          "base-uri 'self'"
+    }
   end
 
   pipeline :api do

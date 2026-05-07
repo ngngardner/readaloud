@@ -1,4 +1,5 @@
 import { PersistedRecord } from "./persisted_record";
+import { type JsonValue, isJsonObject, isOneOf } from "./types";
 
 export interface ReaderSettings {
   readonly fontFamily: "serif" | "sans" | "mono";
@@ -20,22 +21,21 @@ const DEFAULTS: ReaderSettings = Object.freeze({
 
 const FONT_FAMILIES = ["serif", "sans", "mono"] as const;
 
-function coerce(raw: unknown): Partial<ReaderSettings> {
-  if (!raw || typeof raw !== "object") return {};
-  const r = raw as Record<string, unknown>;
+function coerce(raw: JsonValue): Partial<ReaderSettings> {
+  if (!isJsonObject(raw)) return {};
   const out: { -readonly [K in keyof ReaderSettings]?: ReaderSettings[K] } = {};
   if (
-    typeof r.fontFamily === "string" &&
-    (FONT_FAMILIES as ReadonlyArray<string>).includes(r.fontFamily)
+    typeof raw.fontFamily === "string" &&
+    isOneOf(FONT_FAMILIES, raw.fontFamily)
   ) {
-    out.fontFamily = r.fontFamily as ReaderSettings["fontFamily"];
+    out.fontFamily = raw.fontFamily;
   }
-  if (typeof r.fontSize === "number") out.fontSize = r.fontSize;
-  if (typeof r.lineHeight === "number") out.lineHeight = r.lineHeight;
-  if (typeof r.maxWidth === "number") out.maxWidth = r.maxWidth;
-  if (typeof r.autoScroll === "boolean") out.autoScroll = r.autoScroll;
-  if (typeof r.autoNextChapter === "boolean")
-    out.autoNextChapter = r.autoNextChapter;
+  if (typeof raw.fontSize === "number") out.fontSize = raw.fontSize;
+  if (typeof raw.lineHeight === "number") out.lineHeight = raw.lineHeight;
+  if (typeof raw.maxWidth === "number") out.maxWidth = raw.maxWidth;
+  if (typeof raw.autoScroll === "boolean") out.autoScroll = raw.autoScroll;
+  if (typeof raw.autoNextChapter === "boolean")
+    out.autoNextChapter = raw.autoNextChapter;
   return out;
 }
 

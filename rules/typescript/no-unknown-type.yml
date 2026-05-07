@@ -1,0 +1,9 @@
+id: no-unknown-type
+language: typescript
+severity: error
+rule:
+  kind: predefined_type
+  regex: "^unknown$"
+ignores:
+  - "**/phoenix-shims.d.ts"
+message: "Avoid `unknown` — it almost always pairs with an `as` cast at the use-site. Use `JsonValue` for parsed JSON, define a narrower input type, or write a type predicate. Only third-party type stubs may use `unknown`."

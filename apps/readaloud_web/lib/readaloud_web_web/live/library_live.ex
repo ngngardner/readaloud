@@ -61,8 +61,15 @@ defmodule ReadaloudWebWeb.LibraryLive do
   def handle_event("import", _params, socket) do
     [{file_path, file_type}] =
       consume_uploaded_entries(socket, :book_file, fn %{path: path}, entry ->
-        ext = Path.extname(entry.client_name)
-        dest = Path.join(upload_dir(), entry.client_name)
+        # Strip directory components from the user-provided client_name to
+        # prevent path traversal (e.g. uploading "../../etc/passwd"). The
+        # `:book_file` upload is :accept-restricted to .epub/.pdf so an
+        # attacker can't smuggle arbitrary content via this filename, but
+        # defense in depth: never trust a user-provided filename to
+        # determine where the file lands on disk.
+        safe_name = Path.basename(entry.client_name)
+        ext = Path.extname(safe_name)
+        dest = Path.join(upload_dir(), safe_name)
         File.mkdir_p!(Path.dirname(dest))
         File.cp!(path, dest)
         {:ok, {dest, ext}}

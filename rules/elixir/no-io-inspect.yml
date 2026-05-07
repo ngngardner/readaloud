@@ -1,0 +1,13 @@
+id: no-io-inspect
+language: elixir
+severity: error
+rule:
+  any:
+    - pattern: IO.inspect($$$)
+    - pattern: |-
+        $X
+        |> IO.inspect($$$)
+ignores:
+  - "**/test/**"
+  - "**/*_test.exs"
+message: "Don't ship `IO.inspect` — it's debug residue. Use `Logger.debug/info/warning` with structured metadata for production-grade observability."

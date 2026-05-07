@@ -1,0 +1,8 @@
+id: no-as-cast
+language: typescript
+severity: error
+rule:
+  pattern: $X as $T
+  not:
+    pattern: $X as const
+message: "Avoid `as` type casts — they bypass the type system. Prefer `instanceof`, type predicates, or proper input narrowing. `as const` is allowed. For unavoidable casts at type-system boundaries, suppress with `// ast-grep-ignore` and a why-comment."

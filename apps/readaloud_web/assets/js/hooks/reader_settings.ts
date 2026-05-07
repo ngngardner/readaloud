@@ -4,6 +4,7 @@ import {
   type ReaderSettings,
   readerSettings,
 } from "../lib/reader_settings_store";
+import { isOneOf } from "../lib/types";
 
 const FONT_STACKS: Readonly<Record<ReaderSettings["fontFamily"], string>> = {
   serif: "Georgia, serif",
@@ -15,7 +16,24 @@ const RANGE_KEYS = ["fontSize", "lineHeight", "maxWidth"] as const;
 type RangeKey = (typeof RANGE_KEYS)[number];
 
 function isRangeKey(s: string): s is RangeKey {
-  return (RANGE_KEYS as ReadonlyArray<string>).includes(s);
+  return isOneOf(RANGE_KEYS, s);
+}
+
+function setRangeKey(key: RangeKey, value: number): void {
+  // Computed-key object literals widen to `{ [k: string]: number }`, which
+  // doesn't match Partial<ReaderSettings>. Switch on the literal so each
+  // branch builds a typed patch.
+  switch (key) {
+    case "fontSize":
+      readerSettings.set({ fontSize: value });
+      return;
+    case "lineHeight":
+      readerSettings.set({ lineHeight: value });
+      return;
+    case "maxWidth":
+      readerSettings.set({ maxWidth: value });
+      return;
+  }
 }
 
 // Lives on #reader-content. Owns the visual application of reader settings
@@ -56,9 +74,7 @@ export const ReaderSettingsControlsHook = defineHook<HTMLDivElement>((ctx) => {
     const key = input.name;
     if (!isRangeKey(key)) continue;
     ctx.on(input, "input", () => {
-      readerSettings.set({
-        [key]: Number.parseFloat(input.value),
-      } as Partial<ReaderSettings>);
+      setRangeKey(key, Number.parseFloat(input.value));
     });
   }
 

@@ -13,7 +13,7 @@ let
     version = "0.1.0";
     src = self;
     mixEnv = "dev";
-    hash = "sha256-ekX7Y1t46jWlpAWHrIoJHOvtUqB5PibVZ6qWClSM/8M=";
+    hash = "sha256-8ax0VspR8G60KjiRXdI6bN14BS3VsiFGZJ5kSUTSKB0=";
   };
 
   # Test env adds `only: :test` deps (mox, lazy_html) on top of dev deps;
@@ -23,7 +23,7 @@ let
     version = "0.1.0";
     src = self;
     mixEnv = "test";
-    hash = "sha256-+zD+F9TcLuWUlTlifg4UnqiWVks/aimEqnPhSfSUGbU=";
+    hash = "sha256-8wKv80GgSvdG7IlvUm/O/dVFURUKemy4XsI5w9+NdGA=";
   };
 
   treefmtData = {
@@ -53,6 +53,22 @@ in
   ast-grep = import ./ast-grep.nix { inherit nixpkgs self; };
   lint-grep = import ./lint-grep-check.nix { inherit nixpkgs self lintGrep; };
   credo = import ./credo.nix {
+    inherit
+      nixpkgs
+      self
+      beamPackages
+      mixFodDepsDev
+      ;
+  };
+  hex-audit = import ./hex-audit.nix {
+    inherit
+      nixpkgs
+      self
+      beamPackages
+      mixFodDepsDev
+      ;
+  };
+  sobelow = import ./sobelow.nix {
     inherit
       nixpkgs
       self

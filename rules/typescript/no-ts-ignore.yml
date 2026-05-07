@@ -1,0 +1,12 @@
+id: no-ts-ignore
+language: typescript
+severity: error
+rule:
+  any:
+    - kind: comment
+      regex: "@ts-ignore"
+    - kind: comment
+      regex: "@ts-expect-error"
+    - kind: comment
+      regex: "@ts-nocheck"
+message: "Don't suppress TypeScript errors with @ts-ignore / @ts-expect-error / @ts-nocheck. Narrow the type properly, fix the underlying type definition, or wrap the unsafe operation in a typed helper."

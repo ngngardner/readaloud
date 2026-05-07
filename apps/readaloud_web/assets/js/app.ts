@@ -57,12 +57,15 @@ declare global {
     liveSocket: LiveSocket;
     liveReloader?: LiveReloader;
   }
+  interface WindowEventMap {
+    "phx:live_reload:attached": CustomEvent<LiveReloader>;
+  }
 }
 window.liveSocket = liveSocket;
 
 if (process.env.NODE_ENV === "development") {
   window.addEventListener("phx:live_reload:attached", (e) => {
-    const reloader = (e as CustomEvent<LiveReloader>).detail;
+    const reloader = e.detail;
     reloader.enableServerLogs();
 
     let keyDown: string | null = null;

@@ -54,10 +54,8 @@ export const FloatingPillHook = defineHook<HTMLDivElement>((ctx) => {
 
   if (isMobile) {
     ctx.on(document, "click", (e) => {
-      if (
-        e.clientY < MOBILE_TOP_AFFORDANCE_PX &&
-        !pill.contains(e.target as Node)
-      ) {
+      const target = e.target instanceof Node ? e.target : null;
+      if (e.clientY < MOBILE_TOP_AFFORDANCE_PX && !pill.contains(target)) {
         toggle();
       }
     });

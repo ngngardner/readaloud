@@ -93,6 +93,16 @@ function isReadaloudEvent(event: string): boolean {
   return READALOUD_EVENT_PREFIX_RE.test(event);
 }
 
+interface HookState {
+  readonly disposers: Array<() => void>;
+  readonly updateHandlers: Array<() => void>;
+}
+
+// Per-mount state, keyed off the LV view-hook `this`. WeakMap avoids
+// bolting expando fields onto ViewHookInternal (which would force a cast
+// at every read site to satisfy TS).
+const HOOK_STATE = new WeakMap<ViewHookInternal, HookState>();
+
 export function defineHook<
   TEl extends HTMLElement = HTMLElement,
   TDataset = Record<string, string | undefined>,
@@ -104,30 +114,42 @@ export function defineHook<
       const lv = this;
 
       const ctx: HookContext<TEl, TDataset> = {
+        // The LV markup is the source of truth for the element subtype and
+        // the dataset shape. TS can't verify this contract; the caller of
+        // defineHook<TEl, TDataset> asserts it.
+        // ast-grep-ignore: no-as-cast
         el: this.el as TEl,
+        // ast-grep-ignore
         dataset: this.el.dataset as unknown as Readonly<TDataset>,
 
         on(
           target: EventTarget,
           event: string,
+          // Impl signature for the typed overloads above. Callers see the
+          // narrowed handler types; the impl must accept the union, which
+          // TS only expresses as `unknown`.
+          // ast-grep-ignore: no-unknown-type
           handler: (arg: unknown) => void,
           opts?: AddEventListenerOptions,
         ): void {
           if (target === window && isReadaloudEvent(event)) {
             const wrapped = (e: Event): void => {
-              const detail = (e as CustomEvent).detail;
-              handler(detail);
+              if (e instanceof CustomEvent) handler(e.detail);
             };
             window.addEventListener(event, wrapped);
             disposers.push(() => window.removeEventListener(event, wrapped));
           } else {
+            // The DOM API only knows EventListener, not our typed overloads.
+            // ast-grep-ignore: no-as-cast
             target.addEventListener(event, handler as EventListener, opts);
             disposers.push(() =>
+              // ast-grep-ignore: no-as-cast
               target.removeEventListener(event, handler as EventListener, opts),
             );
           }
         },
 
+        // ast-grep-ignore: no-unknown-type
         dispatch(event: string, detail?: unknown): void {
           window.dispatchEvent(new CustomEvent(event, { detail }));
         },
@@ -137,6 +159,11 @@ export function defineHook<
         },
 
         handleEvent(event: string, handler: (payload: never) => void): void {
+          // Phoenix's typed shim wants `(payload: unknown) => void`. Our
+          // public overload above narrows the payload per event K; the
+          // impl signature uses `never` for parametric assignability and
+          // we re-widen here to satisfy the LV type.
+          // ast-grep-ignore
           const ref = lv.handleEvent(event, handler as (p: unknown) => void);
           disposers.push(() => lv.removeHandleEvent(ref));
         },
@@ -172,11 +199,7 @@ export function defineHook<
         },
       };
 
-      (this as unknown as { _ctxDisposers: Array<() => void> })._ctxDisposers =
-        disposers;
-      (
-        this as unknown as { _ctxUpdateHandlers: Array<() => void> }
-      )._ctxUpdateHandlers = updateHandlers;
+      HOOK_STATE.set(this, { disposers, updateHandlers });
 
       try {
         setup(ctx);
@@ -191,11 +214,9 @@ export function defineHook<
     },
 
     updated(this: ViewHookInternal): void {
-      const handlers = (
-        this as unknown as { _ctxUpdateHandlers?: Array<() => void> }
-      )._ctxUpdateHandlers;
-      if (!handlers) return;
-      for (const fn of handlers) {
+      const state = HOOK_STATE.get(this);
+      if (!state) return;
+      for (const fn of state.updateHandlers) {
         try {
           fn();
         } catch (err) {
@@ -205,17 +226,16 @@ export function defineHook<
     },
 
     destroyed(this: ViewHookInternal): void {
-      const disposers = (
-        this as unknown as { _ctxDisposers?: Array<() => void> }
-      )._ctxDisposers;
-      if (!disposers) return;
-      for (const dispose of disposers) {
+      const state = HOOK_STATE.get(this);
+      if (!state) return;
+      for (const dispose of state.disposers) {
         try {
           dispose();
         } catch (err) {
           console.error("hook disposer threw:", err);
         }
       }
+      HOOK_STATE.delete(this);
     },
   };
 }

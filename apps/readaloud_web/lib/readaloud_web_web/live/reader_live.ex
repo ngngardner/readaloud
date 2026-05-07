@@ -302,9 +302,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
       end
 
     new_voice =
-      cond do
-        voice && voice != "" && voice in voices -> voice
-        true -> List.first(voices) || socket.assigns.selected_voice
+      if voice && voice != "" && voice in voices do
+        voice
+      else
+        List.first(voices) || socket.assigns.selected_voice
       end
 
     {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}

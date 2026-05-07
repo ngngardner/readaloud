@@ -32,6 +32,6 @@ export interface ReadaloudPushEvents {
 
 // LV → JS socket pushes. Currently unused; add an entry here before calling
 // ctx.handleEvent in a hook so the contract stays typed. Keeping the channel
-// declared (even when empty) is the contract — keyof {} is never, so calls
-// are unreachable until something is added.
-export interface ReadaloudHandleEvents {}
+// declared (even when empty) is the contract — keyof Record<never,never> is
+// never, so calls are unreachable until something is added.
+export type ReadaloudHandleEvents = Record<never, never>;

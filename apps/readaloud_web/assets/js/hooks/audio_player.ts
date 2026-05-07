@@ -5,7 +5,13 @@ import { attachScrubber, fractionAt } from "../lib/scrubber";
 import { scrollFollow } from "../lib/scroll_follow";
 import { readerSettings } from "../lib/reader_settings_store";
 import { cycleOption } from "../lib/cycle_option";
-import { type WordTiming, parseWordTimings, wordSelector } from "../lib/types";
+import {
+  type JsonValue,
+  type WordTiming,
+  isJsonObject,
+  parseWordTimings,
+  wordSelector,
+} from "../lib/types";
 import { attachWordMenu } from "./word_menu";
 
 interface AudioPlayerDataset {
@@ -50,13 +56,12 @@ const AUTO_SCROLL_GRACE_MS = 800;
 const PLAY_GLYPH = "▶";
 const PAUSE_GLYPH = "❚❚";
 
-function coercePlayerPrefs(raw: unknown): Partial<PlayerPrefs> {
-  if (!raw || typeof raw !== "object") return {};
-  const r = raw as Record<string, unknown>;
+function coercePlayerPrefs(raw: JsonValue): Partial<PlayerPrefs> {
+  if (!isJsonObject(raw)) return {};
   const out: { -readonly [K in keyof PlayerPrefs]?: PlayerPrefs[K] } = {};
-  if (typeof r.speed === "number") out.speed = r.speed;
-  if (typeof r.volume === "number") out.volume = r.volume;
-  if (typeof r.collapsed === "boolean") out.collapsed = r.collapsed;
+  if (typeof raw.speed === "number") out.speed = raw.speed;
+  if (typeof raw.volume === "number") out.volume = raw.volume;
+  if (typeof raw.collapsed === "boolean") out.collapsed = raw.collapsed;
   return out;
 }
 
@@ -144,18 +149,22 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // reports a symptom ("phone woke up at 11:07 and audio was at 0:00")
     // these lines + the chapter/book ids let us line up the JS-side state
     // machine with server logs (see reader_live.ex Logger.info calls).
-    const log = (event: string, extra?: Record<string, unknown>): void => {
+    type LogValue = string | number | boolean | null | undefined;
+    const log = (event: string, extra?: Record<string, LogValue>): void => {
       const wall = new Date().toISOString();
       const t =
         typeof performance !== "undefined"
           ? Math.round(performance.now())
           : Date.now();
-      const base: Record<string, unknown> = {
+      const base: Record<string, LogValue> = {
         player: playerId,
         chapter: ctx.dataset.chapterId,
         t,
       };
       if (extra) Object.assign(base, extra);
+      // Always-on autoplay telemetry per the comment above; this is
+      // intentional production logging, not debug residue.
+      // ast-grep-ignore: no-console-log
       console.log(`[autoplay ${wall}] ${event}`, base);
     };
 
@@ -302,7 +311,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     const hasMeaningfulSrc =
       existingSrc !== "" &&
       existingSrc !== window.location.href &&
-      existingSrc !== window.location.origin + "/";
+      existingSrc !== `${window.location.origin}/`;
     log("mount", {
       hasMeaningfulSrc,
       existingSrcKind: existingSrc.startsWith("blob:")
@@ -341,12 +350,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       currentWordIndex = -1;
       fetch(url)
         .then((r) => r.json())
-        .then((data: unknown) => {
+        .then((data: JsonValue) => {
           timings = parseWordTimings(data);
           if (textContainer && !wordMenuCleanup)
             wordMenuCleanup = attachWordMenu(textContainer);
         })
-        .catch((err: unknown) =>
+        .catch((err: Error) =>
           console.error("AudioPlayer: failed to load timings", err),
         );
     };
@@ -389,7 +398,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     };
 
     const updateMediaSessionPosition = (): void => {
-      if (!ms || !ms.setPositionState) return;
+      if (!ms?.setPositionState) return;
       if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
       try {
         ms.setPositionState({
@@ -460,9 +469,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
             durationMs: Math.round(performance.now() - startedAt),
           });
         })
-        .catch((err: unknown) => {
+        .catch((err: Error) => {
           prefetchAbort = null;
-          if ((err as Error)?.name !== "AbortError") {
+          if (err.name !== "AbortError") {
             log("prefetch-fail", { url, error: String(err) });
             console.warn("AudioPlayer: next-chapter prefetch failed", err);
             // Reset prefetchedFor so we can retry later (e.g. on next
@@ -504,7 +513,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       audio
         .play()
         .then(() => log("swap-play-ok"))
-        .catch((err: unknown) => {
+        .catch((err: Error) => {
           log("swap-play-blocked", { error: String(err) });
           console.warn("AudioPlayer: chapter-swap play blocked", err);
         });
@@ -526,9 +535,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // the whole point of prefetch and is what makes background-tab
       // autoplay actually work. Fall back to the network URL otherwise
       // (e.g. desktop user who never triggered prefetch).
-      const useBlob =
-        prefetchedBlobUrl !== null && prefetchedFor === networkUrl;
-      const audioUrl = useBlob ? (prefetchedBlobUrl as string) : networkUrl;
+      const audioUrl =
+        prefetchedBlobUrl !== null && prefetchedFor === networkUrl
+          ? prefetchedBlobUrl
+          : networkUrl;
+      const useBlob = audioUrl !== networkUrl;
       log("go-to-next-chapter", {
         useBlob,
         prefetchedFor,
@@ -627,7 +638,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       ctx.onDestroy(() => {
         // Clear handlers + metadata so a stale player on a different page
         // doesn't get media-key events meant for nothing.
-        for (const a of [
+        const actions: readonly MediaSessionAction[] = [
           "play",
           "pause",
           "nexttrack",
@@ -635,7 +646,8 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           "seekbackward",
           "seekforward",
           "seekto",
-        ] as MediaSessionAction[]) {
+        ];
+        for (const a of actions) {
           try {
             ms.setActionHandler(a, null);
           } catch {}

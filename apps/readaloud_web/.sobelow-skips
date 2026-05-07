@@ -1,0 +1,7 @@
+
+Traversal.SendFile: Directory Traversal in `send_file`,lib/readaloud_web_web/controllers/audio_controller.ex:37,11FA1A6
+Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/readaloud_web_web/live/library_live.ex:315,3FB8464
+Traversal.SendFile: Directory Traversal in `send_file`,lib/readaloud_web_web/controllers/audio_controller.ex:87,67C5027
+Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/readaloud_web_web/live/library_live.ex:73,686FF83
+Traversal.SendFile: Directory Traversal in `send_file`,lib/readaloud_web_web/controllers/audio_controller.ex:28,751FCD
+Traversal.FileModule: Directory Traversal in `File.cp!`,lib/readaloud_web_web/live/library_live.ex:74,EF4D51
