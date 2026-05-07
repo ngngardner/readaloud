@@ -39,27 +39,8 @@ function coerce(raw: unknown): Partial<ReaderSettings> {
   return out;
 }
 
-const store = new PersistedRecord<ReaderSettings>(
+export const readerSettings = new PersistedRecord<ReaderSettings>(
   "readaloud-reader-settings",
   DEFAULTS,
   coerce,
 );
-
-type SettingsListener = (s: Readonly<ReaderSettings>) => void;
-const listeners = new Set<SettingsListener>();
-
-export const readerSettings = {
-  get(): Readonly<ReaderSettings> {
-    return store.get();
-  },
-  set(patch: Partial<ReaderSettings>): Readonly<ReaderSettings> {
-    const next = store.set(patch);
-    for (const fn of listeners) fn(next);
-    return next;
-  },
-  subscribe(fn: SettingsListener): () => void {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  },
-  defaults: DEFAULTS,
-};

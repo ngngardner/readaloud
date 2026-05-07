@@ -4,6 +4,7 @@ import type {
   ReadaloudPushEvents,
   ReadaloudWindowEvents,
 } from "./events";
+import type { ReadableStore } from "./store";
 
 type EmptyPayload = undefined | Record<string, never>;
 
@@ -61,6 +62,28 @@ export interface HookContext<
 
   onDestroy(fn: () => void): void;
   onUpdate(fn: () => void): void;
+
+  // Bind a DOM projection to a subscribable store. Runs apply once with the
+  // current snapshot, re-runs on every store change, and re-runs on every
+  // LiveView update so morphdom can't desync the DOM from the truth.
+  bindStore<T>(store: ReadableStore<T>, apply: (snapshot: T) => void): void;
+
+  // Bind a DOM projection to one or more events on an element. Runs apply
+  // once now, then on every listed event, then on every LiveView update.
+  // Use when the source of truth lives on the element itself (e.g. an
+  // <audio>'s paused state) rather than in a store.
+  //
+  // K is constrained to keyof HTMLElementEventMap rather than something
+  // narrower per element-subtype because TypeScript's lib.dom.d.ts puts
+  // every media event on every HTMLElement via GlobalEventHandlersEventMap
+  // (the legacy `onplay`/`onpause` mixin). Tightening this further would
+  // require shadowing lib.dom.d.ts — not worth it. Misuse fails silently
+  // (DOM no-ops on a wrong-target listener); we accept this trade-off.
+  bindElement<K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    events: readonly K[],
+    apply: () => void,
+  ): void;
 }
 
 const READALOUD_EVENT_PREFIX_RE =
@@ -124,6 +147,28 @@ export function defineHook<
 
         onUpdate(fn: () => void): void {
           updateHandlers.push(fn);
+        },
+
+        bindStore<T>(
+          store: ReadableStore<T>,
+          apply: (snapshot: T) => void,
+        ): void {
+          apply(store.get());
+          disposers.push(store.subscribe(apply));
+          updateHandlers.push(() => apply(store.get()));
+        },
+
+        bindElement<K extends keyof HTMLElementEventMap>(
+          target: HTMLElement,
+          events: readonly K[],
+          apply: () => void,
+        ): void {
+          apply();
+          for (const ev of events) {
+            target.addEventListener(ev, apply);
+            disposers.push(() => target.removeEventListener(ev, apply));
+          }
+          updateHandlers.push(apply);
         },
       };
 

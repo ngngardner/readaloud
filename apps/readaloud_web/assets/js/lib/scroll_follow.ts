@@ -1,4 +1,4 @@
-type Listener = (state: ScrollFollowState) => void;
+import { Notifier, type ReadableStore } from "./store";
 
 export interface ScrollFollowState {
   readonly playing: boolean;
@@ -6,22 +6,21 @@ export interface ScrollFollowState {
   readonly inAutoScroll: boolean;
 }
 
-class ScrollFollowController {
+class ScrollFollowController implements ReadableStore<ScrollFollowState> {
   private state: ScrollFollowState = Object.freeze({
     playing: false,
     autoScrollPaused: false,
     inAutoScroll: false,
   });
-  private readonly listeners = new Set<Listener>();
+  private readonly notifier = new Notifier<ScrollFollowState>();
   private autoScrollEndTimer: number | undefined;
 
   get(): ScrollFollowState {
     return this.state;
   }
 
-  subscribe(fn: Listener): () => void {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
+  subscribe(fn: (state: ScrollFollowState) => void): () => void {
+    return this.notifier.subscribe(fn);
   }
 
   setPlaying(playing: boolean): void {
@@ -59,7 +58,7 @@ class ScrollFollowController {
       return;
     }
     this.state = next;
-    for (const fn of this.listeners) fn(next);
+    this.notifier.notify(next);
   }
 }
 

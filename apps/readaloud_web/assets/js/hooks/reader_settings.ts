@@ -19,10 +19,10 @@ function isRangeKey(s: string): s is RangeKey {
 }
 
 // Lives on #reader-content. Owns the visual application of reader settings
-// to its own subtree (the chapter article). Subscribes to the settings
-// store; controls are wired up by ReaderSettingsControlsHook on the popover.
+// to its own subtree (the chapter article). Controls are wired up by
+// ReaderSettingsControlsHook on the popover.
 export const ReaderStylesHook = defineHook<HTMLDivElement>((ctx) => {
-  const apply = (s: Readonly<ReaderSettings>): void => {
+  ctx.bindStore(readerSettings, (s) => {
     ctx.el.style.maxWidth = `${s.maxWidth}px`;
     const article = ctx.el.querySelector<HTMLElement>(
       `#${DOM_IDS.CHAPTER_TEXT}`,
@@ -32,13 +32,7 @@ export const ReaderStylesHook = defineHook<HTMLDivElement>((ctx) => {
       article.style.fontSize = `${s.fontSize}px`;
       article.style.lineHeight = String(s.lineHeight);
     }
-  };
-
-  apply(readerSettings.get());
-  ctx.onDestroy(readerSettings.subscribe(apply));
-  // LiveView patches (chapter swap) wipe runtime-set inline style attrs
-  // via morphdom — re-apply current settings after every patch.
-  ctx.onUpdate(() => apply(readerSettings.get()));
+  });
 });
 
 // Lives on #reader-settings (the popover). Owns the form controls inside
@@ -77,10 +71,7 @@ export const ReaderSettingsControlsHook = defineHook<HTMLDivElement>((ctx) => {
     });
   }
 
-  syncControls(readerSettings.get());
-  syncActiveSwatches();
-
-  function syncControls(s: Readonly<ReaderSettings>): void {
+  ctx.bindStore(readerSettings, (s) => {
     for (const key of RANGE_KEYS) {
       const input = ctx.el.querySelector<HTMLInputElement>(
         `input[type=range][name="${key}"]`,
@@ -88,19 +79,25 @@ export const ReaderSettingsControlsHook = defineHook<HTMLDivElement>((ctx) => {
       if (input) input.value = String(s[key]);
     }
     if (autoNext) autoNext.checked = s.autoNextChapter;
-  }
+    for (const btn of ctx.el.querySelectorAll<HTMLElement>(
+      "[data-font-family]",
+    )) {
+      btn.classList.toggle("active", btn.dataset.fontFamily === s.fontFamily);
+    }
+  });
 
   // Theme swatches live in this popover but the active state is tracked
   // on documentElement (set by ThemeHook + bootstrap inline script). The
   // hook is on app-shell, mounting before LV renders the popover, so it
-  // can't see swatches at its own mount time — sync them here instead.
-  function syncActiveSwatches(): void {
+  // can't see swatches at its own mount time. ctx.onUpdate also covers
+  // the morphdom-strip-on-chapter-swap case.
+  const syncActiveSwatches = (): void => {
     const current =
       document.documentElement.getAttribute("data-theme") ?? "dark";
-    for (const el of ctx.el.querySelectorAll<HTMLElement>(
-      "[data-set-theme]",
-    )) {
+    for (const el of ctx.el.querySelectorAll<HTMLElement>("[data-set-theme]")) {
       el.classList.toggle("active", el.dataset.setTheme === current);
     }
-  }
+  };
+  syncActiveSwatches();
+  ctx.onUpdate(syncActiveSwatches);
 });

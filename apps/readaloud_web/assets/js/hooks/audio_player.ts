@@ -45,6 +45,11 @@ const POSITION_REPORT_INTERVAL_MS = 5000;
 const SKIP_SECONDS = 10;
 const AUTO_SCROLL_GRACE_MS = 800;
 
+// Play/pause button glyphs. The LV template renders ▶ (as &#9654;) as the
+// static default; the hook overwrites textContent on every audio play/pause.
+const PLAY_GLYPH = "▶";
+const PAUSE_GLYPH = "❚❚";
+
 function coercePlayerPrefs(raw: unknown): Partial<PlayerPrefs> {
   if (!raw || typeof raw !== "object") return {};
   const r = raw as Record<string, unknown>;
@@ -161,13 +166,6 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     let wordMenuCleanup: (() => void) | undefined;
     let intersectionObserver: IntersectionObserver | undefined;
 
-    const applyAudioPrefs = (): void => {
-      const p = playerPrefs.get();
-      audio.playbackRate = p.speed;
-      audio.volume = p.volume;
-      updateSpeedBadge(p.speed);
-    };
-
     const updateTimeDisplay = (): void => {
       if (!timeDisplay) return;
       timeDisplay.textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
@@ -178,19 +176,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       speedBadge.textContent = speed === 1 ? "1x" : `${speed}x`;
     };
 
-    const setSpeed = (speed: number): void => {
-      playerPrefs.set({ speed });
-      audio.playbackRate = speed;
-      updateSpeedBadge(speed);
-    };
-
     const cycleSpeed = (direction: "up" | "down"): void => {
       const closest = SPEEDS.reduce((best, s) =>
         Math.abs(s - audio.playbackRate) < Math.abs(best - audio.playbackRate)
           ? s
           : best,
       );
-      setSpeed(cycleOption(SPEEDS, closest, direction));
+      playerPrefs.set({ speed: cycleOption(SPEEDS, closest, direction) });
     };
 
     const togglePlayback = (): void => {
@@ -273,14 +265,23 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
     };
 
-    // Initial setup
-    if (playerPrefs.get().collapsed) ctx.el.classList.add("collapsed");
-
     const volSlider = ctx.el.querySelector<HTMLInputElement>(
       "[data-volume-slider]",
     );
-    if (volSlider) volSlider.value = String(playerPrefs.get().volume);
-    updateSpeedBadge(playerPrefs.get().speed);
+
+    // Player prefs → DOM. Bound to the store so chapter-swap re-renders can't
+    // desync the slider, the speed badge, or the collapsed class from the
+    // user's actual preference. The audio element's playbackRate/volume are
+    // also re-applied here; src changes can reset playbackRate, so the
+    // loadedmetadata handler below re-runs apply for that case.
+    const applyPlayerPrefs = (p: Readonly<PlayerPrefs>): void => {
+      audio.playbackRate = p.speed;
+      audio.volume = p.volume;
+      updateSpeedBadge(p.speed);
+      if (volSlider) volSlider.value = String(p.volume);
+      ctx.el.classList.toggle("collapsed", p.collapsed);
+    };
+    ctx.bindStore(playerPrefs, applyPlayerPrefs);
 
     // The <audio> element has phx-update="ignore" so it's preserved across
     // chapter switches (push_patch) AND across LV reconnect/re-mount. The
@@ -325,10 +326,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     } else {
       log("preserve-existing-src");
     }
-    applyAudioPrefs();
 
     ctx.on(audio, "loadedmetadata", () => {
-      applyAudioPrefs();
+      applyPlayerPrefs(playerPrefs.get());
       updateTimeDisplay();
       updateMediaSessionPosition();
     });
@@ -668,16 +668,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     );
     if (collapseToggle) {
       ctx.on(collapseToggle, "click", () => {
-        const isCollapsed = ctx.el.classList.toggle("collapsed");
-        playerPrefs.set({ collapsed: isCollapsed });
+        playerPrefs.set({ collapsed: !playerPrefs.get().collapsed });
       });
     }
 
     if (volSlider) {
       ctx.on(volSlider, "input", () => {
-        const vol = Number.parseFloat(volSlider.value);
-        audio.volume = vol;
-        playerPrefs.set({ volume: vol });
+        playerPrefs.set({ volume: Number.parseFloat(volSlider.value) });
       });
     }
 
@@ -730,13 +727,19 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
     });
 
-    // Play/pause state — drives scrollFollow + button icon + position report
+    // Play/pause icon — bound to the audio element's own state so it stays
+    // in sync across morphdom patches (chapter swap re-renders #audio-player
+    // and would otherwise reset the button text to the template default).
+    ctx.bindElement(audio, ["play", "pause"], () => {
+      playPauseBtn.textContent = audio.paused ? PLAY_GLYPH : PAUSE_GLYPH;
+    });
+
+    // Side effects on play/pause that aren't DOM projection.
     ctx.on(audio, "play", () => {
       log("audio-play", {
         currentTime: audio.currentTime,
         duration: audio.duration,
       });
-      playPauseBtn.innerHTML = "&#10074;&#10074;";
       scrollFollow.setPlaying(true);
       startHighlightLoop();
       if (ms) ms.playbackState = "playing";
@@ -751,7 +754,6 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           audio.duration > 0 &&
           audio.currentTime >= audio.duration - 0.5,
       });
-      playPauseBtn.innerHTML = "&#9654;";
       scrollFollow.setPlaying(false);
       stopHighlightLoop();
       if (ms) ms.playbackState = "paused";
@@ -822,12 +824,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       ctx.onDestroy(() => intersectionObserver?.disconnect());
     }
 
-    const unsubScroll = scrollFollow.subscribe((s) => {
+    ctx.bindStore(scrollFollow, (s) => {
       if (!resyncBtn) return;
-      if (s.autoScrollPaused) resyncBtn.classList.remove("hidden");
-      else resyncBtn.classList.add("hidden");
+      resyncBtn.classList.toggle("hidden", !s.autoScrollPaused);
     });
-    ctx.onDestroy(unsubScroll);
 
     // Word menu actions
     ctx.on(window, "word-action", (detail) => {

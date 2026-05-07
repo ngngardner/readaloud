@@ -731,11 +731,10 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
             <div class="flex-1 [.collapsed_&]:hidden"></div>
 
-            <%!-- Speed badge (click to cycle). phx-update="ignore" so the
-                  hook's textContent updates aren't reverted by morphdom. --%>
+            <%!-- Speed badge text is bound to playerPrefs.speed by the
+                  AudioPlayerHook (re-applied on every LV patch). --%>
             <button
               id="speed-badge"
-              phx-update="ignore"
               class="btn btn-ghost btn-xs font-mono tabular-nums [.collapsed_&]:hidden"
               title="Click to change speed"
             >

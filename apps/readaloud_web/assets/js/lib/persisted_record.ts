@@ -1,5 +1,10 @@
-export class PersistedRecord<T extends object> {
+import { Notifier, type ReadableStore } from "./store";
+
+export class PersistedRecord<T extends object>
+  implements ReadableStore<Readonly<T>>
+{
   private current: Readonly<T>;
+  private readonly notifier = new Notifier<Readonly<T>>();
 
   constructor(
     private readonly key: string,
@@ -25,9 +30,13 @@ export class PersistedRecord<T extends object> {
     return this.current;
   }
 
-  set(patch: Partial<T>): Readonly<T> {
+  set(patch: Partial<T>): void {
     this.current = Object.freeze({ ...this.current, ...patch });
     localStorage.setItem(this.key, JSON.stringify(this.current));
-    return this.current;
+    this.notifier.notify(this.current);
+  }
+
+  subscribe(fn: (snapshot: Readonly<T>) => void): () => void {
+    return this.notifier.subscribe(fn);
   }
 }
