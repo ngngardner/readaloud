@@ -1,6 +1,7 @@
 # Build artifacts
 /_build/
 /deps/
+result
 
 # Database files (root + per-app — readaloud_web tests historically
 # leaked a stale SQLite into apps/readaloud_web/)
