@@ -519,14 +519,29 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         });
     };
 
+    // Build a /books/:bookId/read/:chapterId?nav=internal URL by swapping
+    // the chapter id in the current pathname. The current path always
+    // matches /books/:bookId/read/:N (we're rendering the reader LV), so
+    // a regex replace is enough — no need to thread book_id through the
+    // hook's dataset. Returns null if the pathname isn't on the reader.
+    const buildReaderUrl = (chapterId: string): string | null => {
+      const path = window.location.pathname;
+      if (!/\/books\/\d+\/read\/\d+/.test(path)) return null;
+      return (
+        path.replace(/\/read\/\d+/, `/read/${chapterId}`) + "?nav=internal"
+      );
+    };
+
     const goToNextChapter = (): boolean => {
       const networkUrl = ctx.dataset.nextAudioUrl;
       const timingsUrl = ctx.dataset.nextTimingsUrl;
       const title = ctx.dataset.nextChapterTitle ?? "";
-      if (!networkUrl || !timingsUrl) {
+      const nextChapterId = ctx.dataset.nextChapterId;
+      if (!networkUrl || !timingsUrl || !nextChapterId) {
         log("next-chapter-blocked-no-target", {
           hasUrl: !!networkUrl,
           hasTimings: !!timingsUrl,
+          hasChapterId: !!nextChapterId,
         });
         return false;
       }
@@ -562,11 +577,28 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
 
       swapToChapter(audioUrl, timingsUrl, title);
-      // Tell the server to push_patch the URL + reload chapter assigns.
-      // Fire-and-forget: if the WebSocket is asleep (locked phone), the
-      // event queues until reconnect — audio playback doesn't depend on it.
+
+      // Update browser URL client-side BEFORE notifying the server. This
+      // is the critical fix for sleeping-mobile autoplay: server-side
+      // push_patch only updates the URL when its diff reaches the
+      // client, which doesn't happen if the WebSocket is suspended (and
+      // the LV process times out before delivery). With this pushState
+      // the URL stays in sync with audio.src regardless of WS state, so
+      // a refresh after wake lands on the chapter that's actually
+      // playing — not the previous one.
+      const newUrl = buildReaderUrl(nextChapterId);
+      if (newUrl) {
+        history.pushState({}, "", newUrl);
+        log("history-pushstate", { url: newUrl });
+      }
+
+      // Tell the server to reload chapter assigns. The flag tells it to
+      // skip its own push_patch (we already updated the URL above —
+      // letting the server pushState too would create a duplicate
+      // history entry). Fire-and-forget: if the socket is asleep, the
+      // server reloads on next reconnect-mount instead.
       log("push-event", { event: "next_chapter" });
-      ctx.pushEvent("next_chapter");
+      ctx.pushEvent("next_chapter", { url_already_patched: true });
       return true;
     };
 
@@ -574,14 +606,23 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       const url = ctx.dataset.prevAudioUrl;
       const timingsUrl = ctx.dataset.prevTimingsUrl;
       const title = ctx.dataset.prevChapterTitle ?? "";
-      if (!url || !timingsUrl) {
+      const prevChapterId = ctx.dataset.prevChapterId;
+      if (!url || !timingsUrl || !prevChapterId) {
         log("prev-chapter-blocked-no-target");
         return false;
       }
       log("go-to-prev-chapter", { toTitle: title });
       swapToChapter(url, timingsUrl, title);
+
+      // Same client-side URL update as next-chapter; see comment there.
+      const newUrl = buildReaderUrl(prevChapterId);
+      if (newUrl) {
+        history.pushState({}, "", newUrl);
+        log("history-pushstate", { url: newUrl });
+      }
+
       log("push-event", { event: "prev_chapter" });
-      ctx.pushEvent("prev_chapter");
+      ctx.pushEvent("prev_chapter", { url_already_patched: true });
       return true;
     };
 

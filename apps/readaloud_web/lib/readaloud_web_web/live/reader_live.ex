@@ -159,7 +159,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   # -- Event handlers --
 
   @impl true
-  def handle_event("prev_chapter", _params, socket) do
+  def handle_event("prev_chapter", params, socket) do
     Logger.info(
       "[autoplay] prev_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
     )
@@ -170,13 +170,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        Logger.info("[autoplay] prev_chapter push_patch to=#{ch.id}")
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
-
-        {:noreply,
-         push_patch(socket,
-           to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
-         )}
+        {:noreply, advance_chapter(socket, ch, params)}
     end
   end
 
@@ -188,7 +183,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   # would tear down the OS audio session and require a fresh user gesture
   # to resume playback. With push_patch the audio_player JS hook owns
   # playback continuity and we just patch the URL + reload chapter assigns.
-  def handle_event("next_chapter", _params, socket) do
+  def handle_event("next_chapter", params, socket) do
     Logger.info(
       "[autoplay] next_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
     )
@@ -199,13 +194,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        Logger.info("[autoplay] next_chapter push_patch to=#{ch.id}")
         reset_progress_for_chapter(socket.assigns.book.id, ch.id)
-
-        {:noreply,
-         push_patch(socket,
-           to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
-         )}
+        {:noreply, advance_chapter(socket, ch, params)}
     end
   end
 
@@ -847,6 +837,33 @@ defmodule ReadaloudWebWeb.ReaderLive do
   defp next_chapter(current, chapters) do
     idx = Enum.find_index(chapters, &(&1.id == current.id))
     if idx && idx < length(chapters) - 1, do: Enum.at(chapters, idx + 1), else: nil
+  end
+
+  # Two paths for advancing the chapter:
+  #
+  #   - Manual button click (phx-click) sends no payload. Server owns the
+  #     URL update via push_patch and the client's LV runtime handles
+  #     browser-history mechanics.
+  #
+  #   - Audio-player JS hook (audio.ended autoplay or lock-screen
+  #     next/prev) sends `url_already_patched: true` because it already
+  #     called history.pushState client-side. That keeps URL/audio.src in
+  #     sync even when the WebSocket is suspended (mobile lock) and our
+  #     diff would never reach the browser before the LV process times
+  #     out — the original autoplay-stranding bug. We just reload chapter
+  #     assigns; pushing another patch would create a duplicate history
+  #     entry on connected clients.
+  defp advance_chapter(socket, ch, %{"url_already_patched" => true}) do
+    Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client patched URL)")
+    assign_chapter(socket, ch.id, restore_progress?: false)
+  end
+
+  defp advance_chapter(socket, ch, _params) do
+    Logger.info("[autoplay] advance_chapter push_patch to=#{ch.id}")
+
+    push_patch(socket,
+      to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
+    )
   end
 
   defp chapter_index(chapter, chapters) do

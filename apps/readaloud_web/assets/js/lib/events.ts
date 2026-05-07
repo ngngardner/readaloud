@@ -25,8 +25,13 @@ export interface LiveReloader {
 export interface ReadaloudPushEvents {
   scroll: { position: number };
   audio_position: { position_ms: number };
-  next_chapter: Record<string, never>;
-  prev_chapter: Record<string, never>;
+  // url_already_patched: the audio_player JS hook updated the browser URL
+  // via history.pushState before sending this event. The server should
+  // reload chapter assigns but skip its own push_patch (which would push
+  // a duplicate history entry). Manual button clicks via phx-click omit
+  // the flag and get the normal server-driven push_patch path.
+  next_chapter: { url_already_patched?: true };
+  prev_chapter: { url_already_patched?: true };
   jump_to_chapter: { chapter_id: ChapterId };
 }
 
