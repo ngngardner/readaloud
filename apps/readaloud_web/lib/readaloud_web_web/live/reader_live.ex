@@ -3,6 +3,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   require Logger
 
+  alias ReadaloudReader.Progress.Observation
   alias ReadaloudWebWeb.ThemeSelector
 
   @impl true
@@ -129,9 +130,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
       if conflict_chapter do
         {:noreply, assign(socket, show_conflict_modal: true, conflict_chapter: conflict_chapter)}
       else
-        ReadaloudReader.upsert_progress(%{
+        # Same-chapter observe is a no-op for audio_position_ms / scroll
+        # (nil fields preserve stored values). On cross-chapter (rare here:
+        # the upstream button/jump handler usually already wrote an explicit
+        # reset before push_patch fired) merge_attrs zeros the cursor — same
+        # outcome the dedicated reset path used to produce.
+        ReadaloudReader.observe!(%Observation{
           book_id: socket.assigns.book.id,
-          current_chapter_id: socket.assigns.chapter.id
+          chapter_id: socket.assigns.chapter.id,
+          observed_at: DateTime.utc_now()
         })
 
         ReadaloudAudiobook.reprioritize_pending_jobs(
@@ -170,7 +177,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        reset_progress_for_chapter(socket.assigns.book.id, ch.id)
         {:noreply, advance_chapter(socket, ch, params)}
     end
   end
@@ -194,7 +200,6 @@ defmodule ReadaloudWebWeb.ReaderLive do
         {:noreply, socket}
 
       ch ->
-        reset_progress_for_chapter(socket.assigns.book.id, ch.id)
         {:noreply, advance_chapter(socket, ch, params)}
     end
   end
@@ -230,32 +235,50 @@ defmodule ReadaloudWebWeb.ReaderLive do
     do: {:noreply, socket}
 
   def handle_event("scroll", %{"position" => pos}, socket) do
-    ReadaloudReader.upsert_progress(%{
+    ReadaloudReader.observe!(%Observation{
       book_id: socket.assigns.book.id,
-      current_chapter_id: socket.assigns.chapter.id,
-      scroll_position: pos
+      chapter_id: socket.assigns.chapter.id,
+      scroll_position: pos,
+      observed_at: DateTime.utc_now()
     })
 
     {:noreply, socket}
   end
 
   @impl true
-  def handle_event("audio_position", _params, %{assigns: %{show_conflict_modal: true}} = socket),
-    do: {:noreply, socket}
+  def handle_event(
+        "progress_observations",
+        _params,
+        %{assigns: %{show_conflict_modal: true}} = socket
+      ),
+      do: {:noreply, socket}
 
-  def handle_event("audio_position", %{"position_ms" => ms}, socket) do
-    ReadaloudReader.upsert_progress(%{
-      book_id: socket.assigns.book.id,
-      current_chapter_id: socket.assigns.chapter.id,
-      audio_position_ms: ms
-    })
-
+  # Single durable channel for client-owned position observations. The JS
+  # `progressBuffer` flushes here while the WebSocket is alive; if the WS
+  # drops (mobile screen lock), the same observation shape goes to the
+  # `/api/books/:id/progress` HTTP beacon instead. Both paths converge on
+  # `ReadaloudReader.observe_batch!/2`, which is order-independent
+  # (stale-drop by `observed_at`), so live + buffered drains can
+  # interleave safely. Malformed entries from a trusted socket should be
+  # impossible — we drop silently here; the beacon path logs them.
+  def handle_event("progress_observations", %{"observations" => raw}, socket)
+      when is_list(raw) do
+    ReadaloudReader.observe_batch!(socket.assigns.book.id, raw)
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("dismiss_conflict", _params, socket) do
-    reset_progress_for_chapter(socket.assigns.book.id, socket.assigns.chapter.id)
+    # User chose to stay on the current chapter rather than jump to the
+    # saved (further-along) chapter. Pin the row to here at a fresh cursor
+    # so the next page load won't re-trigger the conflict modal.
+    ReadaloudReader.observe!(%Observation{
+      book_id: socket.assigns.book.id,
+      chapter_id: socket.assigns.chapter.id,
+      audio_position_ms: 0,
+      scroll_position: 0.0,
+      observed_at: DateTime.utc_now()
+    })
 
     {:noreply, assign(socket, show_conflict_modal: false, conflict_chapter: nil)}
   end
@@ -272,11 +295,19 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   @impl true
   def handle_event("jump_to_chapter", %{"chapter_id" => chapter_id}, socket) do
-    reset_progress_for_chapter(socket.assigns.book.id, chapter_id)
+    cid = to_integer(chapter_id)
+
+    ReadaloudReader.observe!(%Observation{
+      book_id: socket.assigns.book.id,
+      chapter_id: cid,
+      audio_position_ms: 0,
+      scroll_position: 0.0,
+      observed_at: DateTime.utc_now()
+    })
 
     {:noreply,
      push_patch(socket,
-       to: ~p"/books/#{socket.assigns.book.id}/read/#{chapter_id}?nav=internal"
+       to: ~p"/books/#{socket.assigns.book.id}/read/#{cid}?nav=internal"
      )}
   end
 
@@ -628,6 +659,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
         data-audio-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/audio"}
         data-timings-url={~p"/api/books/#{@book.id}/chapters/#{@chapter.id}/timings"}
         data-initial-position={@initial_position_ms}
+        data-book-id={@book.id}
         data-book-title={@book.title}
         data-chapter-title={@chapter.title || "Chapter #{@chapter.number}"}
         data-chapter-id={@chapter.id}
@@ -820,14 +852,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
   # -- Private helpers --
 
-  defp reset_progress_for_chapter(book_id, chapter_id) do
-    ReadaloudReader.upsert_progress(%{
-      book_id: book_id,
-      current_chapter_id: chapter_id,
-      audio_position_ms: 0,
-      scroll_position: 0.0
-    })
-  end
+  defp to_integer(n) when is_integer(n), do: n
+  defp to_integer(s) when is_binary(s), do: String.to_integer(s)
 
   defp prev_chapter(current, chapters) do
     idx = Enum.find_index(chapters, &(&1.id == current.id))
@@ -839,27 +865,35 @@ defmodule ReadaloudWebWeb.ReaderLive do
     if idx && idx < length(chapters) - 1, do: Enum.at(chapters, idx + 1), else: nil
   end
 
-  # Two paths for advancing the chapter:
+  # Two paths for advancing the chapter, distinguished by `client_owned`:
   #
-  #   - Manual button click (phx-click) sends no payload. Server owns the
-  #     URL update via push_patch and the client's LV runtime handles
-  #     browser-history mechanics.
+  #   - Manual button click (phx-click): server is the authority for both
+  #     URL and persistence. We write the chapter pivot via observe!/1,
+  #     then push_patch so the LV diff carries the new URL to the browser.
   #
   #   - Audio-player JS hook (audio.ended autoplay or lock-screen
-  #     next/prev) sends `url_already_patched: true` because it already
-  #     called history.pushState client-side. That keeps URL/audio.src in
-  #     sync even when the WebSocket is suspended (mobile lock) and our
-  #     diff would never reach the browser before the LV process times
-  #     out — the original autoplay-stranding bug. We just reload chapter
-  #     assigns; pushing another patch would create a duplicate history
-  #     entry on connected clients.
-  defp advance_chapter(socket, ch, %{"url_already_patched" => true}) do
-    Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client patched URL)")
+  #     next/prev): the JS has *already* persisted the pivot through the
+  #     progressBuffer (which buffers + drains via WS or sendBeacon, so
+  #     even a suspended socket eventually delivers) AND already called
+  #     history.pushState client-side. We just reload chapter assigns;
+  #     pushing another patch would create a duplicate history entry on
+  #     connected clients, and re-writing progress would race with the
+  #     buffered drain.
+  defp advance_chapter(socket, ch, %{"client_owned" => true}) do
+    Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client-owned)")
     assign_chapter(socket, ch.id, restore_progress?: false)
   end
 
   defp advance_chapter(socket, ch, _params) do
     Logger.info("[autoplay] advance_chapter push_patch to=#{ch.id}")
+
+    ReadaloudReader.observe!(%Observation{
+      book_id: socket.assigns.book.id,
+      chapter_id: ch.id,
+      audio_position_ms: 0,
+      scroll_position: 0.0,
+      observed_at: DateTime.utc_now()
+    })
 
     push_patch(socket,
       to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"

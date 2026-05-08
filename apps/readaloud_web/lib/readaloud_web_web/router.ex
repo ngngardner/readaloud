@@ -49,5 +49,7 @@ defmodule ReadaloudWebWeb.Router do
     get "/books/:book_id/cover", AudioController, :cover
     get "/books/:book_id/chapters/:chapter_id/audio", AudioController, :stream
     get "/books/:book_id/chapters/:chapter_id/timings", AudioController, :timings
+
+    post "/books/:book_id/progress", ProgressController, :beacon
   end
 end

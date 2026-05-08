@@ -1,6 +1,10 @@
 import { defineHook } from "../lib/hook";
 import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
 import { PersistedRecord } from "../lib/persisted_record";
+import {
+  type ProgressBuffer,
+  attachProgressBuffer,
+} from "../lib/progress_buffer";
 import { attachScrubber, fractionAt } from "../lib/scrubber";
 import { scrollFollow } from "../lib/scroll_follow";
 import { readerSettings } from "../lib/reader_settings_store";
@@ -18,6 +22,7 @@ interface AudioPlayerDataset {
   audioUrl: string;
   timingsUrl: string;
   initialPosition?: string;
+  bookId?: string;
   bookTitle?: string;
   chapterTitle?: string;
   chapterId?: string;
@@ -174,6 +179,29 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     let rafId: number | undefined;
     let wordMenuCleanup: (() => void) | undefined;
     let intersectionObserver: IntersectionObserver | undefined;
+
+    // Durable position-observation buffer. The hook owns the lifetime;
+    // localStorage owns the cross-mount state (so a buffered observation
+    // from before a LV remount or page-hide drains on the next mount).
+    //
+    // `data-book-id` is set by the LV template and is part of the hook's
+    // contract — if it's ever missing or unparseable, that's a template
+    // bug and we want to fail loudly at mount, not silently no-op every
+    // observation downstream.
+    const bookId = Number.parseInt(ctx.dataset.bookId ?? "", 10);
+    if (!Number.isFinite(bookId)) {
+      throw new Error(
+        "AudioPlayerHook: data-book-id is missing or unparseable",
+      );
+    }
+    const progress: ProgressBuffer = attachProgressBuffer({
+      bookId,
+      beaconUrl: `/api/books/${bookId}/progress`,
+      pushObservations: (observations) => {
+        ctx.pushEvent("progress_observations", { observations });
+      },
+    });
+    ctx.onDestroy(() => progress.detach());
 
     const updateTimeDisplay = (): void => {
       if (!timeDisplay) return;
@@ -592,13 +620,24 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         log("history-pushstate", { url: newUrl });
       }
 
-      // Tell the server to reload chapter assigns. The flag tells it to
-      // skip its own push_patch (we already updated the URL above —
-      // letting the server pushState too would create a duplicate
-      // history entry). Fire-and-forget: if the socket is asleep, the
-      // server reloads on next reconnect-mount instead.
+      // Persist the pivot through the durable buffer. If the WS is
+      // suspended (mobile lock — the original autoplay-stranding bug),
+      // the buffer falls back to sendBeacon on visibilitychange:hidden
+      // so the new chapter / 0:00 reset survives even with a dead WS.
+      progress.observe({
+        chapter_id: nextChapterId,
+        audio_position_ms: 0,
+        scroll_position: 0,
+      });
+
+      // Tell the server to reload chapter assigns. `client_owned: true`
+      // means JS owns BOTH the URL update (already pushState'd above)
+      // AND the persistence write (already buffered above), so the
+      // server skips its own push_patch and observe! — pushing twice
+      // would create a duplicate history entry, and observing twice
+      // would race with the buffered drain.
       log("push-event", { event: "next_chapter" });
-      ctx.pushEvent("next_chapter", { url_already_patched: true });
+      ctx.pushEvent("next_chapter", { client_owned: true });
       return true;
     };
 
@@ -614,15 +653,22 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       log("go-to-prev-chapter", { toTitle: title });
       swapToChapter(url, timingsUrl, title);
 
-      // Same client-side URL update as next-chapter; see comment there.
+      // Same client-side URL update + persistence as next-chapter; see
+      // the comment block in goToNextChapter for the full rationale.
       const newUrl = buildReaderUrl(prevChapterId);
       if (newUrl) {
         history.pushState({}, "", newUrl);
         log("history-pushstate", { url: newUrl });
       }
 
+      progress.observe({
+        chapter_id: prevChapterId,
+        audio_position_ms: 0,
+        scroll_position: 0,
+      });
+
       log("push-event", { event: "prev_chapter" });
-      ctx.pushEvent("prev_chapter", { url_already_patched: true });
+      ctx.pushEvent("prev_chapter", { client_owned: true });
       return true;
     };
 
@@ -776,7 +822,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         Math.abs(nowMs - lastReportedMs) >= POSITION_REPORT_INTERVAL_MS
       ) {
         lastReportedMs = nowMs;
-        ctx.pushEvent("audio_position", { position_ms: nowMs });
+        const chapterId = ctx.dataset.chapterId;
+        if (chapterId) {
+          progress.observe({
+            chapter_id: chapterId,
+            audio_position_ms: nowMs,
+          });
+        }
       }
     });
 
@@ -810,9 +862,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       scrollFollow.setPlaying(false);
       stopHighlightLoop();
       if (ms) ms.playbackState = "paused";
-      ctx.pushEvent("audio_position", {
-        position_ms: Math.round(audio.currentTime * 1000),
-      });
+      const chapterId = ctx.dataset.chapterId;
+      if (chapterId) {
+        progress.observe({
+          chapter_id: chapterId,
+          audio_position_ms: Math.round(audio.currentTime * 1000),
+        });
+      }
     });
     ctx.on(audio, "ended", () => {
       log("audio-ended", {
