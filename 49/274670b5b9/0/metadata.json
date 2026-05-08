@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "49274670b5b9",
+  "session_id": "5ed9247e-3e8d-40e0-b7da-7315299f837c",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-08T14:10:09.431046772Z",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "apps/readaloud_reader/lib/readaloud_reader.ex",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/progress_buffer.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/controllers/progress_controller.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "8da2d09570fa",
+  "token_usage": {
+    "input_tokens": 155,
+    "cache_creation_tokens": 1006751,
+    "cache_read_tokens": 16987460,
+    "output_tokens": 112726,
+    "api_call_count": 101
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-08T14:10:09.045390513Z",
+    "agent_lines": 0,
+    "human_added": 849,
+    "human_modified": 82,
+    "human_removed": 0,
+    "total_committed": 872,
+    "agent_percentage": 0
+  }
+}
