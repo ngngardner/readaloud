@@ -16,12 +16,16 @@ defmodule ReadaloudTTS.TextChunker do
   ]
 
   def chunk(text, max_chars \\ @default_max_chars) do
-    text = String.trim(text)
+    case String.trim(text) do
+      "" ->
+        []
 
-    if String.length(text) <= max_chars do
-      [text]
-    else
-      do_chunk(text, max_chars, [])
+      trimmed ->
+        if String.length(trimmed) <= max_chars do
+          [trimmed]
+        else
+          do_chunk(trimmed, max_chars, [])
+        end
     end
   end
 

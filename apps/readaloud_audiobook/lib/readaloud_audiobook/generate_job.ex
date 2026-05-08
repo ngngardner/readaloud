@@ -28,6 +28,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
          chunks = TextChunker.chunk(clean_text),
+         :ok <- ensure_non_empty(chunks),
          {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, task) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
@@ -65,6 +66,12 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
       reraise exception, __STACKTRACE__
   end
+
+  # Empty/whitespace-only chapters surface as a hard failure so Oban stops
+  # retrying — the upstream LocalAI TTS returns a 500 (`torch.cat()` on empty
+  # tensor list) and Req+Oban together used to spin for ~minutes per attempt.
+  defp ensure_non_empty([]), do: {:error, :empty_chapter_content}
+  defp ensure_non_empty(_chunks), do: :ok
 
   defp synthesize_chunks(chunks, task) do
     total = length(chunks)
