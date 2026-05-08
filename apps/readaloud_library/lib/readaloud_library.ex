@@ -7,6 +7,16 @@ defmodule ReadaloudLibrary do
   def get_book(id), do: Repo.get(Book, id)
   def get_book!(id), do: Repo.get!(Book, id)
 
+  def book_titles_by_ids([]), do: %{}
+
+  def book_titles_by_ids(ids) when is_list(ids) do
+    Book
+    |> where([b], b.id in ^ids)
+    |> select([b], {b.id, b.title})
+    |> Repo.all()
+    |> Map.new()
+  end
+
   def create_book(attrs) do
     %Book{} |> Book.changeset(attrs) |> Repo.insert()
   end

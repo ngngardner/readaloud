@@ -12,8 +12,7 @@ defmodule ReadaloudWebWeb.TasksLive do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook")
     end
 
-    all_tasks = load_all_tasks()
-    {active, completed} = split_tasks(all_tasks)
+    {active, completed} = load_split_rows()
 
     {:ok,
      socket
@@ -21,8 +20,8 @@ defmodule ReadaloudWebWeb.TasksLive do
        page_title: "Tasks",
        active_nav: :tasks,
        task_count: length(active),
-       active_tasks: active,
-       completed_tasks: completed
+       active_rows: active,
+       completed_rows: completed
      )}
   end
 
@@ -43,7 +42,7 @@ defmodule ReadaloudWebWeb.TasksLive do
 
     if task = lookup_task(task_id), do: Tasks.fail(task, "Cancelled by user")
 
-    {:noreply, reload_tasks(socket)}
+    {:noreply, reload_rows(socket)}
   end
 
   @impl true
@@ -64,19 +63,19 @@ defmodule ReadaloudWebWeb.TasksLive do
         :ok
     end
 
-    {:noreply, reload_tasks(socket)}
+    {:noreply, reload_rows(socket)}
   end
 
   @impl true
   def handle_event("clear_completed", _params, socket) do
     ReadaloudAudiobook.clear_completed_tasks()
     ReadaloudImporter.clear_completed_tasks()
-    {:noreply, reload_tasks(socket)}
+    {:noreply, reload_rows(socket)}
   end
 
   @impl true
   def handle_info(_, socket) do
-    {:noreply, reload_tasks(socket)}
+    {:noreply, reload_rows(socket)}
   end
 
   @impl true
@@ -89,36 +88,34 @@ defmodule ReadaloudWebWeb.TasksLive do
       <div class="mb-8">
         <div class="flex items-center gap-3 mb-4">
           <h2 class="text-xl font-semibold">Active</h2>
-          <span :if={@active_tasks != []} class="badge badge-warning badge-sm">
-            {length(@active_tasks)}
+          <span :if={@active_rows != []} class="badge badge-warning badge-sm">
+            {length(@active_rows)}
           </span>
         </div>
 
-        <div :if={@active_tasks == []} class="text-base-content/50 py-6 text-center">
+        <div :if={@active_rows == []} class="text-base-content/50 py-6 text-center">
           No active tasks
         </div>
 
         <div class="space-y-3">
           <div
-            :for={task <- @active_tasks}
+            :for={row <- @active_rows}
             class="card bg-base-200 p-4"
           >
             <div class="flex items-center gap-3">
               <.icon name="hero-arrow-path" class="size-5 text-warning animate-spin shrink-0" />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="font-medium truncate">{task_description(task)}</span>
-                  <span class="badge badge-xs badge-ghost shrink-0">
-                    {task_type_label(task)}
-                  </span>
+                  <span class="font-medium truncate">{row.description}</span>
+                  <span class="badge badge-xs badge-ghost shrink-0">{row.kind}</span>
                 </div>
-                <div :if={book_name(task) != nil} class="text-xs text-base-content/50 truncate">
-                  {book_name(task)}
+                <div :if={row.subtitle} class="text-xs text-base-content/50 truncate">
+                  {row.subtitle}
                 </div>
               </div>
               <button
                 phx-click="cancel_task"
-                phx-value-task-id={task.id}
+                phx-value-task-id={row.task_id}
                 class="btn btn-xs btn-ghost text-error shrink-0"
                 title="Cancel"
               >
@@ -134,12 +131,12 @@ defmodule ReadaloudWebWeb.TasksLive do
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
             <h2 class="text-xl font-semibold">Completed</h2>
-            <span :if={@completed_tasks != []} class="badge badge-ghost badge-sm">
-              {length(@completed_tasks)}
+            <span :if={@completed_rows != []} class="badge badge-ghost badge-sm">
+              {length(@completed_rows)}
             </span>
           </div>
           <button
-            :if={@completed_tasks != []}
+            :if={@completed_rows != []}
             phx-click="clear_completed"
             class="btn btn-xs btn-ghost text-base-content/60"
           >
@@ -147,49 +144,42 @@ defmodule ReadaloudWebWeb.TasksLive do
           </button>
         </div>
 
-        <div :if={@completed_tasks == []} class="text-base-content/50 py-6 text-center">
+        <div :if={@completed_rows == []} class="text-base-content/50 py-6 text-center">
           No completed tasks
         </div>
 
         <div class="space-y-1">
           <div
-            :for={task <- @completed_tasks}
+            :for={row <- @completed_rows}
             class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors"
           >
             <.icon
-              :if={Tasks.completed?(task)}
+              :if={row.success?}
               name="hero-check-circle"
               class="size-5 text-success shrink-0"
             />
             <.icon
-              :if={not Tasks.completed?(task)}
+              :if={not row.success?}
               name="hero-exclamation-circle"
               class="size-5 text-error shrink-0"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm truncate">{task_description(task)}</span>
-                <span class="badge badge-xs badge-ghost shrink-0">
-                  {task_type_label(task)}
-                </span>
+                <span class="text-sm truncate">{row.description}</span>
+                <span class="badge badge-xs badge-ghost shrink-0">{row.kind}</span>
               </div>
-              <div :if={book_name(task) != nil} class="text-xs text-base-content/50 truncate">
-                {book_name(task)}
+              <div :if={row.subtitle} class="text-xs text-base-content/50 truncate">
+                {row.subtitle}
               </div>
-              <div
-                :if={not Tasks.completed?(task) && task.error_message}
-                class="text-xs text-error truncate"
-              >
-                {task.error_message}
+              <div :if={row.error_message} class="text-xs text-error truncate">
+                {row.error_message}
               </div>
             </div>
-            <span class="text-xs text-base-content/40 shrink-0">
-              {relative_time(task.updated_at)}
-            </span>
+            <span class="text-xs text-base-content/40 shrink-0">{row.relative_time}</span>
             <button
-              :if={Tasks.failed?(task)}
+              :if={row.failed?}
               phx-click="retry_task"
-              phx-value-task-id={task.id}
+              phx-value-task-id={row.task_id}
               class="text-xs text-primary hover:underline shrink-0"
             >
               Retry
@@ -203,64 +193,88 @@ defmodule ReadaloudWebWeb.TasksLive do
 
   # --- Private helpers ---
 
-  defp load_all_tasks do
-    audiobook = ReadaloudAudiobook.list_tasks()
-    import = ReadaloudImporter.list_tasks()
-    audiobook ++ import
-  end
-
-  defp split_tasks(tasks) do
-    active =
-      tasks
-      |> Enum.filter(&Tasks.active?/1)
-      |> Enum.sort_by(& &1.inserted_at, {:asc, NaiveDateTime})
-
-    completed =
-      tasks
-      |> Enum.filter(&Tasks.terminal?/1)
-      |> Enum.sort_by(& &1.updated_at, {:desc, NaiveDateTime})
-
-    {active, completed}
-  end
-
-  defp reload_tasks(socket) do
-    all_tasks = load_all_tasks()
-    {active, completed} = split_tasks(all_tasks)
+  defp reload_rows(socket) do
+    {active, completed} = load_split_rows()
 
     socket
     |> assign(
       task_count: length(active),
-      active_tasks: active,
-      completed_tasks: completed
+      active_rows: active,
+      completed_rows: completed
     )
+  end
+
+  defp load_split_rows do
+    tasks = ReadaloudAudiobook.list_tasks() ++ ReadaloudImporter.list_tasks()
+
+    chapter_ids =
+      for %ReadaloudAudiobook.AudiobookTask{chapter_id: id} <- tasks, is_integer(id), do: id
+
+    book_ids = for t <- tasks, is_integer(t.book_id), do: t.book_id
+
+    ctx = %{
+      chapter_numbers: ReadaloudLibrary.chapter_numbers_by_ids(chapter_ids),
+      book_titles: ReadaloudLibrary.book_titles_by_ids(book_ids),
+      now: NaiveDateTime.utc_now()
+    }
+
+    rows = Enum.map(tasks, &present_row(&1, ctx))
+    split_rows(rows)
+  end
+
+  defp split_rows(rows) do
+    {active_rows, terminal_rows} = Enum.split_with(rows, &(&1.state == :active))
+
+    {
+      Enum.sort_by(active_rows, & &1.inserted_at, {:asc, NaiveDateTime}),
+      Enum.sort_by(terminal_rows, & &1.updated_at, {:desc, NaiveDateTime})
+    }
   end
 
   defp lookup_task(task_id) do
     ReadaloudAudiobook.get_task(task_id) || ReadaloudImporter.get_task(task_id)
   end
 
-  defp task_type_label(%ReadaloudAudiobook.AudiobookTask{}), do: "audio"
-  defp task_type_label(_), do: "import"
+  defp present_row(%ReadaloudAudiobook.AudiobookTask{} = task, ctx) do
+    description =
+      case Map.get(ctx.chapter_numbers, task.chapter_id) do
+        nil -> "Generating audio"
+        n -> "Generating audio — Ch #{n}"
+      end
 
-  defp task_description(%ReadaloudAudiobook.AudiobookTask{} = task) do
-    "Generating audio — Ch #{task.chapter_id}"
+    base_row(task, "audio", description, ctx)
   end
 
-  defp task_description(task) do
-    "Importing #{Path.basename(task.file_path)}"
+  defp present_row(%ReadaloudImporter.ImportTask{} = task, ctx) do
+    base_row(task, "import", "Importing #{Path.basename(task.file_path)}", ctx)
   end
 
-  defp book_name(task) do
-    case ReadaloudLibrary.get_book(task.book_id) do
-      nil -> nil
-      book -> book.title
+  defp base_row(task, kind, description, ctx) do
+    %{
+      task_id: task.id,
+      kind: kind,
+      description: description,
+      subtitle: Map.get(ctx.book_titles, task.book_id),
+      error_message: task.error_message,
+      success?: Tasks.completed?(task),
+      failed?: Tasks.failed?(task),
+      state: row_state(task),
+      inserted_at: task.inserted_at,
+      updated_at: task.updated_at,
+      relative_time: relative_time(task.updated_at, ctx.now)
+    }
+  end
+
+  defp row_state(task) do
+    cond do
+      Tasks.active?(task) -> :active
+      Tasks.terminal?(task) -> :terminal
     end
   end
 
-  defp relative_time(nil), do: ""
+  defp relative_time(nil, _now), do: ""
 
-  defp relative_time(dt) do
-    now = NaiveDateTime.utc_now()
+  defp relative_time(dt, now) do
     diff = NaiveDateTime.diff(now, dt, :second)
 
     cond do
