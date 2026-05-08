@@ -1,7 +1,6 @@
 defmodule ReadaloudImporter do
   alias ReadaloudImporter.{ImportTask, ParseJob}
   alias ReadaloudLibrary.Repo
-  alias ReadaloudLibrary.Tasks.Query, as: TaskQuery
   import Ecto.Query
 
   def import_file(file_path, file_type) do
@@ -28,8 +27,4 @@ defmodule ReadaloudImporter do
   end
 
   def get_task(id), do: Repo.get(ImportTask, id)
-
-  def clear_completed_tasks do
-    ImportTask |> TaskQuery.terminal() |> Repo.delete_all()
-  end
 end

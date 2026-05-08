@@ -1,81 +1,40 @@
 defmodule ReadaloudWebWeb.TasksLive do
   use ReadaloudWebWeb, :live_view
 
-  import Ecto.Query
-
   alias ReadaloudLibrary.Tasks
+  alias ReadaloudLibrary.Tasks.Dashboard
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:import")
-      Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook")
-    end
-
-    {active, completed} = load_split_rows()
+    if connected?(socket), do: Tasks.subscribe()
 
     {:ok,
      socket
-     |> assign(
-       page_title: "Tasks",
-       active_nav: :tasks,
-       task_count: length(active),
-       active_rows: active,
-       completed_rows: completed
-     )}
+     |> assign(page_title: "Tasks", active_nav: :tasks)
+     |> assign_dashboard()}
   end
 
   @impl true
-  def handle_event("cancel_task", %{"task-id" => task_id_str}, socket) do
-    task_id = String.to_integer(task_id_str)
-
-    query =
-      from(j in Oban.Job,
-        where:
-          j.state in ["available", "scheduled", "executing", "retryable"] and
-            fragment("?->>'task_id' = ?", j.args, ^to_string(task_id))
-      )
-
-    Enum.each(ReadaloudLibrary.Repo.all(query), fn job ->
-      Oban.cancel_job(job.id)
-    end)
-
-    if task = lookup_task(task_id), do: Tasks.fail(task, "Cancelled by user")
-
-    {:noreply, reload_rows(socket)}
+  def handle_event("cancel_task", %{"task-id" => id}, socket) do
+    Tasks.cancel(String.to_integer(id))
+    {:noreply, assign_dashboard(socket)}
   end
 
   @impl true
-  def handle_event("retry_task", %{"task-id" => task_id_str}, socket) do
-    task_id = String.to_integer(task_id_str)
-
-    case lookup_task(task_id) do
-      %ReadaloudAudiobook.AudiobookTask{} = task ->
-        ReadaloudAudiobook.generate_for_chapter(task.book_id, task.chapter_id,
-          model: task.model,
-          voice: task.voice
-        )
-
-      %ReadaloudImporter.ImportTask{} = task ->
-        ReadaloudImporter.import_file(task.file_path, task.file_type)
-
-      nil ->
-        :ok
-    end
-
-    {:noreply, reload_rows(socket)}
+  def handle_event("retry_task", %{"task-id" => id}, socket) do
+    retry(Tasks.get(String.to_integer(id)))
+    {:noreply, assign_dashboard(socket)}
   end
 
   @impl true
   def handle_event("clear_completed", _params, socket) do
-    ReadaloudAudiobook.clear_completed_tasks()
-    ReadaloudImporter.clear_completed_tasks()
-    {:noreply, reload_rows(socket)}
+    Tasks.clear_completed()
+    {:noreply, assign_dashboard(socket)}
   end
 
   @impl true
-  def handle_info(_, socket) do
-    {:noreply, reload_rows(socket)}
+  def handle_info({:task_updated, _task}, socket) do
+    {:noreply, assign_dashboard(socket)}
   end
 
   @impl true
@@ -88,18 +47,18 @@ defmodule ReadaloudWebWeb.TasksLive do
       <div class="mb-8">
         <div class="flex items-center gap-3 mb-4">
           <h2 class="text-xl font-semibold">Active</h2>
-          <span :if={@active_rows != []} class="badge badge-warning badge-sm">
-            {length(@active_rows)}
+          <span :if={@dashboard.active != []} class="badge badge-warning badge-sm">
+            {length(@dashboard.active)}
           </span>
         </div>
 
-        <div :if={@active_rows == []} class="text-base-content/50 py-6 text-center">
+        <div :if={@dashboard.active == []} class="text-base-content/50 py-6 text-center">
           No active tasks
         </div>
 
         <div class="space-y-3">
           <div
-            :for={row <- @active_rows}
+            :for={row <- @dashboard.active}
             class="card bg-base-200 p-4"
           >
             <div class="flex items-center gap-3">
@@ -131,12 +90,12 @@ defmodule ReadaloudWebWeb.TasksLive do
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
             <h2 class="text-xl font-semibold">Completed</h2>
-            <span :if={@completed_rows != []} class="badge badge-ghost badge-sm">
-              {length(@completed_rows)}
+            <span :if={@dashboard.completed != []} class="badge badge-ghost badge-sm">
+              {length(@dashboard.completed)}
             </span>
           </div>
           <button
-            :if={@completed_rows != []}
+            :if={@dashboard.completed != []}
             phx-click="clear_completed"
             class="btn btn-xs btn-ghost text-base-content/60"
           >
@@ -144,13 +103,13 @@ defmodule ReadaloudWebWeb.TasksLive do
           </button>
         </div>
 
-        <div :if={@completed_rows == []} class="text-base-content/50 py-6 text-center">
+        <div :if={@dashboard.completed == []} class="text-base-content/50 py-6 text-center">
           No completed tasks
         </div>
 
         <div class="space-y-1">
           <div
-            :for={row <- @completed_rows}
+            :for={row <- @dashboard.completed}
             class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors"
           >
             <.icon
@@ -193,95 +152,22 @@ defmodule ReadaloudWebWeb.TasksLive do
 
   # --- Private helpers ---
 
-  defp reload_rows(socket) do
-    {active, completed} = load_split_rows()
+  defp assign_dashboard(socket), do: assign(socket, dashboard: Dashboard.load())
 
-    socket
-    |> assign(
-      task_count: length(active),
-      active_rows: active,
-      completed_rows: completed
+  # Retry dispatch is the one verb that calls back into a consumer app's
+  # public API (`generate_for_chapter/3`, `import_file/2`). Putting it in
+  # `ReadaloudLibrary.Tasks` would create a compile-time cycle. The dispatch
+  # lives here, where the web app already depends on both.
+  defp retry(%ReadaloudAudiobook.AudiobookTask{} = task) do
+    ReadaloudAudiobook.generate_for_chapter(task.book_id, task.chapter_id,
+      model: task.model,
+      voice: task.voice
     )
   end
 
-  defp load_split_rows do
-    tasks = ReadaloudAudiobook.list_tasks() ++ ReadaloudImporter.list_tasks()
-
-    chapter_ids =
-      for %ReadaloudAudiobook.AudiobookTask{chapter_id: id} <- tasks, is_integer(id), do: id
-
-    book_ids = for t <- tasks, is_integer(t.book_id), do: t.book_id
-
-    ctx = %{
-      chapter_numbers: ReadaloudLibrary.chapter_numbers_by_ids(chapter_ids),
-      book_titles: ReadaloudLibrary.book_titles_by_ids(book_ids),
-      now: NaiveDateTime.utc_now()
-    }
-
-    rows = Enum.map(tasks, &present_row(&1, ctx))
-    split_rows(rows)
+  defp retry(%ReadaloudImporter.ImportTask{} = task) do
+    ReadaloudImporter.import_file(task.file_path, task.file_type)
   end
 
-  defp split_rows(rows) do
-    {active_rows, terminal_rows} = Enum.split_with(rows, &(&1.state == :active))
-
-    {
-      Enum.sort_by(active_rows, & &1.inserted_at, {:asc, NaiveDateTime}),
-      Enum.sort_by(terminal_rows, & &1.updated_at, {:desc, NaiveDateTime})
-    }
-  end
-
-  defp lookup_task(task_id) do
-    ReadaloudAudiobook.get_task(task_id) || ReadaloudImporter.get_task(task_id)
-  end
-
-  defp present_row(%ReadaloudAudiobook.AudiobookTask{} = task, ctx) do
-    description =
-      case Map.get(ctx.chapter_numbers, task.chapter_id) do
-        nil -> "Generating audio"
-        n -> "Generating audio — Ch #{n}"
-      end
-
-    base_row(task, "audio", description, ctx)
-  end
-
-  defp present_row(%ReadaloudImporter.ImportTask{} = task, ctx) do
-    base_row(task, "import", "Importing #{Path.basename(task.file_path)}", ctx)
-  end
-
-  defp base_row(task, kind, description, ctx) do
-    %{
-      task_id: task.id,
-      kind: kind,
-      description: description,
-      subtitle: Map.get(ctx.book_titles, task.book_id),
-      error_message: task.error_message,
-      success?: Tasks.completed?(task),
-      failed?: Tasks.failed?(task),
-      state: row_state(task),
-      inserted_at: task.inserted_at,
-      updated_at: task.updated_at,
-      relative_time: relative_time(task.updated_at, ctx.now)
-    }
-  end
-
-  defp row_state(task) do
-    cond do
-      Tasks.active?(task) -> :active
-      Tasks.terminal?(task) -> :terminal
-    end
-  end
-
-  defp relative_time(nil, _now), do: ""
-
-  defp relative_time(dt, now) do
-    diff = NaiveDateTime.diff(now, dt, :second)
-
-    cond do
-      diff < 60 -> "#{diff}s ago"
-      diff < 3600 -> "#{div(diff, 60)}m ago"
-      diff < 86_400 -> "#{div(diff, 3600)}h ago"
-      true -> "#{div(diff, 86_400)}d ago"
-    end
-  end
+  defp retry(nil), do: :ok
 end
