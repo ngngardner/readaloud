@@ -72,15 +72,19 @@ describe("Reader styles persist across chapter swap", () => {
 			() => window.location.pathname.match(/\/read\/(\d+)/)?.[1],
 		);
 
-		// Click the "next chapter" button on the floating pill. This fires
-		// a phx-click="next_chapter" → push_patch on the server, which
-		// patches the DOM in place (no full page navigation).
+		// Click the "next chapter" button on the floating pill. When audio
+		// is mounted this fires JS.dispatch("audio:nav-next-chapter") →
+		// AudioPlayerHook same-element swap; otherwise it fires
+		// phx-click="next_chapter" → push_patch on the server. Both paths
+		// patch the DOM in place (no full page navigation), which is what
+		// this test cares about — we use the stable button ID to stay
+		// agnostic of which path the current audio_state takes.
 		await page.mouse.move(640, 400);
 		await page.mouse.move(641, 401);
 		await page.waitForSelector("#floating-pill.opacity-100", {
 			timeout: 5000,
 		});
-		await page.click('[phx-click="next_chapter"]:not([disabled])');
+		await page.click("#pill-next-chapter-btn:not([disabled])");
 
 		// Wait for the URL to change (push_patch) AND the hook's updated()
 		// lifecycle to re-apply the inline style. Both signals are observable
@@ -146,12 +150,12 @@ describe("Reader styles persist across chapter swap", () => {
 		// next_chapter may be disabled if we landed on the last chapter;
 		// fall back to prev_chapter in that case.
 		const nextDisabled = await page.$eval(
-			'[phx-click="next_chapter"]',
+			"#pill-next-chapter-btn",
 			(el) => el.disabled,
 		);
 		const selector = nextDisabled
-			? '[phx-click="prev_chapter"]:not([disabled])'
-			: '[phx-click="next_chapter"]:not([disabled])';
+			? "#pill-prev-chapter-btn:not([disabled])"
+			: "#pill-next-chapter-btn:not([disabled])";
 		await page.click(selector);
 
 		await page.waitForFunction(

@@ -5,6 +5,17 @@ export interface ReadaloudWindowEvents {
   "audio:toggle-mute": undefined;
   "audio:change-speed": { direction: "up" | "down" };
   "audio:playing-changed": { playing: boolean };
+  // Manual chapter nav (floating-pill buttons + keyboard arrows). When the
+  // audio player is mounted, it handles these client-side: same-element
+  // src swap + history.pushState + buffered progress observation +
+  // `pushEvent("next_chapter", { client_owned: true })`. That keeps the
+  // OS audio session alive (critical for mobile lock-screen playback) and
+  // avoids the bug where push_patch swaps page state but leaves the
+  // <audio> element playing the previous chapter. If no audio target is
+  // available (next chapter has no audio yet) the hook falls back to the
+  // server-owned phx-click path.
+  "audio:nav-next-chapter": undefined;
+  "audio:nav-prev-chapter": undefined;
   "manual-scroll": undefined;
   "auto-scroll-start": undefined;
   "auto-scroll-end": undefined;

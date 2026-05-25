@@ -20,11 +20,23 @@ export const KeyboardShortcutsHook = defineHook((ctx) => {
         return;
       case "ArrowLeft":
         e.preventDefault();
-        ctx.pushEvent("prev_chapter");
+        // When the audio player is mounted, route through its window-event
+        // path so we get a same-element src swap + client_owned server
+        // round-trip. Otherwise fall back to the server-owned phx-click
+        // event (the LV's push_patch is fine when there's no audio).
+        if (document.getElementById("audio-player")) {
+          ctx.dispatch("audio:nav-prev-chapter");
+        } else {
+          ctx.pushEvent("prev_chapter", {});
+        }
         return;
       case "ArrowRight":
         e.preventDefault();
-        ctx.pushEvent("next_chapter");
+        if (document.getElementById("audio-player")) {
+          ctx.dispatch("audio:nav-next-chapter");
+        } else {
+          ctx.pushEvent("next_chapter", {});
+        }
         return;
       case "+":
       case "=":

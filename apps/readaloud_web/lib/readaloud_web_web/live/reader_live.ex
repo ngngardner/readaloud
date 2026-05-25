@@ -385,7 +385,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
         </.link>
         <span class="text-xs text-base-content/30 select-none">/</span>
         <button
-          phx-click="prev_chapter"
+          id="pill-prev-chapter-btn"
+          phx-click={pill_nav_click(@audio_state, :prev)}
           class="btn btn-ghost btn-xs btn-circle"
           title="Previous chapter"
           disabled={prev_chapter(@chapter, @chapters) == nil}
@@ -400,7 +401,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
           Ch {chapter_index(@chapter, @chapters) + 1} / {length(@chapters)}
         </button>
         <button
-          phx-click="next_chapter"
+          id="pill-next-chapter-btn"
+          phx-click={pill_nav_click(@audio_state, :next)}
           class="btn btn-ghost btn-xs btn-circle"
           title="Next chapter"
           disabled={next_chapter(@chapter, @chapters) == nil}
@@ -903,6 +905,18 @@ defmodule ReadaloudWebWeb.ReaderLive do
   defp chapter_index(chapter, chapters) do
     Enum.find_index(chapters, &(&1.id == chapter.id)) || 0
   end
+
+  # When audio is mounted, route manual prev/next through the audio player
+  # hook so we can do a same-<audio>-element src swap instead of letting
+  # the server push_patch leave a stale audio stream playing the previous
+  # chapter (the hook also handles history.pushState, the buffered
+  # progress write, and the client_owned: true round-trip). When no audio
+  # is mounted, keep the simple server-owned phx-click — there's no audio
+  # state to keep in sync with the URL.
+  defp pill_nav_click(:ready, :next), do: JS.dispatch("audio:nav-next-chapter")
+  defp pill_nav_click(:ready, :prev), do: JS.dispatch("audio:nav-prev-chapter")
+  defp pill_nav_click(_, :next), do: "next_chapter"
+  defp pill_nav_click(_, :prev), do: "prev_chapter"
 
   defp has_active_task?(chapter_id) do
     ReadaloudAudiobook.list_tasks()

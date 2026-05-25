@@ -555,9 +555,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     const buildReaderUrl = (chapterId: string): string | null => {
       const path = window.location.pathname;
       if (!/\/books\/\d+\/read\/\d+/.test(path)) return null;
-      return (
-        path.replace(/\/read\/\d+/, `/read/${chapterId}`) + "?nav=internal"
-      );
+      return `${path.replace(/\/read\/\d+/, `/read/${chapterId}`)}?nav=internal`;
     };
 
     const goToNextChapter = (): boolean => {
@@ -954,6 +952,22 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(window, "audio:change-speed", ({ direction }) =>
       cycleSpeed(direction),
     );
+
+    // Manual chapter nav (floating-pill buttons + keyboard arrows). These
+    // dispatch a window event instead of phx-click="next_chapter" while
+    // the audio player is mounted so we can do a same-<audio>-element src
+    // swap instead of letting the server's push_patch leave us playing
+    // the previous chapter. When the next/prev chapter has no audio yet,
+    // goTo*Chapter returns false and we fall back to the server-owned
+    // path so the user can still navigate to audio-less chapters.
+    ctx.on(window, "audio:nav-next-chapter", () => {
+      log("nav-next-chapter-event");
+      if (!goToNextChapter()) ctx.pushEvent("next_chapter", {});
+    });
+    ctx.on(window, "audio:nav-prev-chapter", () => {
+      log("nav-prev-chapter-event");
+      if (!goToPrevChapter()) ctx.pushEvent("prev_chapter", {});
+    });
 
     // Final cleanup not covered by ctx.on. Important: do NOT pause the
     // audio or revoke its current blob URL here. Destroy fires on LV
