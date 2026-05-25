@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "ef96cbd48854",
+  "session_id": "fa395bcc-8a81-4a81-ac67-432b5982fbd4",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-25T01:29:24.425581578Z",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_audiobook/lib/mix/tasks/retranscribe.ex",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/generate_job.ex",
+    "apps/readaloud_audiobook/test/readaloud_audiobook/generate_job_test.exs",
+    "apps/readaloud_importer/lib/readaloud_importer/epub_parser.ex",
+    "mix.exs"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "5fb217d006ff",
+  "token_usage": {
+    "input_tokens": 21,
+    "cache_creation_tokens": 107903,
+    "cache_read_tokens": 1209988,
+    "output_tokens": 21855,
+    "api_call_count": 16
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-25T01:29:24.413855062Z",
+    "agent_lines": 58,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 58,
+    "total_lines_changed": 59,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+pressing the next chapter button during play back does not update state correctly
