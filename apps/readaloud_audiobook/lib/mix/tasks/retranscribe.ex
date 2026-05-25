@@ -175,7 +175,12 @@ defmodule Mix.Tasks.Readaloud.Retranscribe do
   end
 
   defp strip_html(html) do
+    # Keep parity with ReadaloudAudiobook.GenerateJob.strip_html/1 \u2014 see the
+    # rationale comment there. Same bug would bite a retranscribe run otherwise.
     html
+    |> String.replace(~r/<script\b[^>]*>[\s\S]*?<\/script>/i, " ")
+    |> String.replace(~r/<style\b[^>]*>[\s\S]*?<\/style>/i, " ")
+    |> String.replace(~r/<iframe\b[^>]*>[\s\S]*?<\/iframe>/i, " ")
     |> String.replace(~r/<[^>]+>/, " ")
     |> String.replace(~r/&[^;]+;/, " ")
     |> String.replace("\u2014", " ")

@@ -248,7 +248,13 @@ defmodule ReadaloudImporter.EpubParser do
   end
 
   defp strip_html(html) do
+    # Same defensive ordering as ReadaloudAudiobook.GenerateJob.strip_html/1.
+    # EPUBs in the wild ship inline <script>/<style> — leaving their bodies in
+    # would corrupt indexed word counts and any downstream text consumption.
     html
+    |> String.replace(~r/<script\b[^>]*>[\s\S]*?<\/script>/i, " ")
+    |> String.replace(~r/<style\b[^>]*>[\s\S]*?<\/style>/i, " ")
+    |> String.replace(~r/<iframe\b[^>]*>[\s\S]*?<\/iframe>/i, " ")
     |> String.replace(~r/<[^>]+>/, " ")
     |> String.replace(~r/&[^;]+;/, " ")
     |> String.replace(~r/\s+/, " ")

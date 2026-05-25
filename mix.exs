@@ -45,11 +45,13 @@ defmodule Readaloud.MixProject do
   # Run "mix help deps" for examples and options.
   # Dialyzer needs :mix in the PLT to recognize Mix.Task callbacks used by
   # custom mix tasks (e.g. apps/readaloud_audiobook/lib/mix/tasks/retranscribe.ex).
+  # :ex_unit is required in MIX_ENV=test (precommit env) so the PLT can
+  # resolve ExUnit.CaseTemplate / Callbacks references in test/support/*.
   # `app_tree` builds a per-deps PLT instead of one giant blob — faster
   # incremental rebuilds when a single dep changes.
   defp dialyzer do
     [
-      plt_add_apps: [:mix],
+      plt_add_apps: [:mix, :ex_unit],
       plt_add_deps: :app_tree,
       flags: [:error_handling, :underspecs]
     ]

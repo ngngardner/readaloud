@@ -216,6 +216,12 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
   defp strip_html(html) do
     html
+    # Drop opaque blocks bodily \u2014 naive tag-strip leaves their text content
+    # behind (e.g. Reverend Insanity's source injected an h12-media ad
+    # <script> whose JS body got spoken aloud as `window.h12_autoplaced=1;`).
+    |> String.replace(~r/<script\b[^>]*>[\s\S]*?<\/script>/i, " ")
+    |> String.replace(~r/<style\b[^>]*>[\s\S]*?<\/style>/i, " ")
+    |> String.replace(~r/<iframe\b[^>]*>[\s\S]*?<\/iframe>/i, " ")
     |> String.replace(~r/<[^>]+>/, " ")
     |> String.replace(~r/&[^;]+;/, " ")
     |> String.replace("\u2014", " ")

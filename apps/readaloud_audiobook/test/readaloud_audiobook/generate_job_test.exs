@@ -67,5 +67,43 @@ defmodule ReadaloudAudiobook.GenerateJobTest do
 
       assert {:error, :empty_chapter_content} = GenerateJob.perform(job)
     end
+
+    # Regression: a Reverend Insanity crawl source injected an h12-media ad
+    # block whose <script> body was getting spoken aloud as raw JavaScript.
+    # strip_html/1 now drops <script>/<style>/<iframe> bodies whole before
+    # the generic tag pass, so a script-only chapter strips to empty and we
+    # fail fast rather than synthesizing JS source code.
+    test "strips <script> bodies — chapter that is only an ad fails empty", %{book: book} do
+      path = Path.join(System.tmp_dir!(), "ad_chapter_#{System.unique_integer([:positive])}.html")
+
+      File.write!(path, """
+      <script>
+      /* info line, ad unit name: Ad02*/
+      window.h12_autoplaced_enable=1;
+      window.h12_autoplaced_pub="abc";
+      </script>
+      <iframe src="https://ads.example.com"></iframe>
+      <style>.x{color:red}</style>
+      """)
+
+      {:ok, chapter} =
+        ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 3, content_path: path})
+
+      task =
+        %AudiobookTask{}
+        |> AudiobookTask.changeset(%{
+          book_id: book.id,
+          chapter_id: chapter.id,
+          model: "kokoro",
+          voice: "af_heart",
+          status: :pending,
+          attempt_number: 1
+        })
+        |> Repo.insert!()
+
+      job = %Oban.Job{id: 0, args: %{"task_id" => task.id}}
+
+      assert {:error, :empty_chapter_content} = GenerateJob.perform(job)
+    end
   end
 end
