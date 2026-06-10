@@ -1022,6 +1022,17 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(window, "online", () => log("net-online", audioSnapshot()));
     ctx.on(window, "offline", () => log("net-offline", audioSnapshot()));
 
+    // Mirror the app.ts reload guard's decisions into this channel:
+    // "deferred" = LV wanted to hard-reload the page while background
+    // audio was playing and we stopped it; "resumed" = the page came
+    // back to visibility with a healthy socket so no reload was needed.
+    ctx.on(window, "readaloud:lv-reload-deferred", () =>
+      log("lv-reload-deferred", audioSnapshot()),
+    );
+    ctx.on(window, "readaloud:lv-reload-resumed", () =>
+      log("lv-reload-resumed", audioSnapshot()),
+    );
+
     // Re-sync UX
     if (resyncBtn) {
       ctx.on(resyncBtn, "click", () => {

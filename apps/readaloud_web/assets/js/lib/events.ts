@@ -23,6 +23,12 @@ export interface ReadaloudWindowEvents {
   "toggle-pill": undefined;
   "chapter-bar-close": undefined;
   "readaloud:set-theme": { theme: string };
+  // Emitted by the reload guard in app.ts (which wraps LiveSocket's
+  // private reloadWithJitter). The audio player hook mirrors these into
+  // the [player] diagnostics channel so a deferred/skipped reload is
+  // visible in server logs next to the playback events it protected.
+  "readaloud:lv-reload-deferred": undefined;
+  "readaloud:lv-reload-resumed": undefined;
   "phx:live_reload:attached": LiveReloader;
 }
 

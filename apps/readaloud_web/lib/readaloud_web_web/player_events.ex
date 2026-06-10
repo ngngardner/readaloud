@@ -47,6 +47,7 @@ defmodule ReadaloudWebWeb.PlayerEvents do
     audio-stalled audio-waiting audio-loadedmetadata audio-seeked
     visibility-hidden visibility-visible page-show page-hide
     page-freeze page-resume net-online net-offline
+    lv-reload-deferred lv-reload-resumed
     heartbeat
   )
 

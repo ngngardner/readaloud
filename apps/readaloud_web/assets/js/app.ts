@@ -46,6 +46,73 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: Hooks,
 });
 
+// --- Background-audio reload guard -----------------------------------
+// Every socket-recovery failure path in phoenix_live_view converges on
+// LiveSocket.reloadWithJitter → window.location.reload(): a hook
+// pushEvent whose reply times out (PUSH_TIMEOUT=30s), a main-view join
+// error, and the close-code-1000 failsafe. On a locked phone that
+// recovery is fatal to playback: the OS suspends the tab's network
+// while the <audio> element keeps playing, so the channel is a zombie —
+// the hook's own pushes (next_chapter, progress, player events) time
+// out, and LV "recovers" by reloading the page, destroying the playing
+// blob audio and the autoplay gesture with it. That is the 2026-06-10
+// incident reconstructed in the [player] log channel: swap-play-ok at
+// 13:24:27, destroy (audioPaused=false) at 13:25:31, fresh mount paused
+// at 0:00, silence.
+//
+// Guard: while the page is hidden AND the reader audio is actively
+// playing, defer any reload until the page is visible again. On
+// visibility, give the socket a grace window to reconnect on its own
+// (the normal rejoin path — hooks remount, the <audio> element survives
+// via phx-update="ignore", buffers drain); only fall through to the
+// real reload if it's still down. Re-entering the wrapper from the
+// grace timer re-evaluates the conditions, so audio that resumed
+// hidden-playback mid-grace defers again instead of dying.
+//
+// reloadWithJitter is private API (phoenix_live_view 1.1.x); the shape
+// is pinned by e2e/tests/audio-reload-guard.test.js, which drives it
+// directly.
+const RELOAD_RECONNECT_GRACE_MS = 4000;
+type ReloadWithJitter = (view: object, log?: () => void) => void;
+// reloadWithJitter/isConnected are real LiveSocket members that
+// phoenix_live_view's .d.ts doesn't expose — a cast is the only way
+// through; the e2e reload-guard test pins the runtime shape.
+// ast-grep-ignore: no-as-cast, no-unknown-type
+const reloadable = liveSocket as unknown as {
+  reloadWithJitter: ReloadWithJitter;
+  isConnected(): boolean;
+};
+const originalReload = reloadable.reloadWithJitter.bind(liveSocket);
+let reloadDeferred = false;
+
+reloadable.reloadWithJitter = (view, log) => {
+  const audio = document.getElementById("audio-element");
+  const backgroundAudioLive =
+    document.visibilityState === "hidden" &&
+    audio instanceof HTMLAudioElement &&
+    !audio.paused;
+  if (!backgroundAudioLive) {
+    originalReload(view, log);
+    return;
+  }
+  if (reloadDeferred) return;
+  reloadDeferred = true;
+  window.dispatchEvent(new CustomEvent("readaloud:lv-reload-deferred"));
+  const onVisible = (): void => {
+    if (document.visibilityState !== "visible") return;
+    document.removeEventListener("visibilitychange", onVisible);
+    window.setTimeout(() => {
+      reloadDeferred = false;
+      if (reloadable.isConnected()) {
+        window.dispatchEvent(new CustomEvent("readaloud:lv-reload-resumed"));
+      } else {
+        reloadable.reloadWithJitter(view, log);
+      }
+    }, RELOAD_RECONNECT_GRACE_MS);
+  };
+  document.addEventListener("visibilitychange", onVisible);
+};
+
 topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
 window.addEventListener("phx:page-loading-start", () => topbar.show(300));
 window.addEventListener("phx:page-loading-stop", () => topbar.hide());
