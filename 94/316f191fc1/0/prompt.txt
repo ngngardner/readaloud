@@ -1,0 +1,1 @@
+add prometheus metrics to align with our metrics ingestion services. go deep on metrics and logging so we can definitely tackle any weird state issues on mobile when i have the app playing in the background. when complete merge back to master

@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "94316f191fc1",
+  "strategy": "manual-commit",
+  "branch": "claude/compassionate-nightingale-785f4c",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/generate_job.ex",
+    "apps/readaloud_audiobook/test/readaloud_audiobook/telemetry_test.exs",
+    "apps/readaloud_library/lib/readaloud_library/tasks.ex",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/player_event_buffer.ts",
+    "apps/readaloud_web/lib/readaloud_web/application.ex",
+    "apps/readaloud_web/lib/readaloud_web/prom_ex.ex",
+    "apps/readaloud_web/lib/readaloud_web/prom_ex/plugins/readaloud.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/controllers/player_event_controller.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/controllers/progress_controller.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/endpoint.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/router.ex",
+    "apps/readaloud_web/mix.exs",
+    "apps/readaloud_web/test/readaloud_web_web/controllers/player_event_controller_test.exs",
+    "apps/readaloud_web/test/readaloud_web_web/live/reader_live_test.exs",
+    "apps/readaloud_web/test/readaloud_web_web/metrics_endpoint_test.exs",
+    "apps/readaloud_web/test/readaloud_web_web/player_events_test.exs",
+    "cells/app/checks/coverage.nix",
+    "cells/app/checks/default.nix",
+    "cells/app/packages/readaloud/default.nix",
+    "config/config.exs",
+    "config/test.exs",
+    "docs/observability.md",
+    "mix.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/94/316f191fc1/0/metadata.json",
+      "transcript": "/94/316f191fc1/0/full.jsonl",
+      "content_hash": "/94/316f191fc1/0/content_hash.txt",
+      "prompt": "/94/316f191fc1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 27661,
+    "cache_creation_tokens": 461493,
+    "cache_read_tokens": 26603371,
+    "output_tokens": 123010,
+    "api_call_count": 126
+  }
+}
