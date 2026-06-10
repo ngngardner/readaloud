@@ -13,6 +13,18 @@
   mixFodDeps,
   threshold ? 80,
 }:
+let
+  # lazy_html (the LiveView-test HTML parser) compiles a vendored lexbor it
+  # would otherwise `git clone` at build time — pinned by SHA in its mix.exs.
+  # No network in the sandbox, so we pre-seed the checkout it expects.
+  lexborGitSha = "244b84956a6dc7eec293781d051354f351274c46";
+  lexborSrc = nixpkgs.fetchFromGitHub {
+    owner = "lexbor";
+    repo = "lexbor";
+    rev = lexborGitSha;
+    sha256 = "1d4w57lxiysfjf34jz9igvv5ipzn6xc2wf0sgvmd0srwcna7zsis";
+  };
+in
 nixpkgs.runCommand "coverage-check"
   {
     nativeBuildInputs = [
@@ -22,6 +34,7 @@ nixpkgs.runCommand "coverage-check"
       beamPackages.rebar3
       nixpkgs.gcc
       nixpkgs.gnumake
+      nixpkgs.cmake
       nixpkgs.git
       nixpkgs.pkg-config
       nixpkgs.sqlite
@@ -52,6 +65,12 @@ nixpkgs.runCommand "coverage-check"
     done <<< "$ERL_LIBS:"
 
     cp --no-preserve=mode -R ${mixFodDeps} "$MIX_DEPS_PATH"
+
+    # Pre-seed lazy_html's vendored-lexbor checkout (see lexborSrc above).
+    mkdir -p "$MIX_DEPS_PATH/lazy_html/_build/c/third_party/lexbor"
+    cp --no-preserve=mode -R ${lexborSrc} \
+      "$MIX_DEPS_PATH/lazy_html/_build/c/third_party/lexbor/${lexborGitSha}"
+
     mix deps.compile --no-deps-check
 
     # Fresh sandbox → fresh SQLite. Migrate before tests. Run via

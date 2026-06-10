@@ -14,6 +14,12 @@ config :readaloud_web, ReadaloudWebWeb.Endpoint,
   secret_key_base: "qLh+kHMDzK99zgMZuYSA95mHXA5MBmw9NgP9NJhejfa8s1kJapXJWlY3rOCN+wzv",
   server: false
 
+# PromEx stays enabled so /metrics and the custom plugin are testable, but
+# DB-polling groups are dropped: pollers run outside the SQL sandbox owner
+# and would only produce ownership-error noise.
+config :readaloud_web, ReadaloudWeb.PromEx,
+  drop_metrics_groups: [:oban_queue_poll_metrics, :readaloud_snapshot_polling_metrics]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

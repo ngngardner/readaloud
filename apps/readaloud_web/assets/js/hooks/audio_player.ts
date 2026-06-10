@@ -1,19 +1,21 @@
-import { defineHook } from "../lib/hook";
-import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
-import { PersistedRecord } from "../lib/persisted_record";
-import {
-  type ProgressBuffer,
-  attachProgressBuffer,
-} from "../lib/progress_buffer";
-import { attachScrubber, fractionAt } from "../lib/scrubber";
-import { scrollFollow } from "../lib/scroll_follow";
-import { readerSettings } from "../lib/reader_settings_store";
 import { cycleOption } from "../lib/cycle_option";
+import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
+import type { PlayerEventDetailValue } from "../lib/events";
+import { defineHook } from "../lib/hook";
+import { PersistedRecord } from "../lib/persisted_record";
+import { attachPlayerEventBuffer } from "../lib/player_event_buffer";
 import {
-  type JsonValue,
-  type WordTiming,
+  attachProgressBuffer,
+  type ProgressBuffer,
+} from "../lib/progress_buffer";
+import { readerSettings } from "../lib/reader_settings_store";
+import { scrollFollow } from "../lib/scroll_follow";
+import { attachScrubber, fractionAt } from "../lib/scrubber";
+import {
   isJsonObject,
+  type JsonValue,
   parseWordTimings,
+  type WordTiming,
   wordSelector,
 } from "../lib/types";
 import { attachWordMenu } from "./word_menu";
@@ -53,6 +55,11 @@ const PLAYER_PREFS_KEY = "readaloud-player-prefs";
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 const POSITION_REPORT_INTERVAL_MS = 5000;
+// Diagnostic heartbeat cadence while playing. Each heartbeat carries the
+// wall-clock and audio-position deltas since the previous one — on a
+// healthy player they match (scaled by playbackRate); divergence or a gap
+// in the series is direct evidence of background throttling/suspension.
+const HEARTBEAT_INTERVAL_MS = 30_000;
 const SKIP_SECONDS = 10;
 const AUTO_SCROLL_GRACE_MS = 800;
 
@@ -150,6 +157,32 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     if (!audio || !playPauseBtn) return;
 
     const playerId = nextPlayerId++;
+
+    // `data-book-id` is set by the LV template and is part of the hook's
+    // contract — if it's ever missing or unparseable, that's a template
+    // bug and we want to fail loudly at mount, not silently no-op every
+    // observation downstream.
+    const bookId = Number.parseInt(ctx.dataset.bookId ?? "", 10);
+    if (!Number.isFinite(bookId)) {
+      throw new Error(
+        "AudioPlayerHook: data-book-id is missing or unparseable",
+      );
+    }
+
+    // Durable diagnostic-event buffer. Every log() call below lands here
+    // too, giving the server (→ journald → Loki + Prometheus) the same
+    // event stream the browser console gets — that's what lets us debug
+    // background-playback weirdness on a phone after the fact, without
+    // the phone attached to a devtools session.
+    const events = attachPlayerEventBuffer({
+      bookId,
+      beaconUrl: `/api/books/${bookId}/player-events`,
+      pushEvents: (batch) => {
+        ctx.pushEvent("player_events", { events: batch });
+      },
+    });
+    ctx.onDestroy(() => events.detach());
+
     // Detailed always-on logging for autoplay debugging. When the user
     // reports a symptom ("phone woke up at 11:07 and audio was at 0:00")
     // these lines + the chapter/book ids let us line up the JS-side state
@@ -171,11 +204,34 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // intentional production logging, not debug residue.
       // ast-grep-ignore: no-console-log
       console.log(`[autoplay ${wall}] ${event}`, base);
+
+      // Mirror to the server-side diagnostic channel. `undefined` values
+      // are dropped (they don't survive JSON anyway).
+      const detail: Record<string, PlayerEventDetailValue> = {
+        player: playerId,
+      };
+      if (extra) {
+        for (const [key, value] of Object.entries(extra)) {
+          if (value !== undefined) detail[key] = value;
+        }
+      }
+      const fields: {
+        chapter_id?: string;
+        position_ms?: number;
+        detail?: Record<string, PlayerEventDetailValue>;
+      } = { position_ms: Math.round(audio.currentTime * 1000), detail };
+      const chapterId = ctx.dataset.chapterId;
+      if (chapterId !== undefined) fields.chapter_id = chapterId;
+      events.record(event, fields);
     };
 
     let timings: ReadonlyArray<WordTiming> = [];
     let currentWordIndex = -1;
     let lastReportedMs = -1;
+    // Heartbeat state; wall=0 means "no previous beat" (start of playback,
+    // or invalidated by pause/seek so deltas never span a discontinuity).
+    let lastHeartbeatWall = 0;
+    let lastHeartbeatPosMs = 0;
     let rafId: number | undefined;
     let wordMenuCleanup: (() => void) | undefined;
     let intersectionObserver: IntersectionObserver | undefined;
@@ -183,17 +239,6 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // Durable position-observation buffer. The hook owns the lifetime;
     // localStorage owns the cross-mount state (so a buffered observation
     // from before a LV remount or page-hide drains on the next mount).
-    //
-    // `data-book-id` is set by the LV template and is part of the hook's
-    // contract — if it's ever missing or unparseable, that's a template
-    // bug and we want to fail loudly at mount, not silently no-op every
-    // observation downstream.
-    const bookId = Number.parseInt(ctx.dataset.bookId ?? "", 10);
-    if (!Number.isFinite(bookId)) {
-      throw new Error(
-        "AudioPlayerHook: data-book-id is missing or unparseable",
-      );
-    }
     const progress: ProgressBuffer = attachProgressBuffer({
       bookId,
       beaconUrl: `/api/books/${bookId}/progress`,
@@ -828,6 +873,25 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           });
         }
       }
+
+      const wallNow = Date.now();
+      if (
+        !audio.paused &&
+        wallNow - lastHeartbeatWall >= HEARTBEAT_INTERVAL_MS
+      ) {
+        log(
+          "heartbeat",
+          lastHeartbeatWall > 0
+            ? {
+                wallDeltaMs: wallNow - lastHeartbeatWall,
+                audioDeltaMs: nowMs - lastHeartbeatPosMs,
+                rate: audio.playbackRate,
+              }
+            : { rate: audio.playbackRate },
+        );
+        lastHeartbeatWall = wallNow;
+        lastHeartbeatPosMs = nowMs;
+      }
     });
 
     // Play/pause icon — bound to the audio element's own state so it stays
@@ -839,6 +903,8 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
 
     // Side effects on play/pause that aren't DOM projection.
     ctx.on(audio, "play", () => {
+      // Fresh heartbeat series — deltas must not span the paused gap.
+      lastHeartbeatWall = 0;
       log("audio-play", {
         currentTime: audio.currentTime,
         duration: audio.duration,
@@ -903,6 +969,58 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(audio, "loadedmetadata", () =>
       log("audio-loadedmetadata", { duration: audio.duration }),
     );
+    ctx.on(audio, "seeked", () => {
+      // A seek invalidates heartbeat deltas; restart the series.
+      lastHeartbeatWall = 0;
+      log("audio-seeked", { currentTime: audio.currentTime });
+    });
+
+    // --- Background-state diagnostics ---------------------------------
+    // The "weird state on mobile" reports all hinge on transitions the
+    // console can't show us after the fact: screen lock / app switch
+    // (visibilitychange), bfcache traversal (pageshow/pagehide), tab
+    // freezing (freeze/resume — Page Lifecycle API, not in TS's event
+    // maps, hence the manual listeners), and network loss. Snapshot the
+    // <audio> element at every transition so the server-side trace shows
+    // exactly what state playback was in when the platform intervened.
+    const audioSnapshot = (): Record<string, LogValue> => ({
+      paused: audio.paused,
+      currentTime: Math.round(audio.currentTime * 100) / 100,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      srcKind: audio.currentSrc.startsWith("blob:") ? "blob" : "url",
+    });
+
+    const onVisibilityChange = (): void => {
+      log(
+        document.visibilityState === "hidden"
+          ? "visibility-hidden"
+          : "visibility-visible",
+        audioSnapshot(),
+      );
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    ctx.onDestroy(() =>
+      document.removeEventListener("visibilitychange", onVisibilityChange),
+    );
+
+    const onFreeze = (): void => log("page-freeze", audioSnapshot());
+    const onResume = (): void => log("page-resume", audioSnapshot());
+    document.addEventListener("freeze", onFreeze);
+    document.addEventListener("resume", onResume);
+    ctx.onDestroy(() => {
+      document.removeEventListener("freeze", onFreeze);
+      document.removeEventListener("resume", onResume);
+    });
+
+    ctx.on(window, "pagehide", (e) =>
+      log("page-hide", { persisted: e.persisted, ...audioSnapshot() }),
+    );
+    ctx.on(window, "pageshow", (e) =>
+      log("page-show", { persisted: e.persisted, ...audioSnapshot() }),
+    );
+    ctx.on(window, "online", () => log("net-online", audioSnapshot()));
+    ctx.on(window, "offline", () => log("net-offline", audioSnapshot()));
 
     // Re-sync UX
     if (resyncBtn) {

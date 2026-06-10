@@ -161,8 +161,24 @@ defmodule ReadaloudLibrary.Tasks do
     schema = task.__struct__
     attrs = Map.put(extra, :status, status)
 
-    task
-    |> schema.changeset(attrs)
-    |> Repo.update()
+    result =
+      task
+      |> schema.changeset(attrs)
+      |> Repo.update()
+
+    with {:ok, _} <- result do
+      :telemetry.execute(
+        [:readaloud, :task, :transition],
+        %{count: 1},
+        %{kind: kind_for(schema), to: Atom.to_string(status)}
+      )
+    end
+
+    result
   end
+
+  # Prometheus label values — bounded, stringly-typed by design (see
+  # ReadaloudWeb.PromEx.Plugins.Readaloud).
+  defp kind_for(ReadaloudAudiobook.AudiobookTask), do: "audiobook"
+  defp kind_for(ReadaloudImporter.ImportTask), do: "import"
 end

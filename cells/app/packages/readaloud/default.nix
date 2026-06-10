@@ -10,7 +10,7 @@ let
     pname = "readaloud-deps";
     version = "0.1.0";
     src = inputs.self;
-    hash = "sha256-Gm3SnOma94LqRyfGnCqg1bs15yzbNCisp2836aiI2Fo=";
+    hash = "sha256-gUog4jaGvmHPUOtqUfM1KG9LtMkNamiHMq0PdFQwmtM=";
   };
 
 in

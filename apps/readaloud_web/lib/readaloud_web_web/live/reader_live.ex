@@ -4,6 +4,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   require Logger
 
   alias ReadaloudReader.Progress.Observation
+  alias ReadaloudWebWeb.PlayerEvents
   alias ReadaloudWebWeb.ThemeSelector
 
   @impl true
@@ -48,6 +49,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
     chapters = socket.assigns.chapters
 
     chapter = ReadaloudLibrary.get_chapter!(chapter_id)
+
+    # Every subsequent log line from this LV process (autoplay traces,
+    # progress warnings) carries the book/chapter, so Loki can slice by id
+    # without parsing message text. Re-set on every chapter switch.
+    Logger.metadata(book_id: book.id, chapter_id: chapter.id)
 
     content =
       case ReadaloudLibrary.get_chapter_content(chapter) do
@@ -174,10 +180,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
     case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
         Logger.info("[autoplay] prev_chapter no-op (no previous)")
+        emit_chapter_advance("prev", "noop")
         {:noreply, socket}
 
       ch ->
-        {:noreply, advance_chapter(socket, ch, params)}
+        {:noreply, advance_chapter(socket, ch, params, "prev")}
     end
   end
 
@@ -197,10 +204,11 @@ defmodule ReadaloudWebWeb.ReaderLive do
     case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
       nil ->
         Logger.info("[autoplay] next_chapter no-op (no next)")
+        emit_chapter_advance("next", "noop")
         {:noreply, socket}
 
       ch ->
-        {:noreply, advance_chapter(socket, ch, params)}
+        {:noreply, advance_chapter(socket, ch, params, "next")}
     end
   end
 
@@ -263,7 +271,23 @@ defmodule ReadaloudWebWeb.ReaderLive do
   # impossible — we drop silently here; the beacon path logs them.
   def handle_event("progress_observations", %{"observations" => raw}, socket)
       when is_list(raw) do
-    ReadaloudReader.observe_batch!(socket.assigns.book.id, raw)
+    %{dropped: dropped} = ReadaloudReader.observe_batch!(socket.assigns.book.id, raw)
+
+    :telemetry.execute(
+      [:readaloud, :progress, :flush],
+      %{count: length(raw), dropped: length(dropped)},
+      %{transport: "ws"}
+    )
+
+    {:noreply, socket}
+  end
+
+  # Diagnostic events from the audio-player hook (WS path; the HTTP beacon
+  # path is ReadaloudWebWeb.PlayerEventController). Deliberately NOT gated
+  # on the conflict modal — diagnostics are wanted in every state.
+  @impl true
+  def handle_event("player_events", %{"events" => raw}, socket) do
+    PlayerEvents.ingest(socket.assigns.book.id, raw, "ws")
     {:noreply, socket}
   end
 
@@ -881,13 +905,15 @@ defmodule ReadaloudWebWeb.ReaderLive do
   #     pushing another patch would create a duplicate history entry on
   #     connected clients, and re-writing progress would race with the
   #     buffered drain.
-  defp advance_chapter(socket, ch, %{"client_owned" => true}) do
+  defp advance_chapter(socket, ch, %{"client_owned" => true}, direction) do
     Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client-owned)")
+    emit_chapter_advance(direction, "client_owned")
     assign_chapter(socket, ch.id, restore_progress?: false)
   end
 
-  defp advance_chapter(socket, ch, _params) do
+  defp advance_chapter(socket, ch, _params, direction) do
     Logger.info("[autoplay] advance_chapter push_patch to=#{ch.id}")
+    emit_chapter_advance(direction, "server_patch")
 
     ReadaloudReader.observe!(%Observation{
       book_id: socket.assigns.book.id,
@@ -899,6 +925,16 @@ defmodule ReadaloudWebWeb.ReaderLive do
 
     push_patch(socket,
       to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
+    )
+  end
+
+  # Prometheus counter labels — bounded value sets by design (see
+  # ReadaloudWeb.PromEx.Plugins.Readaloud). Ids stay in the log lines.
+  defp emit_chapter_advance(direction, mode) do
+    :telemetry.execute(
+      [:readaloud, :reader, :chapter_advance],
+      %{count: 1},
+      %{direction: direction, mode: mode}
     )
   end
 

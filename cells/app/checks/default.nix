@@ -13,7 +13,7 @@ let
     version = "0.1.0";
     src = self;
     mixEnv = "dev";
-    hash = "sha256-8ax0VspR8G60KjiRXdI6bN14BS3VsiFGZJ5kSUTSKB0=";
+    hash = "sha256-lEXCct5I0Z0mj4T56Lfo1sLoXZ5jL3mtY4kCzBE5TW8=";
   };
 
   # Test env adds `only: :test` deps (mox, lazy_html) on top of dev deps;
@@ -23,7 +23,7 @@ let
     version = "0.1.0";
     src = self;
     mixEnv = "test";
-    hash = "sha256-8wKv80GgSvdG7IlvUm/O/dVFURUKemy4XsI5w9+NdGA=";
+    hash = "sha256-l20EEJ4ZorWOn7P36MlECJnmFQF/k1rq3xuIO6hrUwA=";
   };
 
   treefmtData = {

@@ -51,5 +51,6 @@ defmodule ReadaloudWebWeb.Router do
     get "/books/:book_id/chapters/:chapter_id/timings", AudioController, :timings
 
     post "/books/:book_id/progress", ProgressController, :beacon
+    post "/books/:book_id/player-events", PlayerEventController, :beacon
   end
 end

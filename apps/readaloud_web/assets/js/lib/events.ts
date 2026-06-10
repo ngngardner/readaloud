@@ -43,6 +43,22 @@ export interface ProgressObservationPayload {
   readonly observed_at: string;
 }
 
+// Wire shape of a single audio-player diagnostic event. Mirrors the JS-side
+// `[autoplay]` console log lines (plus visibility/page-lifecycle/network
+// transitions and playback heartbeats) to the server, where each becomes a
+// structured `[player]` log line and a Prometheus counter bump (see
+// ReadaloudWebWeb.PlayerEvents). `detail` is scalars-only by construction;
+// the server clamps it again anyway.
+export type PlayerEventDetailValue = string | number | boolean | null;
+
+export interface PlayerEventPayload {
+  readonly event: string;
+  readonly at: string;
+  readonly chapter_id?: string;
+  readonly position_ms?: number;
+  readonly detail?: Readonly<Record<string, PlayerEventDetailValue>>;
+}
+
 export interface ReadaloudPushEvents {
   scroll: { position: number };
   // Single durable channel for client-owned position observations. Always
@@ -62,6 +78,10 @@ export interface ReadaloudPushEvents {
   next_chapter: { client_owned?: true };
   prev_chapter: { client_owned?: true };
   jump_to_chapter: { chapter_id: ChapterId };
+  // Diagnostic channel for the audio player (WS path; the HTTP beacon to
+  // /api/books/:id/player-events is the fallback). Always batched, like
+  // progress_observations.
+  player_events: { events: ReadonlyArray<PlayerEventPayload> };
 }
 
 // LV → JS socket pushes. Currently unused; add an entry here before calling

@@ -42,6 +42,15 @@ config :readaloud_web, ReadaloudWebWeb.Endpoint,
   pubsub_server: ReadaloudWeb.PubSub,
   live_view: [signing_salt: "Stsep6Eo"]
 
+# Prometheus metrics (PromEx). No standalone metrics server and no Grafana
+# dashboard upload — metrics are served by PromEx.Plug on the Phoenix port
+# and scraped by the Grafana Alloy agent on the host.
+config :readaloud_web, ReadaloudWeb.PromEx,
+  disabled: false,
+  manual_metrics_start_delay: :no_delay,
+  grafana: :disabled,
+  metrics_server: :disabled
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
@@ -64,10 +73,13 @@ config :tailwind,
     cd: Path.expand("../apps/readaloud_web", __DIR__)
   ]
 
-# Configure Elixir's Logger
+# Configure Elixir's Logger. The metadata keys are set per-process by the
+# reader LiveView (book_id/chapter_id), the TTS worker (task_id), and
+# Plug.RequestId (request_id) — they render as `key=value` pairs in journald
+# lines, which Loki picks up via the Alloy journal source on the host.
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :book_id, :chapter_id, :task_id]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

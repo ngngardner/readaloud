@@ -8,6 +8,9 @@ defmodule ReadaloudWeb.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      # PromEx first so its telemetry handlers are attached before the
+      # endpoint (and everything it instruments) starts serving.
+      ReadaloudWeb.PromEx,
       ReadaloudWebWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:readaloud_web, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ReadaloudWeb.PubSub},

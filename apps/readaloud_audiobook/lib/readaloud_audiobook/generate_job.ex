@@ -11,6 +11,11 @@ defmodule ReadaloudAudiobook.GenerateJob do
   def perform(%Oban.Job{args: %{"task_id" => task_id}} = job) do
     task = Repo.get!(AudiobookTask, task_id)
 
+    # Every log line from this job (including TTS provider warnings further
+    # down the stack) carries the task/book/chapter, so a stuck generation
+    # can be traced end-to-end in Loki.
+    Logger.metadata(task_id: task.id, book_id: task.book_id, chapter_id: task.chapter_id)
+
     # Crash recovery: a still-:processing row means the previous run was killed
     # by a restart. Compensate Oban's attempt counter so crashes don't burn
     # real attempts — only genuine TTS failures should count.
@@ -24,6 +29,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
     {:ok, task} = Tasks.start(task)
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
+    started = System.monotonic_time()
 
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
@@ -49,10 +55,17 @@ defmodule ReadaloudAudiobook.GenerateJob do
       |> Repo.insert!(on_conflict: :replace_all, conflict_target: :chapter_id)
 
       {:ok, _task} = Tasks.complete(task)
+
+      emit_chapter_stop(started, "ok", %{
+        chunks: length(chunks),
+        audio_seconds: calculate_duration(audio)
+      })
+
       :ok
     else
       {:error, reason} ->
         {:ok, _task} = Tasks.fail(task, "#{inspect(reason)}")
+        emit_chapter_stop(started, "error", %{})
         {:error, reason}
     end
   rescue
@@ -65,6 +78,16 @@ defmodule ReadaloudAudiobook.GenerateJob do
       end
 
       reraise exception, __STACKTRACE__
+  end
+
+  # `started` is monotonic; extra measurements (chunks, audio_seconds) only
+  # exist on the ok path. Status is a bounded Prometheus label.
+  defp emit_chapter_stop(started, status, extra_measurements) do
+    :telemetry.execute(
+      [:readaloud, :tts, :chapter, :stop],
+      Map.put(extra_measurements, :duration, System.monotonic_time() - started),
+      %{status: status}
+    )
   end
 
   # Empty/whitespace-only chapters surface as a hard failure so Oban stops
@@ -84,9 +107,11 @@ defmodule ReadaloudAudiobook.GenerateJob do
     |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx},
                                                 {:ok, audio_acc, timings_acc, offset_ms} ->
       Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
+      chunk_started = System.monotonic_time()
 
       case ReadaloudTTS.synthesize(chunk, voice) do
         {:ok, chunk_audio} ->
+          emit_chunk_stop(chunk_started, "ok")
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 
           # Transcribe and align to source text
@@ -101,6 +126,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
               {:error, reason} ->
                 Logger.warning("Transcription failed for chunk #{idx}: #{inspect(reason)}")
+                :telemetry.execute([:readaloud, :tts, :transcription_failure], %{count: 1}, %{})
                 []
             end
 
@@ -117,6 +143,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
           {:cont, {:ok, new_audio, timings_acc ++ chunk_timings, offset_ms + chunk_duration_ms}}
 
         {:error, reason} ->
+          emit_chunk_stop(chunk_started, "error")
           {:halt, {:error, "TTS failed on chunk #{idx}/#{total}: #{inspect(reason)}"}}
       end
     end)
@@ -129,6 +156,14 @@ defmodule ReadaloudAudiobook.GenerateJob do
       {:error, _} = error ->
         error
     end
+  end
+
+  defp emit_chunk_stop(started, status) do
+    :telemetry.execute(
+      [:readaloud, :tts, :chunk, :stop],
+      %{duration: System.monotonic_time() - started},
+      %{status: status}
+    )
   end
 
   defp strip_wav_header(wav) do

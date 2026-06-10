@@ -35,6 +35,10 @@ defmodule ReadaloudWebWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
+  # Prometheus scrape endpoint (GET /metrics). Mounted before Plug.Telemetry
+  # so Alloy's periodic scrapes don't pollute the HTTP metrics they collect.
+  plug PromEx.Plug, prom_ex_module: ReadaloudWeb.PromEx
+
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 

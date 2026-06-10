@@ -31,6 +31,12 @@ defmodule ReadaloudWebWeb.ProgressController do
     else
       %{dropped: dropped} = ReadaloudReader.observe_batch!(book_id, raw)
 
+      :telemetry.execute(
+        [:readaloud, :progress, :flush],
+        %{count: length(raw), dropped: length(dropped)},
+        %{transport: "beacon"}
+      )
+
       Enum.each(dropped, fn reason ->
         Logger.warning("[reader] dropping malformed beacon observation: #{inspect(reason)}")
       end)
