@@ -1,0 +1,85 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "588d7d8491db",
+  "session_id": "0157b421-626f-47d1-9caf-6cea94c6d82f",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-10T14:37:21.589663528Z",
+  "branch": "master",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "e2e/tests/audio-reload-guard.test.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "afd9b9b5b900",
+  "token_usage": {
+    "input_tokens": 20896,
+    "cache_creation_tokens": 711494,
+    "cache_read_tokens": 12260407,
+    "output_tokens": 70992,
+    "api_call_count": 81
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-10T14:37:21.561974759Z",
+    "agent_lines": 4,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 4,
+    "total_lines_changed": 4,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 229,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "apps/readaloud_web/assets/js/app.ts": 63,
+        "apps/readaloud_web/assets/js/hooks/audio_player.ts": 11,
+        "apps/readaloud_web/assets/js/lib/events.ts": 6,
+        "apps/readaloud_web/lib/readaloud_web_web/player_events.ex": 1,
+        "e2e/tests/audio-reload-guard.test.js": 148
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 148,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 233,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 233,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 233,
+      "agent_lines_removed": 0
+    }
+  ]
+}

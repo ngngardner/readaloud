@@ -1,0 +1,33 @@
+i just triggered the readaloud playback bug on mobile web when screen was off. reading ri started partway through the chap, closed my phone. the chapter finished, auto started the next one, got less than 30 secs in and stopped. browser said could not connect but why? use our new logs and metrics to diagnose and hopefully squash this bug
+
+---
+
+continue
+
+---
+
+continue
+
+---
+
+<task-notification>
+<task-id>bi8znv5e6</task-id>
+<tool-use-id>toolu_013cJaktVram9ugWmiwN3hvw</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/396ca62c-8310-467b-8e66-0bf69d1c25a2/tasks/bi8znv5e6.output</output-file>
+<status>completed</status>
+<summary>Background command "Run e2e suite expecting new test RED" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+once green, commit and deploy to pylon and merge to master
+
+---
+
+<task-notification>
+<task-id>bjjifw93e</task-id>
+<tool-use-id>toolu_01KZAt6ZitbrU9VsANG8Axqs</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/396ca62c-8310-467b-8e66-0bf69d1c25a2/tasks/bjjifw93e.output</output-file>
+<status>completed</status>
+<summary>Background command "Run e2e suite expecting GREEN with fix" completed (exit code 0)</summary>
+</task-notification>
