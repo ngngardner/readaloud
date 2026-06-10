@@ -32,13 +32,16 @@ describe("Accidental Navigation Popup", () => {
 		// Navigate to first chapter with ?nav=internal
 		const ch = chapters[0];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${ch.id}?nav=internal`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
+		});
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
 		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 		// nav=internal suppresses the conflict modal — assert that, after
-		// any plausible mount work has settled, the modal hasn't appeared.
-		// We can't wait for an event that *won't* fire, so we wait briefly
-		// then check; this is a negative assertion, not a sleep-for-state.
+		// the LV has joined (the modal renders post-join if it's going to),
+		// the modal hasn't appeared. This is a negative assertion, so wait
+		// for the positive signal (connected) and then check.
 		await page.waitForFunction(() => document.readyState === "complete", {
 			timeout: 2000,
 		});
@@ -56,18 +59,26 @@ describe("Accidental Navigation Popup", () => {
 		const laterChapter = chapters[Math.min(2, chapters.length - 1)];
 		await page.goto(
 			`${BASE_URL}/books/${BOOK_ID}/read/${laterChapter.id}?nav=internal`,
-			{ waitUntil: "networkidle2" },
+			{ waitUntil: "domcontentloaded" },
 		);
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		// Now navigate to chapter 1 WITHOUT nav=internal — should trigger
 		// the conflict modal because saved progress points elsewhere.
 		const firstChapter = chapters[0];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 		await page.waitForSelector(".modal.modal-open", { timeout: 5000 });
+		// The modal is part of the dead render, so it can show up before
+		// the LV socket joins — and a phx-click on its buttons before the
+		// join is silently dropped. Wait for the join before proceeding.
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 
 		const modal = await page.$(".modal.modal-open");
 		assert.ok(modal, "Conflict popup should appear when navigating backward");
@@ -133,16 +144,24 @@ describe("Accidental Navigation Popup", () => {
 		const laterChapter = chapters[Math.min(2, chapters.length - 1)];
 		await page.goto(
 			`${BASE_URL}/books/${BOOK_ID}/read/${laterChapter.id}?nav=internal`,
-			{ waitUntil: "networkidle2" },
+			{ waitUntil: "domcontentloaded" },
 		);
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const firstChapter = chapters[0];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 		await page.waitForSelector(".modal.modal-open", { timeout: 5000 });
+		// The modal is part of the dead render, so it can show up before
+		// the LV socket joins — and a phx-click on its buttons before the
+		// join is silently dropped. Wait for the join before proceeding.
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 
 		const modal = await page.$(".modal.modal-open");
 		assert.ok(modal, "Conflict popup should appear after backward nav");
@@ -170,18 +189,22 @@ describe("Accidental Navigation Popup", () => {
 		const firstChapter = chapters[0];
 		await page.goto(
 			`${BASE_URL}/books/${BOOK_ID}/read/${firstChapter.id}?nav=internal`,
-			{ waitUntil: "networkidle2" },
+			{ waitUntil: "domcontentloaded" },
 		);
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		// Navigate forward to chapter 2 without nav=internal — should NOT
 		// trigger the conflict modal (we're moving forward, not back).
 		const secondChapter = chapters[1];
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${secondChapter.id}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const modal = await page.$(".modal.modal-open");
@@ -201,9 +224,11 @@ describe("Accidental Navigation Popup", () => {
 		// Reload without nav=internal — should NOT trigger conflict modal
 		// because the chapter we're reloading matches saved progress.
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}/read/${chapterMatch[1]}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 		await page.waitForSelector("#chapter-text", { timeout: 10000 });
 
 		const modal = await page.$(".modal.modal-open");

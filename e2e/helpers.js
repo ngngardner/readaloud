@@ -17,43 +17,72 @@ export const BASE_URL = process.env.BASE_URL || "http://localhost:4000";
 export const BOOK_ID = process.env.BOOK_ID || "1";
 export const HEADLESS = process.env.HEADLESS !== "false";
 
-/** Launch browser + page with sensible defaults. */
+/**
+ * Launch browser + page with sensible defaults.
+ *
+ * When BROWSER_WS_ENDPOINT is set (the VM runs browser-server.js once
+ * for the whole suite), connect to the shared Chromium and return an
+ * isolated incognito context instead of launching a fresh browser —
+ * BrowserContext and Browser expose the same newPage()/close() surface,
+ * so callers and teardown() don't care which they got.
+ */
 export async function setup() {
-	const browser = await puppeteer.launch({
-		headless: HEADLESS,
-		args: ["--no-sandbox", "--disable-setuid-sandbox"],
-	});
+	const wsEndpoint = process.env.BROWSER_WS_ENDPOINT;
+	let browser;
+	if (wsEndpoint) {
+		const shared = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+		browser = await shared.createBrowserContext();
+	} else {
+		browser = await puppeteer.launch({
+			headless: HEADLESS,
+			args: ["--no-sandbox", "--disable-setuid-sandbox"],
+		});
+	}
 	const page = await browser.newPage();
 	await page.setViewport({ width: 1280, height: 800 });
 	return { browser, page };
 }
 
-/** Close the browser. */
+/** Close the browser (or the per-file context of the shared browser). */
 export async function teardown(browser) {
-	await browser.close();
+	if (typeof browser.browser === "function") {
+		// Shared-browser mode: `browser` is a per-file BrowserContext.
+		// Close it, then disconnect this process's CDP connection — the
+		// open websocket otherwise keeps the node:test child process
+		// alive forever and the suite hangs after the first file.
+		const shared = browser.browser();
+		await browser.close();
+		await shared.disconnect();
+	} else {
+		await browser.close();
+	}
 }
 
 /**
  * Navigate to a reader chapter page and wait for LiveView to mount AND
- * finish its first render cycle.
+ * connect its socket.
  *
  * Waits for three signals in order:
- *   1. networkidle2 — initial HTML loaded
- *   2. [data-phx-session] — LiveView socket connected
- *   3. #chapter-text — first post-mount render committed to the DOM
+ *   1. domcontentloaded — initial (dead-render) HTML parsed
+ *   2. [data-phx-session].phx-connected — LiveView socket joined
+ *   3. #chapter-text — chapter content present in the DOM
  *
- * Without (3), elements gated by mount-time assigns (#audio-player,
- * #speed-badge, etc.) can race the test's first `page.$()` and the
- * test fails with a misleading "selector not found" error. Tests that
- * need a specific element (e.g. #audio-player when audio_state is :ready)
+ * (2) is the load-bearing one: [data-phx-session] and #chapter-text
+ * both exist in the dead render, but phx-click/pushEvent interactions
+ * race the socket join without it. domcontentloaded + .phx-connected is
+ * both faster (no 500ms networkidle heuristic per navigation) and a
+ * stronger guarantee than the old networkidle2 wait. Tests that need a
+ * specific element (e.g. #audio-player when audio_state is :ready)
  * should still `waitForSelector` it explicitly — openReader only
- * guarantees the chapter has rendered.
+ * guarantees the chapter has rendered and the LV is live.
  */
 export async function openReader(page, { bookId, chapterId } = {}) {
 	const bid = bookId || BOOK_ID;
 	// If no chapterId given, go to the book page first and grab the first chapter link
 	if (!chapterId) {
-		await page.goto(`${BASE_URL}/books/${bid}`, { waitUntil: "networkidle2" });
+		await page.goto(`${BASE_URL}/books/${bid}`, {
+			waitUntil: "domcontentloaded",
+		});
 		// Find the first "Read" link that points to /books/:id/read/:chapter_id
 		const href = await page.evaluate((id) => {
 			const link = document.querySelector(`a[href*="/books/${id}/read/"]`);
@@ -63,8 +92,10 @@ export async function openReader(page, { bookId, chapterId } = {}) {
 		chapterId = href.match(/\/read\/(\d+)/)?.[1];
 	}
 	const url = `${BASE_URL}/books/${bid}/read/${chapterId}?nav=internal`;
-	await page.goto(url, { waitUntil: "networkidle2" });
-	await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+	await page.goto(url, { waitUntil: "domcontentloaded" });
+	await page.waitForSelector("[data-phx-session].phx-connected", {
+		timeout: 10000,
+	});
 	await page.waitForSelector("#chapter-text", { timeout: 10000 });
 	return { bookId: bid, chapterId };
 }

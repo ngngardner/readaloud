@@ -91,7 +91,11 @@ defmodule ReadaloudTTS.LocalAIProvider do
   def catalog(opts \\ []) do
     config = Keyword.get(opts, :config, Config.from_env())
 
-    case Req.get("#{config.base_url}/v1/models") do
+    # No retry: the catalog populates a voices dropdown, and callers
+    # (BookLive/ReaderLive handle_info) run it inside the LV process —
+    # Req's default 1s+2s+4s backoff would block the view for 7s
+    # whenever LocalAI is down. Fail fast and render an empty catalog.
+    case Req.get("#{config.base_url}/v1/models", retry: false) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         entries =
           models

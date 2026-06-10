@@ -45,9 +45,11 @@ describe("Audio player re-mount idempotency", () => {
 		for (const ch of chapters) {
 			await page.goto(
 				`${BASE_URL}/books/${bookId}/read/${ch.id}?nav=internal`,
-				{ waitUntil: "networkidle2" },
+				{ waitUntil: "domcontentloaded" },
 			);
-			await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+			await page.waitForSelector("[data-phx-session].phx-connected", {
+				timeout: 10000,
+			});
 			await page.waitForSelector("#chapter-text", { timeout: 10000 });
 			const player = await page
 				.waitForSelector("#audio-player", { timeout: 1000 })

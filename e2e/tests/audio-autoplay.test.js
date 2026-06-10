@@ -41,9 +41,11 @@ describe("Audio auto-next-chapter", () => {
 		for (const ch of chapters) {
 			await page.goto(
 				`${BASE_URL}/books/${bookId}/read/${ch.id}?nav=internal`,
-				{ waitUntil: "networkidle2" },
+				{ waitUntil: "domcontentloaded" },
 			);
-			await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+			await page.waitForSelector("[data-phx-session].phx-connected", {
+				timeout: 10000,
+			});
 			await page.waitForSelector("#chapter-text", { timeout: 10000 });
 			// `#audio-player` is gated by audio_state == :ready; absence after
 			// chapter-text renders means this chapter has no audio. Don't fail —
@@ -140,7 +142,7 @@ describe("Audio auto-next-chapter", () => {
 			cur.autoNextChapter = true;
 			localStorage.setItem("readaloud-reader-settings", JSON.stringify(cur));
 		});
-		await page.reload({ waitUntil: "networkidle2" });
+		await page.reload({ waitUntil: "domcontentloaded" });
 		await page.waitForSelector("#audio-element", { timeout: 10000 });
 
 		// Drive currentTime past the 15% prefetch trigger fraction by
@@ -231,7 +233,7 @@ describe("Audio auto-next-chapter", () => {
 			cur.autoNextChapter = true;
 			localStorage.setItem("readaloud-reader-settings", JSON.stringify(cur));
 		});
-		await page.reload({ waitUntil: "networkidle2" });
+		await page.reload({ waitUntil: "domcontentloaded" });
 		await page.waitForSelector("#audio-element", { timeout: 10000 });
 		// Wait for the hook to finish mount + apply the fresh
 		// PersistedRecord — observable as audio.src being populated.

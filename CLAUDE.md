@@ -119,7 +119,7 @@ Runs the full umbrella ExUnit suite (~1s).
 
 Boots a sandboxed NixOS VM with a real Phoenix release on port 4000, seeds the canonical fixture (`ReadaloudAudiobook.Fixtures.E2E.seed!/1` — one book, three chapters, the first two with silent audio), and runs the full Puppeteer suite under `e2e/tests/*.test.js` against it.
 
-**Use this instead of pushing to pylon for any regression that lives under `e2e/tests/`.** The VM is hermetic — no dev server, no manual seed, no port collisions. First run on a cold cache is ~2 min (VM provisioning); subsequent runs ~30–60s.
+**Use this instead of pushing to pylon for any regression that lives under `e2e/tests/`.** The VM is hermetic — no dev server, no manual seed, no port collisions. A full run is ~4–5 min (~80s VM boot + release start + seed, ~3 min suite); the per-test spec report is printed in the build log. One Chromium is shared across test files via `e2e/browser-server.js` (each file gets an incognito context), and the suite runs files sequentially on purpose — they share the BEAM/SQLite and reading-progress state.
 
 The fixture shape is the contract: every e2e test asserts its preconditions against it. To add a test that needs new data (a fourth chapter, a third audio chapter, a different book), extend `seed!/1` first — don't add a `t.skip` for missing data.
 

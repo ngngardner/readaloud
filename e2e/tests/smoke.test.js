@@ -19,7 +19,7 @@ describe("Smoke Test", () => {
 
 	it("library page loads", async () => {
 		const response = await page.goto(`${BASE_URL}/`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 		assert.strictEqual(
 			response.status(),
@@ -29,14 +29,17 @@ describe("Smoke Test", () => {
 	});
 
 	it("library page has LiveView session", async () => {
-		await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle2" });
-		const phxSession = await page.$("[data-phx-session]");
+		await page.goto(`${BASE_URL}/`, { waitUntil: "domcontentloaded" });
+		const phxSession = await page.waitForSelector(
+			"[data-phx-session].phx-connected",
+			{ timeout: 10000 },
+		);
 		assert.ok(phxSession, "LiveView should be connected");
 	});
 
 	it("book page loads with chapter list", async () => {
 		const response = await page.goto(`${BASE_URL}/books/${BOOK_ID}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 		assert.strictEqual(response.status(), 200, "Book page should return 200");
 
@@ -48,7 +51,7 @@ describe("Smoke Test", () => {
 	it("reader page loads with chapter content", async () => {
 		// Navigate to book page to find a chapter link
 		await page.goto(`${BASE_URL}/books/${BOOK_ID}`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 
 		const href = await page.evaluate((id) => {
@@ -60,12 +63,14 @@ describe("Smoke Test", () => {
 
 		// Navigate to the reader
 		const response = await page.goto(`${BASE_URL}${href}?nav=internal`, {
-			waitUntil: "networkidle2",
+			waitUntil: "domcontentloaded",
 		});
 		assert.strictEqual(response.status(), 200, "Reader page should return 200");
 
 		// Wait for LiveView
-		await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+		await page.waitForSelector("[data-phx-session].phx-connected", {
+			timeout: 10000,
+		});
 
 		// Check that chapter content rendered
 		const content = await page.$("#chapter-text");

@@ -10,10 +10,15 @@ defmodule ReadaloudWebWeb.BookLive do
     chapters = ReadaloudLibrary.list_chapters(book.id)
     progress = ReadaloudReader.get_progress(book.id)
     audio_map = build_audio_map(chapters, book)
-    catalog = fetch_catalog()
+
+    # The TTS catalog comes from LocalAI over HTTP — fetch it after the
+    # join (same pattern as ReaderLive) so a slow or down TTS backend
+    # can't block the dead render or the LV mount.
+    catalog = []
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(ReadaloudWeb.PubSub, "tasks:audiobook:#{book.id}")
+      send(self(), :fetch_catalog)
 
       ReadaloudAudiobook.ensure_audio_generated(
         book,
@@ -132,6 +137,18 @@ defmodule ReadaloudWebWeb.BookLive do
       end
 
     {:noreply, assign(socket, selected_model: model_id, selected_voice: new_voice)}
+  end
+
+  @impl true
+  def handle_info(:fetch_catalog, socket) do
+    catalog = fetch_catalog()
+
+    {:noreply,
+     assign(socket,
+       catalog: catalog,
+       selected_model: default_model(socket.assigns.book, catalog),
+       selected_voice: default_voice(socket.assigns.book, catalog)
+     )}
   end
 
   @impl true

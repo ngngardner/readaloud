@@ -31,10 +31,14 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert";
 import { setup, teardown, openReader } from "../helpers.js";
 
-// Stock reloadWithJitter fires after RELOAD_JITTER_MIN..MAX (5-10s).
-// Wait past the max plus slack to prove the reload did not happen.
-const JITTER_MAX_MS = 10_000;
-const SLACK_MS = 3_000;
+// Stock reloadWithJitter fires after reloadJitterMin..Max (5-10s by
+// default). Those are mutable LiveSocket instance fields read at call
+// time, so the test shrinks the window — a broken guard still reloads,
+// just within milliseconds instead of seconds, and the negative
+// assertion only has to outwait the shrunk window plus page-load time.
+const JITTER_MIN_MS = 50;
+const JITTER_MAX_MS = 250;
+const SLACK_MS = 1_750;
 
 describe("Background-audio reload guard", () => {
 	let browser, page;
@@ -67,9 +71,17 @@ describe("Background-audio reload guard", () => {
 		});
 
 		// Emulate the locked screen: visibilityState becomes "hidden".
-		// Plant a marker that a page reload would wipe.
+		// Plant a marker that a page reload would wipe, and shrink the
+		// jitter window so a regression reloads fast instead of in 5-10s.
+		await page.evaluate(
+			([min, max]) => {
+				window.liveSocket.reloadJitterMin = min;
+				window.liveSocket.reloadJitterMax = max;
+				window.__reloadGuardMarker = true;
+			},
+			[JITTER_MIN_MS, JITTER_MAX_MS],
+		);
 		await page.evaluate(() => {
-			window.__reloadGuardMarker = true;
 			Object.defineProperty(document, "visibilityState", {
 				value: "hidden",
 				configurable: true,
@@ -88,7 +100,8 @@ describe("Background-audio reload guard", () => {
 		});
 
 		// Stock behavior: view.destroy() + window.location.reload() within
-		// 5-10s. Wait past that window.
+		// the (shrunk) jitter window. Wait past it plus page-load slack to
+		// prove the reload did not happen.
 		await new Promise((r) => setTimeout(r, JITTER_MAX_MS + SLACK_MS));
 
 		const afterHidden = await page.evaluate(() => ({
@@ -113,8 +126,18 @@ describe("Background-audio reload guard", () => {
 
 		// Screen comes back on. The socket here is healthy (we never
 		// actually broke it), so the deferred reload must be skipped —
-		// recovery is rejoin, not reload.
+		// recovery is rejoin, not reload. The guard announces that exact
+		// outcome with readaloud:lv-reload-resumed once the reconnect
+		// grace elapses — wait on the event instead of sleeping past it.
 		await page.evaluate(() => {
+			window.__reloadResumedSeen = false;
+			window.addEventListener(
+				"readaloud:lv-reload-resumed",
+				() => {
+					window.__reloadResumedSeen = true;
+				},
+				{ once: true },
+			);
 			Object.defineProperty(document, "visibilityState", {
 				value: "visible",
 				configurable: true,
@@ -126,8 +149,10 @@ describe("Background-audio reload guard", () => {
 			document.dispatchEvent(new Event("visibilitychange"));
 		});
 
-		// Reconnect grace (4s) plus slack.
-		await new Promise((r) => setTimeout(r, 6_000));
+		// Fires after RELOAD_RECONNECT_GRACE_MS (4s); generous timeout.
+		await page.waitForFunction(() => window.__reloadResumedSeen === true, {
+			timeout: 10_000,
+		});
 
 		const afterVisible = await page.evaluate(() => ({
 			marker: window.__reloadGuardMarker === true,

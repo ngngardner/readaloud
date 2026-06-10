@@ -51,9 +51,11 @@ describe("Audio autoplay across LV disconnect", () => {
 		for (const ch of chapters) {
 			await page.goto(
 				`${BASE_URL}/books/${bookId}/read/${ch.id}?nav=internal`,
-				{ waitUntil: "networkidle2" },
+				{ waitUntil: "domcontentloaded" },
 			);
-			await page.waitForSelector("[data-phx-session]", { timeout: 10000 });
+			await page.waitForSelector("[data-phx-session].phx-connected", {
+				timeout: 10000,
+			});
 			await page.waitForSelector("#chapter-text", { timeout: 10000 });
 			const player = await page
 				.waitForSelector("#audio-player", { timeout: 1000 })
@@ -90,7 +92,7 @@ describe("Audio autoplay across LV disconnect", () => {
 			cur.autoNextChapter = true;
 			localStorage.setItem("readaloud-reader-settings", JSON.stringify(cur));
 		});
-		await page.reload({ waitUntil: "networkidle2" });
+		await page.reload({ waitUntil: "domcontentloaded" });
 		await page.waitForSelector("#audio-element", { timeout: 10000 });
 		// Wait for the hook to apply its initial src so we have something
 		// to swap away from.
