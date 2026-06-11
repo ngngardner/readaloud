@@ -4,6 +4,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
   require Logger
 
   alias ReadaloudReader.Progress.Observation
+  alias ReadaloudWebWeb.ChapterNeighbors
   alias ReadaloudWebWeb.PlayerEvents
   alias ReadaloudWebWeb.ThemeSelector
 
@@ -64,17 +65,8 @@ defmodule ReadaloudWebWeb.ReaderLive do
     audio = ReadaloudAudiobook.get_chapter_audio(chapter_id)
     audio_state = determine_audio_state(chapter_id, audio)
 
-    next_audio_chapter =
-      case next_chapter(chapter, chapters) do
-        nil -> nil
-        ch -> if ReadaloudAudiobook.get_chapter_audio(ch.id), do: ch, else: nil
-      end
-
-    prev_audio_chapter =
-      case prev_chapter(chapter, chapters) do
-        nil -> nil
-        ch -> if ReadaloudAudiobook.get_chapter_audio(ch.id), do: ch, else: nil
-      end
+    next_audio_chapter = ChapterNeighbors.next_with_audio(chapters, chapter.id)
+    prev_audio_chapter = ChapterNeighbors.prev_with_audio(chapters, chapter.id)
 
     restore? = Keyword.get(opts, :restore_progress?, false)
     progress = if restore?, do: ReadaloudReader.get_progress(book.id), else: nil
@@ -900,15 +892,12 @@ defmodule ReadaloudWebWeb.ReaderLive do
   defp nav_target(_params, socket, :prev),
     do: prev_chapter(socket.assigns.chapter, socket.assigns.chapters)
 
-  defp prev_chapter(current, chapters) do
-    idx = Enum.find_index(chapters, &(&1.id == current.id))
-    if idx && idx > 0, do: Enum.at(chapters, idx - 1), else: nil
-  end
+  # Adjacency is shared with the /nav endpoint via ChapterNeighbors; only
+  # the (current, chapters) argument order is preserved here for the
+  # template call sites.
+  defp prev_chapter(current, chapters), do: ChapterNeighbors.prev(chapters, current.id)
 
-  defp next_chapter(current, chapters) do
-    idx = Enum.find_index(chapters, &(&1.id == current.id))
-    if idx && idx < length(chapters) - 1, do: Enum.at(chapters, idx + 1), else: nil
-  end
+  defp next_chapter(current, chapters), do: ChapterNeighbors.next(chapters, current.id)
 
   # Two paths for advancing the chapter, distinguished by `client_owned`:
   #

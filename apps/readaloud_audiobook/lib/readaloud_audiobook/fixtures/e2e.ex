@@ -22,7 +22,7 @@ defmodule ReadaloudAudiobook.Fixtures.E2E do
   @default_title "Test Book"
   @default_author "Test Author"
   @default_chapter_count 3
-  @default_audio_chapters [1, 2]
+  @default_audio_chapters [1, 2, 3]
 
   @doc """
   Idempotently seed the e2e fixture book and return its IDs.
@@ -33,8 +33,10 @@ defmodule ReadaloudAudiobook.Fixtures.E2E do
     * `:chapters` — chapter count (default `3`; minimum required by
       `accidental-navigation.test.js` and `reader-styles-persist.test.js`).
     * `:audio_for` — chapter numbers that should have a row in
-      `chapter_audios` (default `[1, 2]` — `audio-autoplay.test.js`
-      requires both a current chapter *and* a next chapter to have audio).
+      `chapter_audios` (default `[1, 2, 3]` — `audio-autoplay.test.js`
+      requires both a current chapter *and* a next chapter to have audio;
+      `autoplay-offline-chain.test.js` chains two autoplay boundaries
+      offline, which needs three consecutive audio-ready chapters).
     * `:storage_dir` — directory for content + audio files. Defaults to
       `STORAGE_PATH` env var if set (matches the systemd unit) or
       `System.tmp_dir!()`.

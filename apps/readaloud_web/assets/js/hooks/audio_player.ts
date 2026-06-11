@@ -1,3 +1,9 @@
+import {
+  type ChapterNavTarget,
+  type ChapterWindow,
+  navUrlFor,
+  parseChapterWindow,
+} from "../lib/chapter_window";
 import { cycleOption } from "../lib/cycle_option";
 import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
 import type { PlayerEventDetailValue } from "../lib/events";
@@ -157,6 +163,17 @@ let nextPlayerId = 1;
 // while hook state dies with the instance, and morphdom strips runtime
 // DOM attributes even on ignored elements.
 const LOADED_CHAPTER = new WeakMap<HTMLAudioElement, string>();
+
+// The loaded chapter's nav neighbors — the client-owned copy the autoplay
+// chain reads at every `ended`. NEVER read the raw dataset for nav targets:
+// the dataset is a server projection that can be frozen one chapter behind
+// when the WS is dead, and consuming it at a chapter boundary navigates to
+// the chapter that just finished (the 2026-06-11 incident). Hydrated from
+// the dataset only while dataset and LOADED_CHAPTER agree, and from the
+// prefetched /nav response on a client-owned swap. Same WeakMap rationale
+// as LOADED_CHAPTER: must live and die with the <audio> element, not the
+// hook instance.
+const CHAPTER_WINDOW = new WeakMap<HTMLAudioElement, ChapterWindow>();
 
 // How long the client-side last-position cache outranks the server's
 // initial position after a reload. Within this window the local cache is
@@ -547,10 +564,35 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     let prefetchedBlobUrl: string | null = null;
     let prefetchedFor: string | null = null;
     let prefetchAbort: AbortController | null = null;
+    // Neighbors OF the prefetched chapter, fetched alongside its audio.
+    // This is what lets the chain extend past one offline boundary: by the
+    // time the prefetched chapter starts playing, its own "next" is local
+    // and doesn't depend on the WS delivering a dataset refresh.
+    let prefetchedNav: ChapterWindow | null = null;
+
+    const fetchPrefetchNav = (audioUrl: string): void => {
+      const navUrl = navUrlFor(audioUrl);
+      fetch(navUrl)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((data: JsonValue) => {
+          if (prefetchedFor !== audioUrl) return; // target changed mid-flight
+          prefetchedNav = parseChapterWindow(data);
+          log("prefetch-nav-done", {
+            url: navUrl,
+            hasNext: prefetchedNav?.next !== null,
+          });
+        })
+        .catch((err: Error) => {
+          log("prefetch-nav-fail", { url: navUrl, error: String(err) });
+        });
+    };
 
     const tryStartPrefetch = (): void => {
       if (!readerSettings.get().autoNextChapter) return;
-      const url = ctx.dataset.nextAudioUrl;
+      const url = navTarget("next")?.networkUrl;
       if (!url) return;
       // Already done or in flight for the same URL? Skip.
       if (prefetchedBlobUrl && prefetchedFor === url) return;
@@ -567,7 +609,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         URL.revokeObjectURL(prefetchedBlobUrl);
         prefetchedBlobUrl = null;
       }
+      prefetchedNav = null;
       prefetchedFor = url;
+      fetchPrefetchNav(url);
       const abort = new AbortController();
       prefetchAbort = abort;
       log("prefetch-start", { url });
@@ -614,12 +658,21 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // and the last-position cache can't drift from the element. Critically:
     // same <audio> element, so the OS audio session is preserved and
     // lock-screen playback continues without requiring a new user gesture.
+    // Desired-playback intent: set on every autoplay swap, cleared by the
+    // `playing` event (i.e. by evidence, not by the play() promise — a
+    // promise can resolve into an immediate stall). While set, connectivity
+    // transitions retry the swap from the chapter's *network* URL. This is
+    // the level-triggered half of offline autoplay: the 2026-06-11 chain
+    // died into NETWORK_NO_SOURCE sixteen seconds before the network came
+    // back, with nothing scheduled to ever look at the element again.
+    let pendingAutoplay: ChapterNavTarget | null = null;
+
     const swapToChapter = (
       chapterId: string,
       audioUrl: string,
       timingsUrl: string,
       chapterTitle: string,
-      opts: { autoplay: boolean },
+      opts: { autoplay: boolean; networkUrl: string },
     ): void => {
       log("swap-to-chapter", {
         srcKind: audioUrl.startsWith("blob:") ? "blob" : "url",
@@ -627,6 +680,14 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         audioPaused: audio.paused,
         autoplay: opts.autoplay,
       });
+      pendingAutoplay = opts.autoplay
+        ? {
+            chapterId,
+            networkUrl: opts.networkUrl,
+            timingsUrl,
+            title: chapterTitle,
+          }
+        : null;
       audio.src = audioUrl;
       audio.load();
       LOADED_CHAPTER.set(audio, chapterId);
@@ -665,17 +726,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       return `${path.replace(/\/read\/\d+/, `/read/${chapterId}`)}?nav=internal`;
     };
 
-    // Adjacent-chapter nav target from the dataset. Returns null when the
-    // neighbor has no audio yet — callers fall back to the server-owned
-    // path so the user can still reach audio-less chapters.
-    const navTarget = (
-      dir: "next" | "prev",
-    ): {
-      chapterId: string;
-      networkUrl: string;
-      timingsUrl: string;
-      title: string;
-    } | null => {
+    // Adjacent-chapter nav target from the dataset attrs. ONLY consumed
+    // via the chapter window below — see adoptDatasetWindow.
+    const datasetTarget = (dir: "next" | "prev"): ChapterNavTarget | null => {
       const d = ctx.dataset;
       const chapterId = dir === "next" ? d.nextChapterId : d.prevChapterId;
       const networkUrl = dir === "next" ? d.nextAudioUrl : d.prevAudioUrl;
@@ -685,6 +738,40 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       if (!chapterId || !networkUrl || !timingsUrl) return null;
       return { chapterId, networkUrl, timingsUrl, title };
     };
+
+    // Hydrate the chapter window from the dataset — but only while the
+    // dataset and the loaded audio agree on what the current chapter IS.
+    // After a client-owned swap with a dead/wedged socket, the dataset
+    // keeps describing the previous chapter until the server's diff lands;
+    // adopting its neighbors then would re-arm exactly the stale-"next"
+    // bug this window exists to prevent.
+    const adoptDatasetWindow = (): void => {
+      const datasetChapter = ctx.dataset.chapterId;
+      if (!datasetChapter) return;
+      if (LOADED_CHAPTER.get(audio) !== datasetChapter) return;
+      CHAPTER_WINDOW.set(audio, {
+        next: datasetTarget("next"),
+        prev: datasetTarget("prev"),
+      });
+    };
+
+    // Nav target for chapter navigation. Returns null when the neighbor
+    // has no audio yet (callers fall back to the server-owned path so the
+    // user can still reach audio-less chapters) — or when the window is
+    // simply unknown (offline past the prefetched horizon), in which case
+    // stopping is correct and self-swapping is not.
+    const navTarget = (dir: "next" | "prev"): ChapterNavTarget | null => {
+      const win = CHAPTER_WINDOW.get(audio);
+      if (!win) return null;
+      return dir === "next" ? win.next : win.prev;
+    };
+
+    // Initial hydration. Fresh mount: set-initial-src above has recorded
+    // the dataset's chapter into LOADED_CHAPTER, so this adopts. Re-mount
+    // onto a preserved (possibly mid-playback) element whose chapter
+    // doesn't match the dataset: this refuses, and the element's previous
+    // window survives in the module-scope WeakMap.
+    adoptDatasetWindow();
 
     // The single user-initiated chapter-change projection. Every client
     // writer (pill buttons, keyboard arrows, lock-screen media keys,
@@ -701,6 +788,16 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         return false;
       }
 
+      // A target equal to the loaded chapter means our neighbor knowledge
+      // is stale (it can only happen when a projection lagged) — swapping
+      // would restart the chapter the user just finished at 0:00 and
+      // clobber the position cache with it. Refuse; reconnection will
+      // refresh the window.
+      if (target.chapterId === LOADED_CHAPTER.get(audio)) {
+        log("nav-blocked-self-swap", { target: target.chapterId });
+        return false;
+      }
+
       // Use the prefetched in-memory blob if it's for THIS URL — this is
       // the whole point of prefetch and is what makes background-tab
       // autoplay actually work. Fall back to the network URL otherwise
@@ -710,8 +807,14 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           ? prefetchedBlobUrl
           : target.networkUrl;
       const useBlob = audioUrl !== target.networkUrl;
+      // The prefetched /nav response describes the chapter we're swapping
+      // TO; it becomes the new window even if the WS never delivers a
+      // dataset refresh. Captured before the prefetch slots reset below.
+      const navForTarget =
+        prefetchedFor === target.networkUrl ? prefetchedNav : null;
       log(dir === "next" ? "go-to-next-chapter" : "go-to-prev-chapter", {
         useBlob,
+        hasPrefetchedNav: navForTarget !== null,
         prefetchedFor,
         prefetchInFlight: prefetchAbort !== null,
         toTitle: target.title,
@@ -726,9 +829,21 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // chapter after this) starts fresh.
       prefetchedBlobUrl = null;
       prefetchedFor = null;
+      prefetchedNav = null;
       if (prefetchAbort) {
         prefetchAbort.abort();
         prefetchAbort = null;
+      }
+
+      // Advance the window with the swap. Better an empty window than a
+      // stale one: empty blocks the next boundary gracefully until the
+      // dataset (reconnect) or the next prefetch refills it; stale
+      // navigates somewhere wrong.
+      if (navForTarget) {
+        CHAPTER_WINDOW.set(audio, navForTarget);
+        log("window-adopt", { source: "prefetch-nav" });
+      } else {
+        CHAPTER_WINDOW.delete(audio);
       }
 
       swapToChapter(
@@ -738,6 +853,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         target.title,
         {
           autoplay: true,
+          networkUrl: target.networkUrl,
         },
       );
 
@@ -803,6 +919,42 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     const goToNextChapter = (): boolean => clientNavigate("next");
     const goToPrevChapter = (): boolean => clientNavigate("prev");
 
+    // Level-triggered recovery for a swap that never reached playback: an
+    // autoplay chapter chain that hits a dead network ends in an element
+    // with NETWORK_NO_SOURCE and no event ever scheduled again. Re-attempt
+    // when connectivity comes back ('online') or the user looks at the
+    // page ('visible'). Bounded by trigger frequency; a successful
+    // `playing` clears the intent.
+    //
+    // Do NOT gate on `audio.paused`: play() flips it false synchronously
+    // and a failed source load never flips it back, so the exact state
+    // this recovery exists for can present as "not paused". Gate on load
+    // evidence instead — a dead element (error / nothing ever loaded)
+    // needs a full re-swap from the network URL; an element whose load
+    // succeeded but whose play() was rejected just needs another play().
+    const retryPendingAutoplay = (reason: string): void => {
+      if (!pendingAutoplay) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return;
+      }
+      const p = pendingAutoplay;
+      const dead = audio.error !== null || audio.readyState === 0;
+      log("autoplay-retry", { reason, toChapter: p.chapterId, dead });
+      if (dead) {
+        swapToChapter(p.chapterId, p.networkUrl, p.timingsUrl, p.title, {
+          autoplay: true,
+          networkUrl: p.networkUrl,
+        });
+      } else {
+        audio
+          .play()
+          .then(() => log("swap-play-ok"))
+          .catch((err: Error) => {
+            log("swap-play-blocked", { error: String(err) });
+          });
+      }
+    };
+
     const safeSet = (
       action: MediaSessionAction,
       handler: MediaSessionActionHandler | null,
@@ -823,7 +975,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // nothing), which is correct.
     const registerMediaSessionNavHandlers = (): void => {
       if (!ms) return;
-      if (ctx.dataset.nextAudioUrl) {
+      if (navTarget("next")) {
         safeSet("nexttrack", () => {
           log("media-session-nexttrack");
           goToNextChapter();
@@ -831,7 +983,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       } else {
         safeSet("nexttrack", null);
       }
-      if (ctx.dataset.prevAudioUrl) {
+      if (navTarget("prev")) {
         safeSet("previoustrack", () => {
           log("media-session-previoustrack");
           goToPrevChapter();
@@ -915,11 +1067,15 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         ctx.dataset.audioUrl,
         ctx.dataset.timingsUrl,
         ctx.dataset.chapterTitle ?? "",
-        { autoplay: wasPlaying },
+        { autoplay: wasPlaying, networkUrl: ctx.dataset.audioUrl },
       );
     };
     ctx.onUpdate(() => {
       syncAudioToDataset();
+      // After a server-owned move the dataset and the loaded chapter agree
+      // again, so the freshly delivered neighbors become the window. (A
+      // stale diff for a chapter we've already left is rejected inside.)
+      adoptDatasetWindow();
       // Chapter changes move the next/prev targets and the lock-screen
       // title with them.
       registerMediaSessionNavHandlers();
@@ -1068,6 +1224,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       playPauseBtn.textContent = audio.paused ? PLAY_GLYPH : PAUSE_GLYPH;
     });
 
+    // Actual playback is the evidence that a pending autoplay swap landed.
+    ctx.on(audio, "playing", () => {
+      pendingAutoplay = null;
+    });
+
     // Side effects on play/pause that aren't DOM projection.
     ctx.on(audio, "play", () => {
       // Fresh heartbeat series — deltas must not span the paused gap.
@@ -1166,6 +1327,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           : "visibility-visible",
         audioSnapshot(),
       );
+      if (document.visibilityState === "visible") {
+        retryPendingAutoplay("visibility-visible");
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     ctx.onDestroy(() =>
@@ -1187,7 +1351,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(window, "pageshow", (e) =>
       log("page-show", { persisted: e.persisted, ...audioSnapshot() }),
     );
-    ctx.on(window, "online", () => log("net-online", audioSnapshot()));
+    ctx.on(window, "online", () => {
+      log("net-online", audioSnapshot());
+      retryPendingAutoplay("net-online");
+    });
     ctx.on(window, "offline", () => log("net-offline", audioSnapshot()));
 
     // Mirror the app.ts reload guard's decisions into this channel:

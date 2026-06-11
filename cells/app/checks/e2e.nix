@@ -96,7 +96,7 @@ pkgs.testers.nixosTest {
     # Verify seeded data — defensive sanity, not a substitute for the suite.
     server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM books;' | grep -q '^1$'")
     server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapters;' | grep -q '^3$'")
-    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapter_audios;' | grep -q '^2$'")
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapter_audios;' | grep -q '^3$'")
     server.succeed("curl -sf http://localhost:4000/books/1 | grep -q 'Chapter 1'")
 
     # Set up the e2e test directory with pre-built node_modules.
@@ -128,6 +128,12 @@ pkgs.testers.nixosTest {
     # moment, which races horribly when reader-styles-persist or audio
     # tests rewrite progress in parallel. Sequential is ~2× slower but
     # deterministic, which is the tradeoff this suite is for.
+    # AUDIO_FIXTURE_FILE lets autoplay-offline-chain.test.js fail a media
+    # load server-side (hide the WAV, serve 500). CDP network emulation
+    # and Fetch interception do NOT apply to chromium media-element
+    # requests in this VM, so "offline" audio loads succeed unless the
+    # file itself is gone. The suite runs as root; the path is the real
+    # /var/lib/readaloud/files location (not PrivateTmp).
     print(server.succeed(
         "cd /tmp/e2e && "
         "PUPPETEER_EXECUTABLE_PATH=\"${pkgs.chromium}/bin/chromium\" "
@@ -135,6 +141,7 @@ pkgs.testers.nixosTest {
         "BASE_URL=\"http://localhost:4000\" "
         "BOOK_ID=\"1\" "
         "HEADLESS=\"true\" "
+        "AUDIO_FIXTURE_FILE=\"$(sqlite3 /var/lib/readaloud/readaloud.db 'SELECT audio_path FROM chapter_audios LIMIT 1;')\" "
         "node --test --test-concurrency=1 --test-reporter=spec tests/*.test.js"
     ))
     server.succeed("systemctl stop e2e-browser")

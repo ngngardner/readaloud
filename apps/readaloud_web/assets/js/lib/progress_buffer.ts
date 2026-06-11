@@ -22,6 +22,7 @@
 // delivered (WS happy path) or no longer worth resending (server has
 // fresher state from in-flight ticks).
 
+import { beaconBestEffort, flushConfirmed } from "./confirmed_flush";
 import { type JsonValue, isJsonObject, parseJson } from "./types";
 
 export interface ProgressObservation {
@@ -49,8 +50,13 @@ interface ProgressBufferDeps {
 }
 
 const STORAGE_KEY_PREFIX = "readaloud-progress-buffer:";
-const MAX_BUFFER_ENTRIES = 50;
-const BACKLOG_PRUNE_AGE_MS = 60_000;
+// Wide enough to carry a commute-length offline gap: the 2026-06-11
+// incident's final chapter pivot was recorded 8 minutes before the next
+// mount and the old 60s window pruned it before it could be replayed —
+// the server never learned the user had moved on. Position ticks are
+// individually cheap; the pivots they travel with are not.
+const MAX_BUFFER_ENTRIES = 150;
+const BACKLOG_PRUNE_AGE_MS = 10 * 60_000;
 
 function storageKey(bookId: number): string {
   return `${STORAGE_KEY_PREFIX}${bookId}`;
@@ -186,22 +192,22 @@ function pruneBacklog(
 export function attachProgressBuffer(deps: ProgressBufferDeps): ProgressBuffer {
   const { bookId, beaconUrl, pushObservations } = deps;
 
-  // Replay anything still in localStorage from a prior mount or unload.
-  // Prune first — if the user force-killed the tab N days ago, the same
-  // stale entry would otherwise re-fire on every mount forever (server
-  // stale-drops it, but that's bytes wasted on every page load). Persist
-  // the pruned form back so the cleanup survives even if no observation
-  // happens this mount.
-  const initial = pruneBacklog(readBacklog(bookId), Date.now());
-  writeBacklog(bookId, initial);
-  if (initial.length > 0) {
+  // Replay anything still in localStorage from a prior mount or unload —
+  // BEFORE pruning, so the final observations of a session that died
+  // offline (the chapter pivot especially) get at least one delivery
+  // attempt instead of being silently aged out. The pruned form is
+  // persisted right after, so a stale entry re-fires at most once, not
+  // on every mount forever.
+  const initialBacklog = readBacklog(bookId);
+  if (initialBacklog.length > 0) {
     try {
-      pushObservations(initial);
+      pushObservations(initialBacklog);
     } catch {
-      // pushEvent shouldn't throw; if it does, sendBeacon still owns the
-      // durable path and we fall back on next visibilitychange.
+      // pushEvent shouldn't throw; if it does, the HTTP path still owns
+      // durability on the next flush trigger.
     }
   }
+  writeBacklog(bookId, pruneBacklog(initialBacklog, Date.now()));
 
   function append(obs: ProgressObservation): void {
     const now = Date.now();
@@ -209,33 +215,59 @@ export function attachProgressBuffer(deps: ProgressBufferDeps): ProgressBuffer {
     writeBacklog(bookId, merged);
   }
 
-  function flushViaBeacon(): void {
+  const entryKey = (o: ProgressObservation): string =>
+    `${o.observed_at} ${o.chapter_id}`;
+
+  // Confirmed-delivery flush — only observations the server 2xx'd leave
+  // the backlog. The old sendBeacon flush cleared on "queued", which is a
+  // silent drop when the network is down; "the next observe re-seeds the
+  // buffer" doesn't hold for the *last* observations of a session (the
+  // 2026-06-11 final pivot had no next observe).
+  let flushInFlight = false;
+  function flush(): void {
+    if (flushInFlight) return;
     const backlog = readBacklog(bookId);
     if (backlog.length === 0) return;
-    if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
-    const body = new Blob([JSON.stringify({ observations: backlog })], {
-      type: "application/json",
-    });
-    const accepted = navigator.sendBeacon(beaconUrl, body);
-    if (accepted) {
-      // sendBeacon's "accepted" only means the browser queued the request,
-      // not that the server received it. But the request has the same
-      // observation payload the server's idempotent `observe!/1` already
-      // tolerates as a duplicate, so clearing locally is safe — even if
-      // the beacon fails, the next observe will re-seed the buffer.
-      writeBacklog(bookId, []);
-    }
+    flushInFlight = true;
+    flushConfirmed(beaconUrl, "observations", backlog)
+      .then((delivered) => {
+        if (delivered.length === 0) return;
+        const deliveredKeys = new Set(delivered.map(entryKey));
+        writeBacklog(
+          bookId,
+          readBacklog(bookId).filter((o) => !deliveredKeys.has(entryKey(o))),
+        );
+      })
+      .finally(() => {
+        flushInFlight = false;
+      });
+  }
+  flush();
+
+  function onVisibilityChange(): void {
+    // `hidden` is the canonical last-chance flush; `visible` drains
+    // observations recorded while the screen was locked without waiting
+    // for the WS to re-establish.
+    flush();
   }
 
-  function onVisibilityHidden(): void {
-    if (document.visibilityState === "hidden") flushViaBeacon();
+  function onOnline(): void {
+    flush();
   }
 
   // pagehide is more reliable than visibilitychange on iOS Safari for
-  // tab close + bfcache eviction. Both are registered; flushViaBeacon is
-  // idempotent on an empty backlog.
-  document.addEventListener("visibilitychange", onVisibilityHidden);
-  window.addEventListener("pagehide", flushViaBeacon);
+  // tab close + bfcache eviction, but may not leave enough page lifetime
+  // for a confirmed round-trip — so also fire a best-effort beacon
+  // WITHOUT clearing (observe!/1 is idempotent; duplicates are fine,
+  // silent loss is not).
+  function onPageHide(): void {
+    flush();
+    beaconBestEffort(beaconUrl, "observations", readBacklog(bookId));
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("online", onOnline);
 
   return {
     observe(input) {
@@ -254,8 +286,9 @@ export function attachProgressBuffer(deps: ProgressBufferDeps): ProgressBuffer {
       }
     },
     detach() {
-      document.removeEventListener("visibilitychange", onVisibilityHidden);
-      window.removeEventListener("pagehide", flushViaBeacon);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("online", onOnline);
     },
   };
 }

@@ -17,7 +17,7 @@
  *
  * Requires the canonical e2e fixture: chapter 1 has audio AND its next
  * chapter (chapter 2) also has audio, so the manual nav has a JS-side
- * target to swap to. `seed_e2e_book!/1` defaults to `audio_for: [1, 2]`.
+ * target to swap to. `seed_e2e_book!/1` defaults to `audio_for: [1, 2, 3]`.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";

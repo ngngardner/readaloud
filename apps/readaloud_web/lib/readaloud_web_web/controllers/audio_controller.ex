@@ -1,6 +1,8 @@
 defmodule ReadaloudWebWeb.AudioController do
   use ReadaloudWebWeb, :controller
 
+  alias ReadaloudWebWeb.ChapterNeighbors
+
   def stream(conn, %{"chapter_id" => chapter_id}) do
     case ReadaloudAudiobook.get_chapter_audio(String.to_integer(chapter_id)) do
       nil ->
@@ -58,6 +60,39 @@ defmodule ReadaloudWebWeb.AudioController do
       _ ->
         :invalid
     end
+  end
+
+  # Neighbor metadata for the audio-player hook's chapter window. The LV
+  # dataset carries the same data but only advances over the WebSocket;
+  # this HTTP copy is fetched alongside the next-chapter audio prefetch so
+  # an offline/wedged-WS autoplay swap still knows its own neighbors.
+  # Must stay in lockstep with ReaderLive's next/prev assigns — both go
+  # through ChapterNeighbors.
+  def nav(conn, %{"book_id" => book_id, "chapter_id" => chapter_id}) do
+    book_id = String.to_integer(book_id)
+    chapter_id = String.to_integer(chapter_id)
+    chapters = ReadaloudLibrary.list_chapters(book_id)
+
+    if Enum.any?(chapters, &(&1.id == chapter_id)) do
+      json(conn, %{
+        chapter_id: chapter_id,
+        prev: neighbor_json(book_id, ChapterNeighbors.prev_with_audio(chapters, chapter_id)),
+        next: neighbor_json(book_id, ChapterNeighbors.next_with_audio(chapters, chapter_id))
+      })
+    else
+      send_resp(conn, 404, "No chapter")
+    end
+  end
+
+  defp neighbor_json(_book_id, nil), do: nil
+
+  defp neighbor_json(book_id, chapter) do
+    %{
+      chapter_id: chapter.id,
+      title: ChapterNeighbors.display_title(chapter),
+      audio_url: ~p"/api/books/#{book_id}/chapters/#{chapter.id}/audio",
+      timings_url: ~p"/api/books/#{book_id}/chapters/#{chapter.id}/timings"
+    }
   end
 
   def timings(conn, %{"chapter_id" => chapter_id}) do

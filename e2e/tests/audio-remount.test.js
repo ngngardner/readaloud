@@ -17,7 +17,7 @@
  * element already has a meaningful src. These tests pin that behavior.
  *
  * Requires the canonical e2e fixture: at least one chapter with audio
- * (default `audio_for: [1, 2]` in `ReadaloudAudiobook.Fixtures.E2E.seed!/1`).
+ * (default `audio_for: [1, 2, 3]` in `ReadaloudAudiobook.Fixtures.E2E.seed!/1`).
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert";

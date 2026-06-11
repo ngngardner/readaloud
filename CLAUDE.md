@@ -117,7 +117,7 @@ Runs the full umbrella ExUnit suite (~1s).
 
 ### UI behavior — `mix test.e2e`
 
-Boots a sandboxed NixOS VM with a real Phoenix release on port 4000, seeds the canonical fixture (`ReadaloudAudiobook.Fixtures.E2E.seed!/1` — one book, three chapters, the first two with silent audio), and runs the full Puppeteer suite under `e2e/tests/*.test.js` against it.
+Boots a sandboxed NixOS VM with a real Phoenix release on port 4000, seeds the canonical fixture (`ReadaloudAudiobook.Fixtures.E2E.seed!/1` — one book, three chapters, all three with silent audio), and runs the full Puppeteer suite under `e2e/tests/*.test.js` against it.
 
 **Use this instead of pushing to pylon for any regression that lives under `e2e/tests/`.** The VM is hermetic — no dev server, no manual seed, no port collisions. A full run is ~4–5 min (~80s VM boot + release start + seed, ~3 min suite); the per-test spec report is printed in the build log. One Chromium is shared across test files via `e2e/browser-server.js` (each file gets an incognito context), and the suite runs files sequentially on purpose — they share the BEAM/SQLite and reading-progress state.
 

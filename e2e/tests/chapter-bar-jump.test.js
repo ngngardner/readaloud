@@ -17,7 +17,7 @@
  * the SAME node.
  *
  * Requires the canonical e2e fixture: chapter 1 has audio AND chapter 2
- * has audio (`seed_e2e_book!/1` defaults to `audio_for: [1, 2]`), so the
+ * has audio (`seed_e2e_book!/1` defaults to `audio_for: [1, 2, 3]`), so the
  * jump target's audio URL exists for the reconciler to load.
  */
 import { describe, it, before, after } from "node:test";

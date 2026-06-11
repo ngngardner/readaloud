@@ -38,8 +38,10 @@ defmodule ReadaloudWebWeb.PlayerEvents do
     swap-to-chapter swap-play-ok swap-play-blocked
     prefetch-start prefetch-done prefetch-fail prefetch-aborted
     prefetch-abort-stale prefetch-revoke-stale prefetch-discard-target-changed
+    prefetch-nav-done prefetch-nav-fail
     go-to-next-chapter go-to-prev-chapter
     next-chapter-blocked-no-target prev-chapter-blocked-no-target
+    nav-blocked-self-swap window-adopt autoplay-retry
     history-pushstate push-event
     media-session-nexttrack media-session-previoustrack
     nav-next-chapter-event nav-prev-chapter-event
