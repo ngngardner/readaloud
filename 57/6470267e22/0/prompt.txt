@@ -1,0 +1,9 @@
+dunno if logs/metrics captured this but i was listening earlier to RI again and i pressed next  chapter on pill during playback. i think it the audio loaded the next chapter but the reader was still on the same chapter (not the next)
+
+---
+
+im interested in a fix but i wonder if theres a general pattern to how this bug surfaces and if we could tackle the pattern? im getting tired of this state whackamole
+
+---
+
+let me know what you find but you have permission to investigate and address what you find

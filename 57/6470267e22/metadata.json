@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "576470267e22",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/hooks/chapter_bar.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/hook.ts",
+    "apps/readaloud_web/assets/js/lib/nav_ack.ts",
+    "apps/readaloud_web/assets/js/lib/phoenix-shims.d.ts",
+    "apps/readaloud_web/assets/js/lib/progress_buffer.ts",
+    "apps/readaloud_web/assets/js/lib/types.ts",
+    "apps/readaloud_web/lib/readaloud_web/prom_ex/plugins/readaloud.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "apps/readaloud_web/test/readaloud_web_web/live/reader_live_test.exs",
+    "e2e/tests/chapter-bar-jump.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/57/6470267e22/0/metadata.json",
+      "transcript": "/57/6470267e22/0/full.jsonl",
+      "content_hash": "/57/6470267e22/0/content_hash.txt",
+      "prompt": "/57/6470267e22/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 27505,
+    "cache_creation_tokens": 574353,
+    "cache_read_tokens": 46296865,
+    "output_tokens": 178645,
+    "api_call_count": 171
+  }
+}

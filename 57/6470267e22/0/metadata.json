@@ -1,0 +1,59 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "576470267e22",
+  "session_id": "72187cdc-53e9-4b07-8a24-5499cc3b615b",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-11T06:14:49.135882878Z",
+  "branch": "master",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/hooks/chapter_bar.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/hook.ts",
+    "apps/readaloud_web/assets/js/lib/nav_ack.ts",
+    "apps/readaloud_web/assets/js/lib/phoenix-shims.d.ts",
+    "apps/readaloud_web/assets/js/lib/progress_buffer.ts",
+    "apps/readaloud_web/assets/js/lib/types.ts",
+    "apps/readaloud_web/lib/readaloud_web/prom_ex/plugins/readaloud.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "apps/readaloud_web/test/readaloud_web_web/live/reader_live_test.exs",
+    "e2e/tests/chapter-bar-jump.test.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "844aed5acc33",
+  "token_usage": {
+    "input_tokens": 27505,
+    "cache_creation_tokens": 574353,
+    "cache_read_tokens": 46296865,
+    "output_tokens": 178645,
+    "api_call_count": 171
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-11T06:14:49.082186483Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 803,
+    "human_modified": 121,
+    "human_removed": 0,
+    "total_committed": 803,
+    "total_lines_changed": 924,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
