@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "230a02119543",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "CLAUDE.md",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/fixtures/e2e.ex",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/chapter_window.ts",
+    "apps/readaloud_web/assets/js/lib/confirmed_flush.ts",
+    "apps/readaloud_web/assets/js/lib/player_event_buffer.ts",
+    "apps/readaloud_web/assets/js/lib/progress_buffer.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/chapter_neighbors.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/controllers/audio_controller.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/router.ex",
+    "apps/readaloud_web/test/readaloud_web_web/controllers/chapter_nav_test.exs",
+    "cells/app/checks/e2e.nix",
+    "e2e/tests/audio-autoplay.test.js",
+    "e2e/tests/audio-remount.test.js",
+    "e2e/tests/autoplay-offline-chain.test.js",
+    "e2e/tests/chapter-bar-jump.test.js",
+    "e2e/tests/manual-chapter-nav.test.js",
+    "e2e/tests/speed-badge.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/23/0a02119543/0/metadata.json",
+      "transcript": "/23/0a02119543/0/full.jsonl",
+      "content_hash": "/23/0a02119543/0/content_hash.txt",
+      "prompt": "/23/0a02119543/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46510,
+    "cache_creation_tokens": 798031,
+    "cache_read_tokens": 40269190,
+    "output_tokens": 190698,
+    "api_call_count": 238
+  }
+}

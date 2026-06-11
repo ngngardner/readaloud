@@ -1,0 +1,125 @@
+{
+  "cli_version": "0.5.6",
+  "checkpoint_id": "230a02119543",
+  "session_id": "89c980cb-26d4-445b-82ba-1f08d74a3d41",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-11T22:06:50.446579459Z",
+  "branch": "master",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "CLAUDE.md",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/fixtures/e2e.ex",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/chapter_window.ts",
+    "apps/readaloud_web/assets/js/lib/confirmed_flush.ts",
+    "apps/readaloud_web/assets/js/lib/player_event_buffer.ts",
+    "apps/readaloud_web/assets/js/lib/progress_buffer.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/chapter_neighbors.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/controllers/audio_controller.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "apps/readaloud_web/lib/readaloud_web_web/router.ex",
+    "apps/readaloud_web/test/readaloud_web_web/controllers/chapter_nav_test.exs",
+    "cells/app/checks/e2e.nix",
+    "e2e/tests/audio-autoplay.test.js",
+    "e2e/tests/audio-remount.test.js",
+    "e2e/tests/autoplay-offline-chain.test.js",
+    "e2e/tests/chapter-bar-jump.test.js",
+    "e2e/tests/manual-chapter-nav.test.js",
+    "e2e/tests/speed-badge.test.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5",
+  "turn_id": "d604fbacf9f0",
+  "token_usage": {
+    "input_tokens": 46510,
+    "cache_creation_tokens": 798031,
+    "cache_read_tokens": 40269190,
+    "output_tokens": 190698,
+    "api_call_count": 238
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-11T22:06:50.398481565Z",
+    "agent_lines": 130,
+    "agent_removed": 11,
+    "human_added": 0,
+    "human_modified": 2,
+    "human_removed": 258,
+    "total_committed": 130,
+    "total_lines_changed": 401,
+    "agent_percentage": 35.16209476309227,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 551,
+      "user_lines_removed": 258,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "apps/readaloud_web/assets/js/hooks/audio_player.ts": 168,
+        "apps/readaloud_web/assets/js/lib/chapter_window.ts": 60,
+        "apps/readaloud_web/assets/js/lib/confirmed_flush.ts": 58,
+        "apps/readaloud_web/assets/js/lib/progress_buffer.ts": 69,
+        "apps/readaloud_web/lib/readaloud_web_web/chapter_neighbors.ex": 58,
+        "apps/readaloud_web/lib/readaloud_web_web/controllers/audio_controller.ex": 35,
+        "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex": 8,
+        "apps/readaloud_web/lib/readaloud_web_web/player_events.ex": 2,
+        "apps/readaloud_web/lib/readaloud_web_web/router.ex": 1,
+        "apps/readaloud_web/test/readaloud_web_web/controllers/chapter_nav_test.exs": 92
+      },
+      "user_removed_per_file": {
+        "apps/readaloud_web/assets/js/hooks/audio_player.ts": 17,
+        "apps/readaloud_web/assets/js/lib/player_event_buffer.ts": 186,
+        "apps/readaloud_web/assets/js/lib/progress_buffer.ts": 36,
+        "apps/readaloud_web/lib/readaloud_web_web/live/reader_live.ex": 19
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 864,
+      "agent_lines_removed": 268
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 865,
+      "agent_lines_removed": 269
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 886,
+      "agent_lines_removed": 269
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 906,
+      "agent_lines_removed": 269
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 925,
+      "agent_lines_removed": 269
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 939,
+      "agent_lines_removed": 269
+    }
+  ]
+}
