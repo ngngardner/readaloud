@@ -50,6 +50,7 @@ declare module "phoenix_live_view" {
   export class LiveSocket {
     constructor(endpoint: string, socket: typeof Socket, opts: LiveSocketOpts);
     connect(): void;
+    disconnect(callback?: () => void): void;
     enableDebug(): void;
     disableDebug(): void;
     enableLatencySim(ms: number): void;

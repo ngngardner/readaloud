@@ -1,4 +1,5 @@
 import { defineHook } from "../lib/hook";
+import { watchNavAck } from "../lib/nav_ack";
 import { attachScrubber, fractionAt } from "../lib/scrubber";
 import { type Chapter, parseChapters } from "../lib/types";
 
@@ -61,11 +62,26 @@ export const ChapterBarHook = defineHook<HTMLDivElement, ChapterBarDataset>(
 
     const hideTooltip = (): void => tooltip?.classList.add("hidden");
 
+    // Server-owned navigation: the LV patch updates URL + reader text, and
+    // the audio player's dataset reconciler swaps the audio to follow. The
+    // ack watchdog covers the wedged-socket case — no ack while visible
+    // means the jump is stuck in a zombie channel. The reconnect can't
+    // replay the lost jump, but it restores a working session so the
+    // user's retry actually lands, instead of every tap silently no-oping.
+    //
+    // The current index is read fresh at call time: the hook survives
+    // push_patch chapter switches, so the mount-time snapshot goes stale
+    // after the first navigation.
     const jumpTo = (idx: number): void => {
       const target = chapters[idx];
-      const current = chapters[currentIndex];
+      const freshIndex = Number.parseInt(ctx.dataset.currentIndex ?? "0", 10);
+      const current = chapters[freshIndex];
       if (!target || target.id === current?.id) return;
-      ctx.pushEvent("jump_to_chapter", { chapter_id: target.id });
+      watchNavAck({
+        push: (onAck) =>
+          ctx.pushEventAck("jump_to_chapter", { chapter_id: target.id }, onAck),
+        onTimeout: () => ctx.dispatch("readaloud:force-reconnect"),
+      });
     };
 
     setScrubberPosition(currentIndex);
@@ -118,13 +134,17 @@ export const ChapterBarHook = defineHook<HTMLDivElement, ChapterBarDataset>(
       close();
     });
 
-    for (const pill of ctx.el.querySelectorAll<HTMLElement>(
-      "[data-chapter-pill]",
-    )) {
-      ctx.on(pill, "click", () => {
-        const idx = Number.parseInt(pill.dataset.chapterPill ?? "-1", 10);
-        jumpTo(idx);
-      });
-    }
+    // Delegated from the (stable) hook root, NOT bound per-pill: the strip
+    // buttons carry no DOM ids, so morphdom REPLACES them on every LV
+    // update (the :fetch_catalog assign right after mount, every chapter
+    // patch) instead of patching in place — per-button listeners die with
+    // the old nodes and every tap after the first update silently no-ops.
+    ctx.on(ctx.el, "click", (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const pill = target.closest<HTMLElement>("[data-chapter-pill]");
+      if (!pill || !ctx.el.contains(pill)) return;
+      jumpTo(Number.parseInt(pill.dataset.chapterPill ?? "-1", 10));
+    });
   },
 );

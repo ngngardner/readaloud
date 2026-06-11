@@ -65,6 +65,131 @@ defmodule ReadaloudWebWeb.ReaderLiveTest do
       assert_received {[:readaloud, :progress, :flush], ^ref, %{count: 2, dropped: 1},
                        %{transport: "ws"}}
     end
+
+    # Level-triggered convergence: when the client navigated chapters but
+    # the nav event was lost in a wedged socket, the pivot observation
+    # (which always eventually arrives — WS or buffered replay after
+    # reconnect) must pull the rendered chapter along.
+    test "reconciles assigns on a pivot observation for another chapter", %{
+      conn: conn,
+      book: book,
+      ch1: ch1,
+      ch2: ch2
+    } do
+      ref = attach([[:readaloud, :reader, :chapter_advance]])
+      {:ok, view, html} = live(conn, ~p"/books/#{book.id}/read/#{ch1.id}")
+      assert html =~ "Chapter 1 text"
+
+      html =
+        render_hook(view, "progress_observations", %{
+          "observations" => [
+            %{
+              "chapter_id" => ch2.id,
+              "audio_position_ms" => 0,
+              "observed_at" => "2026-06-10T01:00:00Z",
+              "pivot" => true
+            }
+          ]
+        })
+
+      assert html =~ "Chapter 2 text"
+
+      assert_received {[:readaloud, :reader, :chapter_advance], ^ref, %{count: 1},
+                       %{direction: "next", mode: "reconcile"}}
+    end
+
+    # A position tick (no pivot flag) for another chapter must NOT
+    # reconcile: ticks for the old chapter are legitimately in flight
+    # during a server-owned jump, and reconciling on them drags the
+    # rendered chapter back.
+    test "position ticks never reconcile, even cross-chapter", %{
+      conn: conn,
+      book: book,
+      ch1: ch1,
+      ch2: ch2
+    } do
+      ref = attach([[:readaloud, :reader, :chapter_advance]])
+      {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/read/#{ch1.id}")
+
+      html =
+        render_hook(view, "progress_observations", %{
+          "observations" => [
+            %{
+              "chapter_id" => ch2.id,
+              "audio_position_ms" => 5000,
+              "observed_at" => "2026-06-10T01:00:00Z"
+            }
+          ]
+        })
+
+      assert html =~ "Chapter 1 text"
+      refute_received {[:readaloud, :reader, :chapter_advance], ^ref, _, _}
+    end
+
+    test "does not reconcile to a chapter outside the book", %{
+      conn: conn,
+      book: book,
+      ch1: ch1
+    } do
+      {:ok, other_book} = ReadaloudLibrary.create_book(%{title: "Other", source_type: "epub"})
+      {:ok, foreign_ch} = ReadaloudLibrary.create_chapter(chapter_attrs(other_book, 1))
+
+      ref = attach([[:readaloud, :reader, :chapter_advance]])
+      {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/read/#{ch1.id}")
+
+      html =
+        render_hook(view, "progress_observations", %{
+          "observations" => [
+            %{
+              "chapter_id" => foreign_ch.id,
+              "audio_position_ms" => 0,
+              "observed_at" => "2026-06-10T01:00:00Z",
+              "pivot" => true
+            }
+          ]
+        })
+
+      assert html =~ "Chapter 1 text"
+      refute_received {[:readaloud, :reader, :chapter_advance], ^ref, _, _}
+    end
+
+    # The double-advance race: pivot observation arrives first (reconciler
+    # moves assigns to ch2), then the nav event lands. With an absolute
+    # chapter_id the event is idempotent; a relative "next from current"
+    # would double-step to ch3 (or past the end).
+    test "client-owned nav after reconcile is idempotent, not relative", %{
+      conn: conn,
+      book: book,
+      ch1: ch1,
+      ch2: ch2
+    } do
+      ref = attach([[:readaloud, :reader, :chapter_advance]])
+      {:ok, view, _html} = live(conn, ~p"/books/#{book.id}/read/#{ch1.id}")
+
+      render_hook(view, "progress_observations", %{
+        "observations" => [
+          %{
+            "chapter_id" => ch2.id,
+            "audio_position_ms" => 0,
+            "observed_at" => "2026-06-10T01:00:00Z",
+            "pivot" => true
+          }
+        ]
+      })
+
+      assert_received {[:readaloud, :reader, :chapter_advance], ^ref, %{count: 1},
+                       %{direction: "next", mode: "reconcile"}}
+
+      html =
+        render_hook(view, "next_chapter", %{
+          "client_owned" => true,
+          "chapter_id" => to_string(ch2.id)
+        })
+
+      # Still chapter 2 — the event was already applied via the pivot.
+      assert html =~ "Chapter 2 text"
+      refute_received {[:readaloud, :reader, :chapter_advance], ^ref, _, _}
+    end
   end
 
   describe "chapter_advance telemetry" do

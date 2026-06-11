@@ -98,10 +98,21 @@ export function parseChapters(
   const out: Chapter[] = [];
   for (const c of json) {
     if (!isJsonObject(c)) continue;
-    if (typeof c.id !== "string") continue;
+    // The chapter-bar template Jason-encodes integer ids as JSON numbers;
+    // the wire convention elsewhere is string ids. Accept both — the
+    // string-only check here silently produced an EMPTY chapter list,
+    // which made every chapter-bar jump a no-op.
+    let id: ChapterId;
+    if (typeof c.id === "string") {
+      id = ChapterId(c.id);
+    } else if (typeof c.id === "number") {
+      id = ChapterId(String(c.id));
+    } else {
+      continue;
+    }
     if (typeof c.number !== "number") continue;
     const title = typeof c.title === "string" ? c.title : null;
-    out.push({ id: ChapterId(c.id), title, number: c.number });
+    out.push({ id, title, number: c.number });
   }
   return out;
 }

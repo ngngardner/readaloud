@@ -55,6 +55,18 @@ export interface HookContext<
     ...payload: PushEventArgs<K>
   ): void;
 
+  // Like pushEvent, but invokes onAck when the channel-level reply for
+  // this event arrives. LiveView replies to every hook event push (even
+  // `{:noreply, socket}` handlers — the ack is protocol-level, not a
+  // `{:reply, ...}`), so a missing ack means the message is sitting in a
+  // dead-or-wedged socket, not that the server declined to answer. Used
+  // by the nav-ack watchdog to detect a stalled WS after chapter nav.
+  pushEventAck<K extends keyof ReadaloudPushEvents>(
+    event: K,
+    payload: ReadaloudPushEvents[K],
+    onAck: () => void,
+  ): void;
+
   handleEvent<K extends keyof ReadaloudHandleEvents>(
     event: K,
     handler: (payload: ReadaloudHandleEvents[K]) => void,
@@ -156,6 +168,10 @@ export function defineHook<
 
         pushEvent(event: string, payload?: object): void {
           lv.pushEvent(event, payload ?? {});
+        },
+
+        pushEventAck(event: string, payload: object, onAck: () => void): void {
+          lv.pushEvent(event, payload, () => onAck());
         },
 
         handleEvent(event: string, handler: (payload: never) => void): void {

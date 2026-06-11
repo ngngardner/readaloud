@@ -49,6 +49,8 @@ defmodule ReadaloudWebWeb.PlayerEvents do
     page-freeze page-resume net-online net-offline
     lv-reload-deferred lv-reload-resumed
     heartbeat
+    sync-audio-to-dataset state-divergence restore-position
+    nav-ack-timeout force-reconnect
   )
 
   @doc """

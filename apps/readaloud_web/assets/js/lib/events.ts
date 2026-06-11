@@ -29,6 +29,14 @@ export interface ReadaloudWindowEvents {
   // visible in server logs next to the playback events it protected.
   "readaloud:lv-reload-deferred": undefined;
   "readaloud:lv-reload-resumed": undefined;
+  // Emitted by the nav-ack watchdog (lib/nav_ack.ts) when a chapter-nav
+  // pushEvent gets no channel ack while the page is visible — the socket
+  // is wedged (open but not delivering). app.ts handles it with a
+  // LiveSocket disconnect/connect; the reconnect remounts from the
+  // current URL (already correct via history.pushState) so the reader
+  // text converges with the audio. The audio player hook mirrors it into
+  // the [player] diagnostics channel.
+  "readaloud:force-reconnect": undefined;
   "phx:live_reload:attached": LiveReloader;
 }
 
@@ -47,6 +55,11 @@ export interface ProgressObservationPayload {
   readonly audio_position_ms?: number;
   readonly scroll_position?: number;
   readonly observed_at: string;
+  // Marks an explicit client-owned chapter pivot (clientNavigate), as
+  // opposed to a periodic position tick. The server's assign-reconciler
+  // fires ONLY on pivots: a straggler tick for the old chapter arriving
+  // after a server-owned jump must not drag the rendered chapter back.
+  readonly pivot?: true;
 }
 
 // Wire shape of a single audio-player diagnostic event. Mirrors the JS-side
@@ -81,8 +94,13 @@ export interface ReadaloudPushEvents {
   // connected client) and skipping its own observe! (would race with
   // the buffered drain). Manual button clicks via phx-click omit the
   // flag and get the normal server-driven path.
-  next_chapter: { client_owned?: true };
-  prev_chapter: { client_owned?: true };
+  //
+  // chapter_id names the ABSOLUTE target. A relative "advance from
+  // current" is racy: the observation-driven reconciler may converge
+  // assigns onto the client's new chapter before this event lands, and
+  // a relative advance would then double-step past it.
+  next_chapter: { client_owned?: true; chapter_id?: string };
+  prev_chapter: { client_owned?: true; chapter_id?: string };
   jump_to_chapter: { chapter_id: ChapterId };
   // Diagnostic channel for the audio player (WS path; the HTTP beacon to
   // /api/books/:id/player-events is the fallback). Always batched, like

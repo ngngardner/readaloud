@@ -177,7 +177,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       "[autoplay] prev_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
     )
 
-    case prev_chapter(socket.assigns.chapter, socket.assigns.chapters) do
+    case nav_target(params, socket, :prev) do
       nil ->
         Logger.info("[autoplay] prev_chapter no-op (no previous)")
         emit_chapter_advance("prev", "noop")
@@ -201,7 +201,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       "[autoplay] next_chapter event book_id=#{socket.assigns.book.id} from=#{socket.assigns.chapter.id}"
     )
 
-    case next_chapter(socket.assigns.chapter, socket.assigns.chapters) do
+    case nav_target(params, socket, :next) do
       nil ->
         Logger.info("[autoplay] next_chapter no-op (no next)")
         emit_chapter_advance("next", "noop")
@@ -279,7 +279,7 @@ defmodule ReadaloudWebWeb.ReaderLive do
       %{transport: "ws"}
     )
 
-    {:noreply, socket}
+    {:noreply, reconcile_chapter_assigns(socket, raw)}
   end
 
   # Diagnostic events from the audio-player hook (WS path; the HTTP beacon
@@ -881,6 +881,25 @@ defmodule ReadaloudWebWeb.ReaderLive do
   defp to_integer(n) when is_integer(n), do: n
   defp to_integer(s) when is_binary(s), do: String.to_integer(s)
 
+  # Resolve a nav event's target chapter. Client-owned navs name their
+  # ABSOLUTE target: resolving "next" relative to the server's current
+  # assigns is racy, because the pivot observation the client sent just
+  # before this event may have already moved assigns onto the new chapter
+  # via reconcile_chapter_assigns/2 — a relative advance would then
+  # double-step past it (observed in e2e as a jump to a chapter with no
+  # audio, tearing the player down mid-playback). Server-owned navs
+  # (phx-click fallback, no audio mounted) stay relative.
+  defp nav_target(%{"client_owned" => true, "chapter_id" => chapter_id}, socket, _dir) do
+    cid = to_integer(chapter_id)
+    Enum.find(socket.assigns.chapters, &(&1.id == cid))
+  end
+
+  defp nav_target(_params, socket, :next),
+    do: next_chapter(socket.assigns.chapter, socket.assigns.chapters)
+
+  defp nav_target(_params, socket, :prev),
+    do: prev_chapter(socket.assigns.chapter, socket.assigns.chapters)
+
   defp prev_chapter(current, chapters) do
     idx = Enum.find_index(chapters, &(&1.id == current.id))
     if idx && idx > 0, do: Enum.at(chapters, idx - 1), else: nil
@@ -906,9 +925,17 @@ defmodule ReadaloudWebWeb.ReaderLive do
   #     connected clients, and re-writing progress would race with the
   #     buffered drain.
   defp advance_chapter(socket, ch, %{"client_owned" => true}, direction) do
-    Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client-owned)")
-    emit_chapter_advance(direction, "client_owned")
-    assign_chapter(socket, ch.id, restore_progress?: false)
+    if ch.id == socket.assigns.chapter.id do
+      # The pivot observation beat this event and the reconciler already
+      # moved assigns here — same user action, already applied. Skip the
+      # re-assign and don't double-count the advance.
+      Logger.info("[autoplay] advance_chapter already-current to=#{ch.id} (client-owned)")
+      socket
+    else
+      Logger.info("[autoplay] advance_chapter assign-only to=#{ch.id} (client-owned)")
+      emit_chapter_advance(direction, "client_owned")
+      assign_chapter(socket, ch.id, restore_progress?: false)
+    end
   end
 
   defp advance_chapter(socket, ch, _params, direction) do
@@ -926,6 +953,76 @@ defmodule ReadaloudWebWeb.ReaderLive do
     push_patch(socket,
       to: ~p"/books/#{socket.assigns.book.id}/read/#{ch.id}?nav=internal"
     )
+  end
+
+  # Level-triggered convergence of the rendered chapter with the client's
+  # explicit chapter pivots, run after every progress-observation batch.
+  # The client owns chapter navigation while audio plays — it swaps the
+  # audio, pushStates the URL, and persists the pivot through the durable
+  # buffer — but the nav *event* (`next_chapter` etc.) rides the WS and
+  # can be lost or delayed for tens of seconds when the socket is wedged
+  # (2026-06-11: 23s), leaving this LV rendering a chapter the user has
+  # already left. Pivot observations are the channel that always
+  # eventually arrives (WS now, or buffered replay after reconnect), so
+  # converge on the newest pivot in the batch.
+  #
+  # ONLY pivots reconcile, never position ticks: a tick for the old
+  # chapter is legitimately in flight during any server-owned navigation
+  # (chapter-bar jump), and treating it as chapter authority would drag
+  # the rendered chapter back to where the audio was a moment ago.
+  # Assign-only, no push_patch: the client owns the URL for every
+  # transition it pivots.
+  defp reconcile_chapter_assigns(socket, raw_observations) do
+    cid =
+      raw_observations
+      |> Enum.filter(&(is_map(&1) and &1["pivot"] == true and is_binary(&1["observed_at"])))
+      # ISO8601 UTC strings sort chronologically as strings.
+      |> Enum.max_by(& &1["observed_at"], fn -> nil end)
+      |> case do
+        nil -> nil
+        obs -> safe_to_integer(obs["chapter_id"])
+      end
+
+    cond do
+      is_nil(cid) or cid == socket.assigns.chapter.id ->
+        socket
+
+      not Enum.any?(socket.assigns.chapters, &(&1.id == cid)) ->
+        socket
+
+      true ->
+        Logger.info(
+          "[autoplay] reconcile assigns book_id=#{socket.assigns.book.id} " <>
+            "from=#{socket.assigns.chapter.id} to=#{cid}"
+        )
+
+        direction =
+          if chapter_number(cid, socket.assigns.chapters) >=
+               socket.assigns.chapter.number,
+             do: "next",
+             else: "prev"
+
+        emit_chapter_advance(direction, "reconcile")
+        assign_chapter(socket, cid, restore_progress?: false)
+    end
+  end
+
+  defp safe_to_integer(n) when is_integer(n), do: n
+
+  defp safe_to_integer(s) when is_binary(s) do
+    case Integer.parse(s) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp safe_to_integer(_), do: nil
+
+  defp chapter_number(chapter_id, chapters) do
+    case Enum.find(chapters, &(&1.id == chapter_id)) do
+      nil -> 0
+      ch -> ch.number
+    end
   end
 
   # Prometheus counter labels — bounded value sets by design (see

@@ -11,7 +11,9 @@ defmodule ReadaloudWeb.PromEx.Plugins.Readaloud do
       name and delivery transport (`ws` | `beacon`).
     * `[:readaloud, :reader, :chapter_advance]` — `ReadaloudWebWeb.ReaderLive`,
       tagged by direction (`next` | `prev`) and mode (`client_owned` |
-      `server_patch` | `noop`).
+      `server_patch` | `noop` | `reconcile`). `reconcile` means the LV's
+      rendered chapter was converged onto the durable progress row after a
+      client-owned nav whose WS event was lost or delayed.
     * `[:readaloud, :progress, :flush]` — progress-observation batches from
       both the LiveView channel and the HTTP beacon, with accepted/dropped
       counts.

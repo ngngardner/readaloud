@@ -113,6 +113,20 @@ reloadable.reloadWithJitter = (view, log) => {
   document.addEventListener("visibilitychange", onVisible);
 };
 
+// --- Wedged-socket recovery -------------------------------------------
+// The nav-ack watchdog (lib/nav_ack.ts) fires this when a chapter-nav
+// pushEvent gets no channel ack while the page is visible: the socket is
+// open-but-not-delivering, so the reader text can't follow the audio.
+// A disconnect/connect cycle tears the zombie channel down and remounts
+// the LV from the current URL — which client-owned nav already updated
+// via history.pushState — so the remount lands on the chapter that's
+// actually playing. The <audio> element survives (phx-update="ignore" +
+// the hook's preserve-existing-src mount path), so playback continues.
+window.addEventListener("readaloud:force-reconnect", () => {
+  liveSocket.disconnect();
+  liveSocket.connect();
+});
+
 topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
 window.addEventListener("phx:page-loading-start", () => topbar.show(300));
 window.addEventListener("phx:page-loading-stop", () => topbar.hide());

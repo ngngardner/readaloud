@@ -2,11 +2,14 @@ import { cycleOption } from "../lib/cycle_option";
 import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
 import type { PlayerEventDetailValue } from "../lib/events";
 import { defineHook } from "../lib/hook";
+import { watchNavAck } from "../lib/nav_ack";
 import { PersistedRecord } from "../lib/persisted_record";
 import { attachPlayerEventBuffer } from "../lib/player_event_buffer";
 import {
   attachProgressBuffer,
   type ProgressBuffer,
+  readLastPosition,
+  writeLastPosition,
 } from "../lib/progress_buffer";
 import { readerSettings } from "../lib/reader_settings_store";
 import { scrollFollow } from "../lib/scroll_follow";
@@ -144,6 +147,22 @@ function formatTime(secs: number): string {
 // shows up in every log line so we can tell apart pre-/post-remount
 // instances when reading the browser console after the fact.
 let nextPlayerId = 1;
+
+// Which chapter's audio is actually loaded into a given <audio> element.
+// This is the client's canonical "what is playing" — every src write goes
+// through swapToChapter/set-initial-src, which record it here, and every
+// reconciliation compares against it. A WeakMap at module scope (not hook
+// state, not a DOM attribute) because it must match the element's own
+// lifetime: the element survives LV remounts via phx-update="ignore"
+// while hook state dies with the instance, and morphdom strips runtime
+// DOM attributes even on ignored elements.
+const LOADED_CHAPTER = new WeakMap<HTMLAudioElement, string>();
+
+// How long the client-side last-position cache outranks the server's
+// initial position after a reload. Within this window the local cache is
+// fresher than any beacon that may still be racing the page load; beyond
+// it (other device, next-day resume) the server row is the authority.
+const LAST_POSITION_TRUST_MS = 10 * 60_000;
 
 export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
   (ctx) => {
@@ -405,8 +424,17 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       log("set-initial-src");
       audio.src = wantSrc;
       audio.load();
+      if (ctx.dataset.chapterId) {
+        LOADED_CHAPTER.set(audio, ctx.dataset.chapterId);
+      }
     } else {
       log("preserve-existing-src");
+      // A preserved src was set by a previous hook instance, which also
+      // recorded its chapter in LOADED_CHAPTER (module scope survives
+      // remounts). The fallback only covers a same-page hook crash.
+      if (!LOADED_CHAPTER.has(audio) && ctx.dataset.chapterId) {
+        LOADED_CHAPTER.set(audio, ctx.dataset.chapterId);
+      }
     }
 
     ctx.on(audio, "loadedmetadata", () => {
@@ -437,16 +465,39 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // Restore initial position — only on a fresh load. On re-mount of an
     // already-playing element we'd otherwise rewind the user back to a
     // saved position from a different LV session.
-    const initialMs = Number.parseInt(ctx.dataset.initialPosition ?? "0", 10);
-    if (initialMs > 0 && !hasMeaningfulSrc) {
-      ctx.on(
-        audio,
-        "loadedmetadata",
-        () => {
-          audio.currentTime = initialMs / 1000;
-        },
-        { once: true },
-      );
+    //
+    // The server's initial position competes with the client-side
+    // last-position cache: after a reload, the beacon carrying the final
+    // observations may still be in flight when the new page renders, so
+    // the server value can be seconds stale (the 2026-06-11 incident
+    // restarted a chapter at 0:00 that the client knew was at 5.8s).
+    // Same chapter + recent → take whichever is further along.
+    const serverMs = Number.parseInt(ctx.dataset.initialPosition ?? "0", 10);
+    if (!hasMeaningfulSrc) {
+      const last = readLastPosition(bookId);
+      const lastTrusted =
+        last !== null &&
+        last.chapter_id === ctx.dataset.chapterId &&
+        Date.now() - last.at_ms < LAST_POSITION_TRUST_MS;
+      const restoreMs =
+        lastTrusted && last.position_ms > serverMs
+          ? last.position_ms
+          : serverMs;
+      if (restoreMs > 0) {
+        log("restore-position", {
+          ms: restoreMs,
+          serverMs,
+          source: restoreMs === serverMs ? "server" : "client-cache",
+        });
+        ctx.on(
+          audio,
+          "loadedmetadata",
+          () => {
+            audio.currentTime = restoreMs / 1000;
+          },
+          { once: true },
+        );
+      }
     }
 
     // --- Media Session API ----------------------------------------------
@@ -556,23 +607,32 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         });
     };
 
-    // Swap to a different chapter without unmounting the player. Used by
-    // both the auto-next-on-ended path and (if invoked from outside) by
-    // server-pushed chapter changes. Critically: same <audio> element, so
-    // the OS audio session is preserved and lock-screen playback continues
-    // without requiring a new user gesture.
+    // Swap to a different chapter without unmounting the player. The ONLY
+    // writer of audio.src after mount — both the user-initiated nav
+    // projection (clientNavigate) and the server-driven reconciler
+    // (syncAudioToDataset) go through here, so the loaded-chapter record
+    // and the last-position cache can't drift from the element. Critically:
+    // same <audio> element, so the OS audio session is preserved and
+    // lock-screen playback continues without requiring a new user gesture.
     const swapToChapter = (
+      chapterId: string,
       audioUrl: string,
       timingsUrl: string,
       chapterTitle: string,
+      opts: { autoplay: boolean },
     ): void => {
       log("swap-to-chapter", {
         srcKind: audioUrl.startsWith("blob:") ? "blob" : "url",
         chapterTitle,
         audioPaused: audio.paused,
+        autoplay: opts.autoplay,
       });
       audio.src = audioUrl;
       audio.load();
+      LOADED_CHAPTER.set(audio, chapterId);
+      // Keep the client-side position cache coherent with the swap: the
+      // new chapter starts at 0 no matter which path triggered it.
+      writeLastPosition(bookId, chapterId, 0);
       // Update title eagerly so the lock screen shows the new chapter name
       // even before the LV push_patch round-trip lands.
       if (ms) {
@@ -583,13 +643,15 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         });
       }
       fetchTimings(timingsUrl);
-      audio
-        .play()
-        .then(() => log("swap-play-ok"))
-        .catch((err: Error) => {
-          log("swap-play-blocked", { error: String(err) });
-          console.warn("AudioPlayer: chapter-swap play blocked", err);
-        });
+      if (opts.autoplay) {
+        audio
+          .play()
+          .then(() => log("swap-play-ok"))
+          .catch((err: Error) => {
+            log("swap-play-blocked", { error: String(err) });
+            console.warn("AudioPlayer: chapter-swap play blocked", err);
+          });
+      }
     };
 
     // Build a /books/:bookId/read/:chapterId?nav=internal URL by swapping
@@ -603,34 +665,56 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       return `${path.replace(/\/read\/\d+/, `/read/${chapterId}`)}?nav=internal`;
     };
 
-    const goToNextChapter = (): boolean => {
-      const networkUrl = ctx.dataset.nextAudioUrl;
-      const timingsUrl = ctx.dataset.nextTimingsUrl;
-      const title = ctx.dataset.nextChapterTitle ?? "";
-      const nextChapterId = ctx.dataset.nextChapterId;
-      if (!networkUrl || !timingsUrl || !nextChapterId) {
-        log("next-chapter-blocked-no-target", {
-          hasUrl: !!networkUrl,
-          hasTimings: !!timingsUrl,
-          hasChapterId: !!nextChapterId,
-        });
+    // Adjacent-chapter nav target from the dataset. Returns null when the
+    // neighbor has no audio yet — callers fall back to the server-owned
+    // path so the user can still reach audio-less chapters.
+    const navTarget = (
+      dir: "next" | "prev",
+    ): {
+      chapterId: string;
+      networkUrl: string;
+      timingsUrl: string;
+      title: string;
+    } | null => {
+      const d = ctx.dataset;
+      const chapterId = dir === "next" ? d.nextChapterId : d.prevChapterId;
+      const networkUrl = dir === "next" ? d.nextAudioUrl : d.prevAudioUrl;
+      const timingsUrl = dir === "next" ? d.nextTimingsUrl : d.prevTimingsUrl;
+      const title =
+        (dir === "next" ? d.nextChapterTitle : d.prevChapterTitle) ?? "";
+      if (!chapterId || !networkUrl || !timingsUrl) return null;
+      return { chapterId, networkUrl, timingsUrl, title };
+    };
+
+    // The single user-initiated chapter-change projection. Every client
+    // writer (pill buttons, keyboard arrows, lock-screen media keys,
+    // auto-next on ended) lands here, and the chapter transition fans out
+    // to every replica in one place: audio.src (+ MediaSession title +
+    // timings) via swapToChapter, the URL via pushState, persistence via
+    // the durable progress buffer, and the server's assigns via an acked
+    // pushEvent. No writer updates a subset.
+    const clientNavigate = (dir: "next" | "prev"): boolean => {
+      const navEvent = dir === "next" ? "next_chapter" : "prev_chapter";
+      const target = navTarget(dir);
+      if (!target) {
+        log(`${dir}-chapter-blocked-no-target`);
         return false;
       }
 
       // Use the prefetched in-memory blob if it's for THIS URL — this is
       // the whole point of prefetch and is what makes background-tab
       // autoplay actually work. Fall back to the network URL otherwise
-      // (e.g. desktop user who never triggered prefetch).
+      // (prev nav, or a desktop user who never triggered prefetch).
       const audioUrl =
-        prefetchedBlobUrl !== null && prefetchedFor === networkUrl
+        prefetchedBlobUrl !== null && prefetchedFor === target.networkUrl
           ? prefetchedBlobUrl
-          : networkUrl;
-      const useBlob = audioUrl !== networkUrl;
-      log("go-to-next-chapter", {
+          : target.networkUrl;
+      const useBlob = audioUrl !== target.networkUrl;
+      log(dir === "next" ? "go-to-next-chapter" : "go-to-prev-chapter", {
         useBlob,
         prefetchedFor,
         prefetchInFlight: prefetchAbort !== null,
-        toTitle: title,
+        toTitle: target.title,
       });
 
       // The blob currently in use as audio.src (if any) is being replaced
@@ -647,7 +731,15 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         prefetchAbort = null;
       }
 
-      swapToChapter(audioUrl, timingsUrl, title);
+      swapToChapter(
+        target.chapterId,
+        audioUrl,
+        target.timingsUrl,
+        target.title,
+        {
+          autoplay: true,
+        },
+      );
 
       // Update browser URL client-side BEFORE notifying the server. This
       // is the critical fix for sleeping-mobile autoplay: server-side
@@ -657,7 +749,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // the URL stays in sync with audio.src regardless of WS state, so
       // a refresh after wake lands on the chapter that's actually
       // playing — not the previous one.
-      const newUrl = buildReaderUrl(nextChapterId);
+      const newUrl = buildReaderUrl(target.chapterId);
       if (newUrl) {
         history.pushState({}, "", newUrl);
         log("history-pushstate", { url: newUrl });
@@ -667,10 +759,13 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // suspended (mobile lock — the original autoplay-stranding bug),
       // the buffer falls back to sendBeacon on visibilitychange:hidden
       // so the new chapter / 0:00 reset survives even with a dead WS.
+      // `pivot: true` lets the server's assign-reconciler treat this as
+      // an authoritative chapter change (position ticks never reconcile).
       progress.observe({
-        chapter_id: nextChapterId,
+        chapter_id: target.chapterId,
         audio_position_ms: 0,
         scroll_position: 0,
+        pivot: true,
       });
 
       // Tell the server to reload chapter assigns. `client_owned: true`
@@ -679,54 +774,75 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // server skips its own push_patch and observe! — pushing twice
       // would create a duplicate history entry, and observing twice
       // would race with the buffered drain.
-      log("push-event", { event: "next_chapter" });
-      ctx.pushEvent("next_chapter", { client_owned: true });
+      //
+      // The ack watchdog covers the wedged-socket case: a socket that's
+      // open but not delivering buffers this push silently, leaving the
+      // reader text on the old chapter while audio + URL + persistence
+      // have all advanced. No ack while visible → force a reconnect,
+      // which remounts the LV from the pushState'd URL.
+      log("push-event", { event: navEvent });
+      watchNavAck({
+        push: (onAck) =>
+          ctx.pushEventAck(
+            navEvent,
+            // Absolute target, not "advance from current": if the pivot
+            // observation above reaches the server first, the reconciler
+            // has already moved assigns to the target — a relative
+            // advance would then double-step past it.
+            { client_owned: true, chapter_id: target.chapterId },
+            onAck,
+          ),
+        onTimeout: () => {
+          log("nav-ack-timeout", { event: navEvent });
+          ctx.dispatch("readaloud:force-reconnect");
+        },
+      });
       return true;
     };
 
-    const goToPrevChapter = (): boolean => {
-      const url = ctx.dataset.prevAudioUrl;
-      const timingsUrl = ctx.dataset.prevTimingsUrl;
-      const title = ctx.dataset.prevChapterTitle ?? "";
-      const prevChapterId = ctx.dataset.prevChapterId;
-      if (!url || !timingsUrl || !prevChapterId) {
-        log("prev-chapter-blocked-no-target");
-        return false;
+    const goToNextChapter = (): boolean => clientNavigate("next");
+    const goToPrevChapter = (): boolean => clientNavigate("prev");
+
+    const safeSet = (
+      action: MediaSessionAction,
+      handler: MediaSessionActionHandler | null,
+    ): void => {
+      if (!ms) return;
+      try {
+        ms.setActionHandler(action, handler);
+      } catch {
+        // Browser may not support this action — fine, skip it.
       }
-      log("go-to-prev-chapter", { toTitle: title });
-      swapToChapter(url, timingsUrl, title);
+    };
 
-      // Same client-side URL update + persistence as next-chapter; see
-      // the comment block in goToNextChapter for the full rationale.
-      const newUrl = buildReaderUrl(prevChapterId);
-      if (newUrl) {
-        history.pushState({}, "", newUrl);
-        log("history-pushstate", { url: newUrl });
+    // Bound at mount and re-bound on every LV update: the dataset's
+    // next/prev targets change with the chapter, so a handler set for a
+    // neighbor that no longer exists — or missing for one that now does —
+    // leaves the OS lock-screen buttons stale. Only register when there's
+    // actually a target; otherwise the OS shows greyed-out buttons (or
+    // nothing), which is correct.
+    const registerMediaSessionNavHandlers = (): void => {
+      if (!ms) return;
+      if (ctx.dataset.nextAudioUrl) {
+        safeSet("nexttrack", () => {
+          log("media-session-nexttrack");
+          goToNextChapter();
+        });
+      } else {
+        safeSet("nexttrack", null);
       }
-
-      progress.observe({
-        chapter_id: prevChapterId,
-        audio_position_ms: 0,
-        scroll_position: 0,
-      });
-
-      log("push-event", { event: "prev_chapter" });
-      ctx.pushEvent("prev_chapter", { client_owned: true });
-      return true;
+      if (ctx.dataset.prevAudioUrl) {
+        safeSet("previoustrack", () => {
+          log("media-session-previoustrack");
+          goToPrevChapter();
+        });
+      } else {
+        safeSet("previoustrack", null);
+      }
     };
 
     if (ms) {
       updateMediaSessionMetadata();
-      const safeSet = (
-        action: MediaSessionAction,
-        handler: MediaSessionActionHandler | null,
-      ): void => {
-        try {
-          ms.setActionHandler(action, handler);
-        } catch {
-          // Browser may not support this action — fine, skip it.
-        }
-      };
       safeSet("play", () => {
         audio.play().catch(() => {});
       });
@@ -747,24 +863,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           audio.currentTime = details.seekTime;
         }
       });
-      // Only register next/prev when there's actually a target; otherwise
-      // the OS UI shows greyed-out buttons (or nothing) which is correct.
-      if (ctx.dataset.nextAudioUrl) {
-        safeSet("nexttrack", () => {
-          log("media-session-nexttrack");
-          goToNextChapter();
-        });
-      } else {
-        safeSet("nexttrack", null);
-      }
-      if (ctx.dataset.prevAudioUrl) {
-        safeSet("previoustrack", () => {
-          log("media-session-previoustrack");
-          goToPrevChapter();
-        });
-      } else {
-        safeSet("previoustrack", null);
-      }
+      registerMediaSessionNavHandlers();
       ctx.onDestroy(() => {
         // Clear handlers + metadata so a stale player on a different page
         // doesn't get media-key events meant for nothing.
@@ -785,6 +884,47 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         ms.metadata = null;
       });
     }
+
+    // --- Reconciler: audio follows the server-rendered chapter ----------
+    // Every server-owned navigation (chapter-bar jump, browser
+    // back/forward, conflict-modal jump, any future writer) reaches the
+    // browser as a morphdom patch of this hook's dataset. Watching for the
+    // dataset's chapter to *transition* and re-aligning the <audio> element
+    // covers all of them in one place — no per-writer audio handling, which
+    // is how the chapter-bar jump shipped without one.
+    //
+    // Transition-triggered (not raw inequality) on purpose: right after a
+    // client-owned nav, LOADED_CHAPTER is already on the new chapter while
+    // the dataset still shows the old one until the server's diff lands. An
+    // unrelated diff arriving in that window must not "fix" the audio
+    // backwards. A dataset transition means the server moved the chapter;
+    // the LOADED_CHAPTER check then skips the no-op case where the client
+    // itself initiated that move.
+    let lastSeenDatasetChapter = ctx.dataset.chapterId;
+    const syncAudioToDataset = (): void => {
+      const want = ctx.dataset.chapterId;
+      if (!want || want === lastSeenDatasetChapter) return;
+      lastSeenDatasetChapter = want;
+      if (LOADED_CHAPTER.get(audio) === want) return;
+      // Server-driven moves preserve the user's play/pause state instead
+      // of force-playing: jumping chapters while paused should stay paused.
+      const wasPlaying = !audio.paused;
+      log("sync-audio-to-dataset", { resume: wasPlaying });
+      swapToChapter(
+        want,
+        ctx.dataset.audioUrl,
+        ctx.dataset.timingsUrl,
+        ctx.dataset.chapterTitle ?? "",
+        { autoplay: wasPlaying },
+      );
+    };
+    ctx.onUpdate(() => {
+      syncAudioToDataset();
+      // Chapter changes move the next/prev targets and the lock-screen
+      // title with them.
+      registerMediaSessionNavHandlers();
+      updateMediaSessionMetadata();
+    });
 
     // Controls
     ctx.on(playPauseBtn, "click", togglePlayback);
@@ -865,7 +1005,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         Math.abs(nowMs - lastReportedMs) >= POSITION_REPORT_INTERVAL_MS
       ) {
         lastReportedMs = nowMs;
-        const chapterId = ctx.dataset.chapterId;
+        // Attribute the position to the chapter the audio has actually
+        // loaded, not the dataset: while a nav's server round-trip is in
+        // flight (or wedged) the dataset lags the audio, and pairing the
+        // old chapter id with the new chapter's position corrupts
+        // progress.
+        const chapterId = LOADED_CHAPTER.get(audio) ?? ctx.dataset.chapterId;
         if (chapterId) {
           progress.observe({
             chapter_id: chapterId,
@@ -891,6 +1036,28 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         );
         lastHeartbeatWall = wallNow;
         lastHeartbeatPosMs = nowMs;
+
+        // Cheap replica-consistency assertion, piggybacked on the
+        // heartbeat: the loaded audio, the LV-rendered chapter, and the
+        // URL should all agree. A mismatch is the state-whackamole bug
+        // class showing itself — the event lands in Prometheus (via the
+        // PlayerEvents whitelist) so divergence is an alert with context
+        // instead of a user report.
+        const urlChapter =
+          window.location.pathname.match(/\/read\/(\d+)/)?.[1] ?? null;
+        const loadedChapter = LOADED_CHAPTER.get(audio) ?? null;
+        const datasetChapter = ctx.dataset.chapterId ?? null;
+        if (
+          loadedChapter !== null &&
+          (loadedChapter !== datasetChapter ||
+            (urlChapter !== null && loadedChapter !== urlChapter))
+        ) {
+          log("state-divergence", {
+            loaded: loadedChapter,
+            dataset: datasetChapter,
+            url: urlChapter,
+          });
+        }
       }
     });
 
@@ -926,7 +1093,8 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       scrollFollow.setPlaying(false);
       stopHighlightLoop();
       if (ms) ms.playbackState = "paused";
-      const chapterId = ctx.dataset.chapterId;
+      // Same loaded-chapter attribution rationale as the timeupdate path.
+      const chapterId = LOADED_CHAPTER.get(audio) ?? ctx.dataset.chapterId;
       if (chapterId) {
         progress.observe({
           chapter_id: chapterId,
@@ -1031,6 +1199,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     );
     ctx.on(window, "readaloud:lv-reload-resumed", () =>
       log("lv-reload-resumed", audioSnapshot()),
+    );
+    // Mirror wedged-socket recoveries the same way — whichever hook's
+    // nav-ack watchdog triggered it (this one or the chapter bar's).
+    ctx.on(window, "readaloud:force-reconnect", () =>
+      log("force-reconnect", audioSnapshot()),
     );
 
     // Re-sync UX

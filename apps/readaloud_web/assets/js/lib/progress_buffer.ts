@@ -29,6 +29,10 @@ export interface ProgressObservation {
   readonly audio_position_ms?: number;
   readonly scroll_position?: number;
   readonly observed_at: string;
+  // Explicit chapter pivot (see ProgressObservationPayload in events.ts).
+  // Must survive the localStorage round-trip: a buffered pivot replayed
+  // after reconnect is exactly the case the server reconciler exists for.
+  readonly pivot?: true;
 }
 
 export interface ProgressBuffer {
@@ -52,6 +56,68 @@ function storageKey(bookId: number): string {
   return `${STORAGE_KEY_PREFIX}${bookId}`;
 }
 
+// --- Last-known-position cache ----------------------------------------
+// The queue above is a delivery buffer: entries are cleared the moment a
+// beacon is *queued* (not received). That's correct for delivery — the
+// server's observe! is idempotent — but it means a page load right after
+// a pagehide flush can race the beacon to the server and restore a stale
+// position (the 2026-06-11 incident: beacon carrying 5.8s arrived 6s
+// after the new page had already mounted at 0:00).
+//
+// This cache is the client's own memory of where playback last was:
+// written on every observation, never cleared, read at player mount as a
+// candidate alongside the server's initial position. Same-chapter only,
+// recency-bounded — across devices or after a long gap the server row is
+// the better authority.
+
+export interface LastPosition {
+  readonly chapter_id: string;
+  readonly position_ms: number;
+  readonly at_ms: number;
+}
+
+const LAST_POSITION_KEY_PREFIX = "readaloud-last-position:";
+
+function lastPositionKey(bookId: number): string {
+  return `${LAST_POSITION_KEY_PREFIX}${bookId}`;
+}
+
+export function writeLastPosition(
+  bookId: number,
+  chapterId: string,
+  positionMs: number,
+): void {
+  const entry: LastPosition = {
+    chapter_id: chapterId,
+    position_ms: positionMs,
+    at_ms: Date.now(),
+  };
+  try {
+    localStorage.setItem(lastPositionKey(bookId), JSON.stringify(entry));
+  } catch {
+    // Quota/private-mode failures just mean no client-side restore.
+  }
+}
+
+export function readLastPosition(bookId: number): LastPosition | null {
+  const raw = localStorage.getItem(lastPositionKey(bookId));
+  if (!raw) return null;
+  try {
+    const json = parseJson(raw);
+    if (!isJsonObject(json)) return null;
+    if (typeof json.chapter_id !== "string") return null;
+    if (typeof json.position_ms !== "number") return null;
+    if (typeof json.at_ms !== "number") return null;
+    return {
+      chapter_id: json.chapter_id,
+      position_ms: json.position_ms,
+      at_ms: json.at_ms,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function parseObservation(v: JsonValue): ProgressObservation | null {
   if (!isJsonObject(v)) return null;
   if (typeof v.chapter_id !== "string") return null;
@@ -67,6 +133,9 @@ function parseObservation(v: JsonValue): ProgressObservation | null {
   }
   if (typeof v.scroll_position === "number") {
     out.scroll_position = v.scroll_position;
+  }
+  if (v.pivot === true) {
+    out.pivot = true;
   }
   return out;
 }
@@ -174,6 +243,9 @@ export function attachProgressBuffer(deps: ProgressBufferDeps): ProgressBuffer {
         ...input,
         observed_at: new Date().toISOString(),
       };
+      if (typeof obs.audio_position_ms === "number") {
+        writeLastPosition(bookId, obs.chapter_id, obs.audio_position_ms);
+      }
       append(obs);
       try {
         pushObservations([obs]);
