@@ -1,17 +1,13 @@
 { inputs, cell }:
 let
   inherit (inputs) nixpkgs;
-  inherit (inputs.std) lib;
-  inherit (inputs) std;
   l = nixpkgs.lib;
   beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
   lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
 {
-  default = lib.dev.mkShell {
+  default = inputs.vendor.mkShell {
     name = "readaloud-dev";
-
-    imports = [ std.std.devshellProfiles.default ];
 
     nixago = [
       cell.configs.treefmt

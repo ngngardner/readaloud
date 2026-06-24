@@ -1,7 +1,7 @@
 { inputs, cell }:
 let
   inherit (inputs) nixpkgs;
-  inherit (inputs.std.lib.dev) mkNixago;
+  inherit (inputs.vendor) mkNixago;
   l = nixpkgs.lib;
   lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
