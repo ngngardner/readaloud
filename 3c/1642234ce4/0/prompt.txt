@@ -1,0 +1,35 @@
+Generating audio — Ch 3
+audio
+The Innovator's Dilemma: When New Technologies Cause Great Firms to Fail (Management of Innovation and Change)
+6m ago
+Generating audio — Ch 2
+audio
+The Innovator's Dilemma: When New Technologies Cause Great Firms to Fail (Management of Innovation and Change)
+26m ago
+Generating audio — Ch 1
+audio
+The Innovator's Dilemma: When New Technologies Cause Great Firms to Fail (Management of Innovation and Change) i just generated audio for these chapters but didnt get highlighting. did our whisper update when we switch to localai's version of whisper silently fail to get word level timestamps?
+
+---
+
+your 2 is wrong, of course we had word level timestamps, i can load a chapter from castle of black iron and get perfect word highlighting. ground yourself first in how that worked before suggesting the next followup
+
+---
+
+unless your point is that its only segments, not words. still, take a look
+
+---
+
+continue answering your open questions
+
+---
+
+yes you can restart it
+
+---
+
+yes you can restart it. its being used by upscaling on mangareader probably. pause all upscaling tasks then restart localai
+
+---
+
+not its ok skip requeue, leave them stranded
