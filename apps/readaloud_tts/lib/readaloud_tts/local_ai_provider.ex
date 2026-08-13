@@ -59,7 +59,13 @@ defmodule ReadaloudTTS.LocalAIProvider do
            form_multipart: [
              file: {audio, filename: "audio.wav", content_type: "audio/wav"},
              model: config.stt_model,
-             response_format: "verbose_json"
+             response_format: "verbose_json",
+             # Upstream LocalAI gates faster-whisper's word alignment on this
+             # field (`word_timestamps = "word" in request.timestamp_granularities`).
+             # The old ngngardner/LocalAI fork emitted words unconditionally, so
+             # this was unnecessary until we moved to the upstream image and
+             # silently started getting segment-level timings instead.
+             "timestamp_granularities[]": "word"
            ],
            receive_timeout: 300_000,
            retry: :transient,
@@ -125,23 +131,39 @@ defmodule ReadaloudTTS.LocalAIProvider do
 
   defp retry_delay(attempt), do: min(1_000 * Integer.pow(2, attempt), 30_000)
 
-  defp extract_word_timings(%{"segments" => segments}) when is_list(segments) do
+  @doc false
+  # Public only so the response-shape contract with LocalAI can be tested
+  # directly; the shape has changed underneath us once already.
+  def extract_word_timings(%{"segments" => segments}) when is_list(segments) do
     Enum.flat_map(segments, &segment_timings/1)
   end
 
-  defp extract_word_timings(_), do: []
+  def extract_word_timings(_), do: []
 
+  # Upstream LocalAI names the word field "text"; the old fork named it "word".
   defp segment_timings(%{"words" => words}) when is_list(words) do
     Enum.map(words, fn w ->
       %WordTiming{
-        word: w["word"] |> to_string() |> String.trim(),
+        word: (w["text"] || w["word"]) |> to_string() |> String.trim(),
         start_ms: round((w["start"] || 0) * 1000),
         end_ms: round((w["end"] || 0) * 1000)
       }
     end)
   end
 
+  # Segment-level fallback: every word in the segment gets the segment's own
+  # start/end, which reads as "highlighting works" while being far too coarse
+  # to follow. That is a misconfiguration (word alignment was not requested or
+  # not honoured), not a normal response, so say so loudly rather than emitting
+  # smeared timings in silence.
   defp segment_timings(%{"start" => start_s, "end" => end_s, "text" => text}) do
+    Logger.warning(
+      "Transcription segment has no word-level timings; falling back to " <>
+        "segment-level. Check that LocalAI honours timestamp_granularities[]=word."
+    )
+
+    :telemetry.execute([:readaloud, :tts, :segment_level_timings], %{count: 1}, %{})
+
     text
     |> String.split(~r/\s+/, trim: true)
     |> Enum.map(fn word ->

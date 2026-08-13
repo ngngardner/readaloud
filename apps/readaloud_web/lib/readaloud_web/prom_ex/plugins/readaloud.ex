@@ -23,6 +23,9 @@ defmodule ReadaloudWeb.PromEx.Plugins.Readaloud do
       — `ReadaloudAudiobook.GenerateJob` synthesis spans, tagged by outcome.
     * `[:readaloud, :tts, :transcription_failure]` — whisper alignment
       fallbacks (audio kept, timings lost for that chunk).
+    * `[:readaloud, :tts, :segment_level_timings]` — whisper returned a segment
+      with no word timings (audio kept, highlighting degraded to segment
+      granularity for that segment).
 
   Polling groups snapshot task counts by kind/status and library totals every
   `poll_rate` ms (default 10s).
@@ -97,6 +100,10 @@ defmodule ReadaloudWeb.PromEx.Plugins.Readaloud do
         counter("readaloud.tts.transcription_failure.count",
           event_name: [:readaloud, :tts, :transcription_failure],
           description: "Chunks whose whisper transcription failed (timings dropped)."
+        ),
+        counter("readaloud.tts.segment_level_timings.count",
+          event_name: [:readaloud, :tts, :segment_level_timings],
+          description: "Segments returned without word timings (highlighting degraded)."
         )
       ])
     ]
