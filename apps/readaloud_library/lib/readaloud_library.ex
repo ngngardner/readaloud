@@ -1,5 +1,5 @@
 defmodule ReadaloudLibrary do
-  alias ReadaloudLibrary.{Book, Chapter, Repo}
+  alias ReadaloudLibrary.{Book, Chapter, Repo, Watermark}
   import Ecto.Query
 
   # Books
@@ -88,9 +88,18 @@ defmodule ReadaloudLibrary do
     %Chapter{} |> Chapter.changeset(attrs) |> Repo.insert()
   end
 
+  @doc """
+  Reads a chapter's stored HTML, with scraper-site watermarks removed.
+
+  Filtering on read rather than on import is deliberate: it is the one path
+  the reader, `ReadaloudAudiobook.GenerateJob`, and `mix retranscribe` all
+  share, so already-imported books are cleaned without a backfill and no
+  chapter can reach the TTS provider unfiltered. See
+  `ReadaloudLibrary.Watermark`.
+  """
   def get_chapter_content(chapter) do
     case File.read(chapter.content_path) do
-      {:ok, content} -> {:ok, content}
+      {:ok, content} -> {:ok, Watermark.strip(content)}
       {:error, reason} -> {:error, reason}
     end
   end
