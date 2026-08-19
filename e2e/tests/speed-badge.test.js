@@ -11,7 +11,7 @@ describe("Speed Badge", () => {
 		await page.evaluateOnNewDocument(() => {
 			localStorage.removeItem("readaloud-playback-speed");
 		});
-		// Pin to chapter 1: the fixture's `audio_for: [1, 2, 3]` guarantees
+		// Pin to chapter 1: the fixture's `audio_for: [1, 2, 3, 4, 5]` guarantees
 		// audio there. `openReader()` without args hits BookLive's Resume
 		// link, which can point at whichever chapter saved progress
 		// reflects — flaky across test ordering.
@@ -24,7 +24,7 @@ describe("Speed Badge", () => {
 	});
 
 	// The badge only renders when audio_state == :ready, which requires
-	// a chapter_audios row. The fixture (`audio_for: [1, 2, 3]`) guarantees
+	// a chapter_audios row. The fixture (`audio_for: [1, 2, 3, 4, 5]`) guarantees
 	// chapter 1 has audio, and openReader() lands on chapter 1 by default.
 	it("speed badge exists in the audio player", async () => {
 		const badge = await page.$("#speed-badge");

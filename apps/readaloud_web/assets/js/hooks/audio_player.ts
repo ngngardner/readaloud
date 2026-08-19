@@ -9,6 +9,7 @@ import { DOM_IDS, findElement, requireElement } from "../lib/dom_ids";
 import type { PlayerEventDetailValue } from "../lib/events";
 import { defineHook } from "../lib/hook";
 import { watchNavAck } from "../lib/nav_ack";
+import { netInfo } from "../lib/net_info";
 import { PersistedRecord } from "../lib/persisted_record";
 import { attachPlayerEventBuffer } from "../lib/player_event_buffer";
 import {
@@ -174,6 +175,64 @@ const LOADED_CHAPTER = new WeakMap<HTMLAudioElement, string>();
 // as LOADED_CHAPTER: must live and die with the <audio> element, not the
 // hook instance.
 const CHAPTER_WINDOW = new WeakMap<HTMLAudioElement, ChapterWindow>();
+
+// --- Prefetch cache (per <audio> element) -----------------------------
+// Mobile browsers suspend or kill the page's network while the screen is
+// off — iOS Safari on lock, Android under Doze (the 2026-08-18 commute:
+// ~6 minutes of fetch() throwing "Failed to fetch" with navigator.onLine
+// still true). If the next chapter's audio isn't already in memory when
+// `ended` fires, the autoplay chain stalls into silence until the user
+// wakes the phone. A single next-chapter slot, filled at 15% of the
+// chapter, left exactly one blackout-sized hole; this cache keeps up to
+// PREFETCH_HORIZON chapters ahead — audio blob + /nav neighbors each —
+// filled from the moment a chapter starts playing, so a blackout has to
+// outlast several whole chapters before the chain runs dry.
+//
+// Keyed by network audio URL. Reachability is walked forward from the
+// loaded chapter's CHAPTER_WINDOW through each entry's own `nav.next`
+// (never the dataset — same rationale as navTarget), so the cache is
+// always "the next N chapters of whatever is loaded": entries the loaded
+// chapter has moved past, or that a manual jump left unreachable, are
+// evicted (in-flight fetch aborted, blob revoked) on the next fill.
+// Bounded by construction — a fill keeps at most PREFETCH_HORIZON entries
+// and evicts every other one — so memory tops out around 3 × ~20 MB WAV.
+// Prev-direction blobs are out of scope: prev is a rare, user-initiated,
+// screen-on action.
+//
+// Module scope, keyed by the element (like LOADED_CHAPTER/CHAPTER_WINDOW):
+// a hook remount must not throw away the blobs the chain may need before
+// the network is back. In-flight fetches DO die with the hook instance —
+// their continuations belong to the dead closure — and the successor
+// restarts them on its first fill.
+interface PrefetchEntry {
+  readonly target: ChapterNavTarget;
+  blobUrl: string | null;
+  nav: ChapterWindow | null;
+  abort: AbortController | null; // audio fetch in flight
+  navAbort: AbortController | null; // /nav fetch in flight
+  failures: number;
+  retryAt: number; // epoch ms; fetches for this entry wait until then
+}
+
+const PREFETCH_HORIZON = 3;
+// Failed fetches back off per entry (10s, 20s, 40s … capped) so a chapter
+// with broken audio doesn't get hammered on every trigger; a connectivity
+// transition (online / visible) resets the backoff.
+const PREFETCH_RETRY_BASE_MS = 10_000;
+const PREFETCH_RETRY_MAX_MS = 120_000;
+// timeupdate fires ~4×/s; the fill it drives is the steady-state retry
+// path, so throttle it.
+const PREFETCH_TIMEUPDATE_INTERVAL_MS = 5_000;
+
+const PREFETCH_CACHE = new WeakMap<
+  HTMLAudioElement,
+  Map<string, PrefetchEntry>
+>();
+
+// The blob URL currently loaded into the element (if its src is a blob),
+// so the next swap can revoke it. Element-scoped for the same reason as
+// the cache: a remount must not orphan ~20 MB.
+const CURRENT_BLOB_URL = new WeakMap<HTMLAudioElement, string>();
 
 // How long the client-side last-position cache outranks the server's
 // initial position after a reload. Within this window the local cache is
@@ -434,6 +493,12 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       autoNextChapter: readerSettings.get().autoNextChapter,
       hasNext: !!ctx.dataset.nextAudioUrl,
       hasPrev: !!ctx.dataset.prevAudioUrl,
+      cachedBlobs: (() => {
+        let n = 0;
+        for (const e of PREFETCH_CACHE.get(audio)?.values() ?? [])
+          if (e.blobUrl !== null) n += 1;
+        return n;
+      })(),
       bookTitle: ctx.dataset.bookTitle,
       chapterTitle: ctx.dataset.chapterTitle,
     });
@@ -552,103 +617,268 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
     };
 
-    // --- Next-chapter prefetch -----------------------------------------
-    // Mobile browsers (iOS Safari especially) suspend network fetches
-    // when the screen locks. If we wait until `ended` to fetch the next
-    // chapter's audio, the request stalls and audio.play() never gets a
-    // valid resource — exactly the bug we're chasing. So while the
-    // current chapter is still playing (and the device presumably
-    // awake), download the next chapter's audio fully into a Blob URL.
-    // On `ended` we swap to the in-memory blob — no network needed.
-    let currentBlobUrl: string | null = null; // points to in-use audio.src
-    let prefetchedBlobUrl: string | null = null;
-    let prefetchedFor: string | null = null;
-    let prefetchAbort: AbortController | null = null;
-    // Neighbors OF the prefetched chapter, fetched alongside its audio.
-    // This is what lets the chain extend past one offline boundary: by the
-    // time the prefetched chapter starts playing, its own "next" is local
-    // and doesn't depend on the WS delivering a dataset refresh.
-    let prefetchedNav: ChapterWindow | null = null;
+    // --- Prefetch cache: fill / evict --------------------------------------
+    // See the PREFETCH_CACHE comment at module scope for the design. This
+    // instance adopts the element's cache (a remount inherits completed
+    // blobs + navs) and owns every fetch it starts.
+    const prefetchCache: Map<string, PrefetchEntry> = (() => {
+      const existing = PREFETCH_CACHE.get(audio);
+      if (existing) return existing;
+      const fresh = new Map<string, PrefetchEntry>();
+      PREFETCH_CACHE.set(audio, fresh);
+      return fresh;
+    })();
 
-    const fetchPrefetchNav = (audioUrl: string): void => {
-      const navUrl = navUrlFor(audioUrl);
-      fetch(navUrl)
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
-        })
-        .then((data: JsonValue) => {
-          if (prefetchedFor !== audioUrl) return; // target changed mid-flight
-          prefetchedNav = parseChapterWindow(data);
-          log("prefetch-nav-done", {
-            url: navUrl,
-            hasNext: prefetchedNav?.next !== null,
-          });
-        })
-        .catch((err: Error) => {
-          log("prefetch-nav-fail", { url: navUrl, error: String(err) });
-        });
+    const cachedBlobCount = (): number => {
+      let n = 0;
+      for (const e of prefetchCache.values()) if (e.blobUrl !== null) n += 1;
+      return n;
+    };
+    const inFlightCount = (): number => {
+      let n = 0;
+      for (const e of prefetchCache.values()) if (e.abort !== null) n += 1;
+      return n;
     };
 
-    const tryStartPrefetch = (): void => {
-      if (!readerSettings.get().autoNextChapter) return;
-      const url = navTarget("next")?.networkUrl;
-      if (!url) return;
-      // Already done or in flight for the same URL? Skip.
-      if (prefetchedBlobUrl && prefetchedFor === url) return;
-      if (prefetchAbort && prefetchedFor === url) return;
-      // Target URL changed (e.g. user manually jumped chapters) — drop
-      // any in-flight or stale-blob state and restart.
-      if (prefetchAbort) {
-        log("prefetch-abort-stale", { for: prefetchedFor });
-        prefetchAbort.abort();
-        prefetchAbort = null;
+    // Prefetch is armed by playback evidence (play / timeupdate), not by
+    // mount: a reader who opens a chapter and never presses play shouldn't
+    // pull ~60 MB of audio. A remount onto a playing element is already
+    // engaged. Once armed it stays armed for the hook's lifetime.
+    let prefetchArmed = !audio.paused;
+
+    const noteFailure = (entry: PrefetchEntry): number => {
+      entry.failures += 1;
+      const delay = Math.min(
+        PREFETCH_RETRY_BASE_MS * 2 ** (entry.failures - 1),
+        PREFETCH_RETRY_MAX_MS,
+      );
+      entry.retryAt = Date.now() + delay;
+      return delay;
+    };
+
+    const evictEntry = (
+      url: string,
+      entry: PrefetchEntry,
+      reason: string,
+    ): void => {
+      prefetchCache.delete(url);
+      log("prefetch-cache-evict", {
+        url,
+        reason,
+        hadBlob: entry.blobUrl !== null,
+        inFlight: entry.abort !== null,
+      });
+      if (entry.abort) entry.abort.abort();
+      entry.abort = null;
+      if (entry.navAbort) entry.navAbort.abort();
+      entry.navAbort = null;
+      if (entry.blobUrl) {
+        URL.revokeObjectURL(entry.blobUrl);
+        entry.blobUrl = null;
       }
-      if (prefetchedBlobUrl) {
-        log("prefetch-revoke-stale", { for: prefetchedFor });
-        URL.revokeObjectURL(prefetchedBlobUrl);
-        prefetchedBlobUrl = null;
-      }
-      prefetchedNav = null;
-      prefetchedFor = url;
-      fetchPrefetchNav(url);
+    };
+
+    // Detach an entry whose blob is about to become audio.src. Ownership
+    // of the blob URL moves to CURRENT_BLOB_URL (via swapToChapter); an
+    // audio fetch still in flight is pointless now — the element loads
+    // the network URL itself.
+    const consumeEntry = (url: string): PrefetchEntry | null => {
+      const entry = prefetchCache.get(url);
+      if (!entry) return null;
+      prefetchCache.delete(url);
+      if (entry.abort) entry.abort.abort();
+      entry.abort = null;
+      if (entry.navAbort) entry.navAbort.abort();
+      entry.navAbort = null;
+      return entry;
+    };
+
+    const startAudioFetch = (entry: PrefetchEntry, depth: number): void => {
+      const url = entry.target.networkUrl;
       const abort = new AbortController();
-      prefetchAbort = abort;
-      log("prefetch-start", { url });
+      entry.abort = abort;
+      log("prefetch-start", { url, depth });
       const startedAt = performance.now();
+      // Continuations only clear the in-flight marker if it is still THIS
+      // controller: a destroy/remount aborts this fetch and the successor
+      // instance may already have started a new one on the same entry.
       fetch(url, { signal: abort.signal })
         .then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.blob();
         })
         .then((blob) => {
-          prefetchAbort = null;
-          if (prefetchedFor !== url) {
-            log("prefetch-discard-target-changed", {
-              completedFor: url,
-              currentTarget: prefetchedFor,
-            });
+          if (entry.abort === abort) entry.abort = null;
+          const blobUrl = URL.createObjectURL(blob);
+          if (prefetchCache.get(url) !== entry) {
+            // Evicted or consumed while the body was downloading (the
+            // abort raced the last bytes). Nobody will ever read this.
+            URL.revokeObjectURL(blobUrl);
+            log("prefetch-discard-target-changed", { completedFor: url });
             return;
           }
-          prefetchedBlobUrl = URL.createObjectURL(blob);
+          entry.blobUrl = blobUrl;
+          entry.failures = 0;
+          entry.retryAt = 0;
           log("prefetch-done", {
             url,
+            depth,
             bytes: blob.size,
             durationMs: Math.round(performance.now() - startedAt),
           });
+          maybeLogHorizon();
         })
         .catch((err: Error) => {
-          prefetchAbort = null;
-          if (err.name !== "AbortError") {
-            log("prefetch-fail", { url, error: String(err) });
-            console.warn("AudioPlayer: next-chapter prefetch failed", err);
-            // Reset prefetchedFor so we can retry later (e.g. on next
-            // timeupdate) instead of being stuck thinking we're done.
-            if (prefetchedFor === url) prefetchedFor = null;
-          } else {
+          if (entry.abort === abort) entry.abort = null;
+          if (err.name === "AbortError") {
             log("prefetch-aborted", { url });
+            return;
           }
+          const retryInMs = noteFailure(entry);
+          log("prefetch-fail", {
+            url,
+            depth,
+            error: String(err),
+            retryInMs,
+            ...netInfo(),
+          });
+          console.warn("AudioPlayer: chapter prefetch failed", err);
         });
+    };
+
+    // Neighbors OF a cached chapter, fetched alongside its audio. This is
+    // what lets the chain extend past one offline boundary: by the time a
+    // cached chapter starts playing, its own "next" is local and doesn't
+    // depend on the WS delivering a dataset refresh — and it is how the
+    // fill walk reaches depth 2 and 3.
+    const startNavFetch = (entry: PrefetchEntry, depth: number): void => {
+      const url = entry.target.networkUrl;
+      const navUrl = navUrlFor(url);
+      const abort = new AbortController();
+      entry.navAbort = abort;
+      fetch(navUrl, { signal: abort.signal })
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((data: JsonValue) => {
+          if (entry.navAbort === abort) entry.navAbort = null;
+          if (prefetchCache.get(url) !== entry) return;
+          const nav = parseChapterWindow(data);
+          if (!nav) throw new Error("malformed /nav payload");
+          entry.nav = nav;
+          entry.failures = 0;
+          entry.retryAt = 0;
+          log("prefetch-nav-done", {
+            url: navUrl,
+            depth,
+            hasNext: nav.next !== null,
+          });
+          // The walk that started this fetch stopped here for lack of
+          // neighbors; extend it now rather than waiting for the next
+          // trigger.
+          fillPrefetchCache("nav-done");
+        })
+        .catch((err: Error) => {
+          if (entry.navAbort === abort) entry.navAbort = null;
+          if (err.name === "AbortError") return;
+          const retryInMs = noteFailure(entry);
+          log("prefetch-nav-fail", {
+            url: navUrl,
+            depth,
+            error: String(err),
+            retryInMs,
+            ...netInfo(),
+          });
+        });
+    };
+
+    // Emitted once per loaded chapter, the first time the cache covers the
+    // whole horizon — every reachable chapter within PREFETCH_HORIZON has
+    // both blob and neighbors, or the chain ends sooner (`chainEnd`: last
+    // chapter, or the next one has no audio yet). Its absence in an
+    // incident log says the network never let us get there.
+    let horizonLoggedFor: string | null = null;
+    const maybeLogHorizon = (): void => {
+      const loaded = LOADED_CHAPTER.get(audio) ?? null;
+      if (loaded === null || horizonLoggedFor === loaded) return;
+      const win = CHAPTER_WINDOW.get(audio);
+      if (!win) return;
+      let target = win.next;
+      let depth = 0;
+      while (target && depth < PREFETCH_HORIZON) {
+        const entry = prefetchCache.get(target.networkUrl);
+        if (!entry || entry.blobUrl === null || entry.nav === null) return;
+        depth += 1;
+        target = entry.nav.next;
+      }
+      horizonLoggedFor = loaded;
+      log("prefetch-horizon", { depth, chainEnd: target === null });
+    };
+
+    // The level-triggered fill. Walk forward from the loaded chapter's
+    // window through each cached entry's own nav, up to PREFETCH_HORIZON:
+    // start whatever fetches are missing (audio blob, /nav) subject to
+    // per-entry backoff, then evict every entry the walk didn't reach.
+    // Idempotent and cheap when the cache is complete, so it runs on every
+    // trigger: mount, play, swap, LV update, nav-done, throttled
+    // timeupdate, and (with backoff reset) online / visibility-visible.
+    const fillPrefetchCache = (
+      reason: string,
+      opts?: { readonly force?: boolean },
+    ): void => {
+      if (!prefetchArmed) return;
+      if (!readerSettings.get().autoNextChapter) return;
+      // Unknown neighbors (offline past the horizon, or right after a prev
+      // nav until the dataset refills the window): nothing to walk, and
+      // no basis for judging what's unreachable — leave the cache alone.
+      const win = CHAPTER_WINDOW.get(audio);
+      if (!win) return;
+      const loaded = LOADED_CHAPTER.get(audio) ?? null;
+      const now = Date.now();
+      const reachable = new Set<string>();
+      let target = win.next;
+      let depth = 0;
+      while (target && depth < PREFETCH_HORIZON) {
+        const url = target.networkUrl;
+        // Cycle / self guard: a target equal to the loaded chapter or one
+        // already walked means the neighbor data is inconsistent; stop
+        // rather than cache the chapter that is playing.
+        if (target.chapterId === loaded || reachable.has(url)) break;
+        depth += 1;
+        reachable.add(url);
+        let entry = prefetchCache.get(url);
+        if (!entry) {
+          entry = {
+            target,
+            blobUrl: null,
+            nav: null,
+            abort: null,
+            navAbort: null,
+            failures: 0,
+            retryAt: 0,
+          };
+          prefetchCache.set(url, entry);
+        }
+        if (opts?.force) {
+          entry.failures = 0;
+          entry.retryAt = 0;
+        }
+        const retryOk = now >= entry.retryAt;
+        if (entry.nav === null && entry.navAbort === null && retryOk) {
+          startNavFetch(entry, depth);
+        }
+        if (entry.blobUrl === null && entry.abort === null && retryOk) {
+          startAudioFetch(entry, depth);
+        }
+        if (entry.nav === null) break; // can't see past this one yet
+        target = entry.nav.next;
+      }
+      for (const [url, entry] of Array.from(prefetchCache)) {
+        if (!reachable.has(url))
+          evictEntry(url, entry, `unreachable:${reason}`);
+      }
+      maybeLogHorizon();
     };
 
     // Swap to a different chapter without unmounting the player. The ONLY
@@ -688,6 +918,16 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
             title: chapterTitle,
           }
         : null;
+      // The blob currently in use as audio.src (if any) is being replaced
+      // — revoke it so we don't leak ~tens of MB per chapter swap. Blob
+      // ownership is tracked here, at the single src writer, so server-
+      // owned moves and autoplay retries can't orphan one either.
+      const prevBlob = CURRENT_BLOB_URL.get(audio);
+      if (prevBlob !== undefined && prevBlob !== audioUrl) {
+        URL.revokeObjectURL(prevBlob);
+      }
+      if (audioUrl.startsWith("blob:")) CURRENT_BLOB_URL.set(audio, audioUrl);
+      else CURRENT_BLOB_URL.delete(audio);
       audio.src = audioUrl;
       audio.load();
       LOADED_CHAPTER.set(audio, chapterId);
@@ -772,6 +1012,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // doesn't match the dataset: this refuses, and the element's previous
     // window survives in the module-scope WeakMap.
     adoptDatasetWindow();
+    // A remount onto a playing element (screen-wake rejoin with a dead LV
+    // process) inherits the element's cache and re-validates it against
+    // the window; a fresh mount is unarmed until playback evidence.
+    fillPrefetchCache("mount");
 
     // The single user-initiated chapter-change projection. Every client
     // writer (pill buttons, keyboard arrows, lock-screen media keys,
@@ -798,42 +1042,26 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
         return false;
       }
 
-      // Use the prefetched in-memory blob if it's for THIS URL — this is
-      // the whole point of prefetch and is what makes background-tab
+      // Use the cached in-memory blob for THIS URL if we have one — this
+      // is the whole point of prefetch and is what makes locked-screen
       // autoplay actually work. Fall back to the network URL otherwise
-      // (prev nav, or a desktop user who never triggered prefetch).
-      const audioUrl =
-        prefetchedBlobUrl !== null && prefetchedFor === target.networkUrl
-          ? prefetchedBlobUrl
-          : target.networkUrl;
-      const useBlob = audioUrl !== target.networkUrl;
-      // The prefetched /nav response describes the chapter we're swapping
-      // TO; it becomes the new window even if the WS never delivers a
-      // dataset refresh. Captured before the prefetch slots reset below.
-      const navForTarget =
-        prefetchedFor === target.networkUrl ? prefetchedNav : null;
+      // (prev nav, a fetch that never completed, or a desktop user who
+      // never armed prefetch). Consuming the entry detaches it from the
+      // cache; the blob's ownership moves to the element via swapToChapter.
+      const entry = consumeEntry(target.networkUrl);
+      const audioUrl = entry?.blobUrl ?? target.networkUrl;
+      const useBlob = entry?.blobUrl != null;
+      // The cached /nav response describes the chapter we're swapping TO;
+      // it becomes the new window even if the WS never delivers a dataset
+      // refresh.
+      const navForTarget = entry?.nav ?? null;
       log(dir === "next" ? "go-to-next-chapter" : "go-to-prev-chapter", {
         useBlob,
         hasPrefetchedNav: navForTarget !== null,
-        prefetchedFor,
-        prefetchInFlight: prefetchAbort !== null,
+        cachedBlobs: cachedBlobCount(),
+        prefetchInFlight: inFlightCount(),
         toTitle: target.title,
       });
-
-      // The blob currently in use as audio.src (if any) is being replaced
-      // — revoke it so we don't leak ~tens of MB per chapter swap.
-      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-      currentBlobUrl = useBlob ? audioUrl : null;
-      // Detach the prefetched-blob slot since it's now the current one
-      // (or we didn't use it). Either way, the next prefetch (for the
-      // chapter after this) starts fresh.
-      prefetchedBlobUrl = null;
-      prefetchedFor = null;
-      prefetchedNav = null;
-      if (prefetchAbort) {
-        prefetchAbort.abort();
-        prefetchAbort = null;
-      }
 
       // Advance the window with the swap. Better an empty window than a
       // stale one: empty blocks the next boundary gracefully until the
@@ -856,6 +1084,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
           networkUrl: target.networkUrl,
         },
       );
+      // The window just moved one chapter forward: keep the cache "the
+      // next N of what's loaded" — the consumed entry's successors are
+      // now depth 1..N-1, and depth N starts downloading immediately (not
+      // at 15% of the chapter — the network may be gone by then).
+      fillPrefetchCache("swap");
 
       // Update browser URL client-side BEFORE notifying the server. This
       // is the critical fix for sleeping-mobile autoplay: server-side
@@ -1115,6 +1348,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       // again, so the freshly delivered neighbors become the window. (A
       // stale diff for a chapter we've already left is rejected inside.)
       adoptDatasetWindow();
+      // The window may have moved with the dataset (server-owned nav) —
+      // re-aim the cache at it.
+      fillPrefetchCache("update");
       // Chapter changes move the next/prev targets and the lock-screen
       // title with them.
       registerMediaSessionNavHandlers();
@@ -1174,11 +1410,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     }
 
     // Time updates: progress bars + time display + position report.
-    // Also kicks off the next-chapter prefetch once the user has clearly
-    // committed to this chapter (>15% through). Doing it here, gated on
-    // playback progress, means we don't waste bandwidth on chapters the
-    // user opens and immediately abandons.
-    const PREFETCH_TRIGGER_FRACTION = 0.15;
+    // Also the steady-state prefetch trigger: playback progress arms the
+    // cache (so a reader who never presses play downloads nothing) and,
+    // throttled, retries fetches that failed while the network was down.
+    let lastTimeupdateFillAt = 0;
     ctx.on(audio, "timeupdate", () => {
       if (!audio.duration) return;
       const pct = (audio.currentTime / audio.duration) * 100;
@@ -1190,8 +1425,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       if (fillMini) fillMini.style.width = `${pct}%`;
       updateTimeDisplay();
 
-      if (audio.currentTime / audio.duration > PREFETCH_TRIGGER_FRACTION) {
-        tryStartPrefetch();
+      prefetchArmed = true;
+      const fillNow = Date.now();
+      if (fillNow - lastTimeupdateFillAt >= PREFETCH_TIMEUPDATE_INTERVAL_MS) {
+        lastTimeupdateFillAt = fillNow;
+        fillPrefetchCache("timeupdate");
       }
 
       const nowMs = Math.round(audio.currentTime * 1000);
@@ -1272,6 +1510,10 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(audio, "play", () => {
       // Fresh heartbeat series — deltas must not span the paused gap.
       lastHeartbeatWall = 0;
+      // Playback evidence arms prefetch; start filling the horizon now
+      // rather than at some fraction of the chapter.
+      prefetchArmed = true;
+      fillPrefetchCache("play");
       log("audio-play", {
         currentTime: audio.currentTime,
         duration: audio.duration,
@@ -1303,12 +1545,16 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       }
     });
     ctx.on(audio, "ended", () => {
+      const nextTarget = navTarget("next");
+      const nextEntry = nextTarget
+        ? (prefetchCache.get(nextTarget.networkUrl) ?? null)
+        : null;
       log("audio-ended", {
         autoNext: readerSettings.get().autoNextChapter,
-        hasPrefetchedBlob: prefetchedBlobUrl !== null,
-        prefetchInFlight: prefetchAbort !== null,
-        prefetchedFor,
-        nextUrl: ctx.dataset.nextAudioUrl ?? null,
+        hasPrefetchedBlob: nextEntry?.blobUrl != null,
+        prefetchInFlight: nextEntry?.abort != null,
+        cachedBlobs: cachedBlobCount(),
+        nextUrl: nextTarget?.networkUrl ?? null,
       });
       stopHighlightLoop();
       if (readerSettings.get().autoNextChapter) {
@@ -1368,6 +1614,9 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       );
       if (document.visibilityState === "visible") {
         retryPendingAutoplay("visibility-visible");
+        // Screen-on usually means the network is back too (Doze lifts);
+        // retry every failed prefetch immediately, ignoring backoff.
+        fillPrefetchCache("visibility-visible", { force: true });
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -1393,6 +1642,7 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     ctx.on(window, "online", () => {
       log("net-online", audioSnapshot());
       retryPendingAutoplay("net-online");
+      fillPrefetchCache("net-online", { force: true });
     });
     ctx.on(window, "offline", () => log("net-offline", audioSnapshot()));
 
@@ -1487,21 +1737,27 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // (user navigates off the reader), the <audio> element gets removed
     // from the DOM, which auto-pauses it — no explicit pause needed.
     //
-    // We do still abort and revoke the *prefetch* slot: that blob is not
-    // tied to the playing audio element, so leaking it across re-mount
-    // would just waste memory.
+    // The prefetch cache is element-scoped and survives too — completed
+    // blobs + navs are exactly what a re-mounted instance needs if the
+    // network is still gone. Only the in-flight fetches are aborted: their
+    // continuations belong to this closure, and the successor's first
+    // fill restarts whatever is still missing.
     ctx.onDestroy(() => {
       log("destroy", {
         audioPaused: audio.paused,
         currentTime: audio.currentTime,
         duration: audio.duration,
-        prefetchInFlight: prefetchAbort !== null,
-        hasPrefetchedBlob: prefetchedBlobUrl !== null,
+        prefetchInFlight: inFlightCount(),
+        cachedBlobs: cachedBlobCount(),
       });
       stopHighlightLoop();
       wordMenuCleanup?.();
-      if (prefetchAbort) prefetchAbort.abort();
-      if (prefetchedBlobUrl) URL.revokeObjectURL(prefetchedBlobUrl);
+      for (const entry of prefetchCache.values()) {
+        if (entry.abort) entry.abort.abort();
+        entry.abort = null;
+        if (entry.navAbort) entry.navAbort.abort();
+        entry.navAbort = null;
+      }
     });
   },
 );

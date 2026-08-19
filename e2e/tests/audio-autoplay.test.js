@@ -8,7 +8,7 @@
  *
  * Requires the canonical e2e fixture: a chapter with audio that *also*
  * has a next chapter with audio (so `next_audio_url` is populated).
- * `seed_e2e_book!/1` defaults to `audio_for: [1, 2, 3]` — chapter 1 sees
+ * `seed_e2e_book!/1` defaults to `audio_for: [1, 2, 3, 4, 5]` — chapter 1 sees
  * chapter 2 as the next audio-ready chapter.
  */
 import { describe, it, before, after } from "node:test";

@@ -21,8 +21,8 @@ defmodule ReadaloudAudiobook.Fixtures.E2E do
 
   @default_title "Test Book"
   @default_author "Test Author"
-  @default_chapter_count 3
-  @default_audio_chapters [1, 2, 3]
+  @default_chapter_count 5
+  @default_audio_chapters [1, 2, 3, 4, 5]
 
   @doc """
   Idempotently seed the e2e fixture book and return its IDs.
@@ -30,13 +30,16 @@ defmodule ReadaloudAudiobook.Fixtures.E2E do
   ## Options
     * `:title` — book title (default `"Test Book"`).
     * `:author` — book author (default `"Test Author"`).
-    * `:chapters` — chapter count (default `3`; minimum required by
-      `accidental-navigation.test.js` and `reader-styles-persist.test.js`).
+    * `:chapters` — chapter count (default `5`; `accidental-navigation`
+      and `reader-styles-persist` need ≥3, `autoplay-offline-chain` needs
+      5 — see `:audio_for`).
     * `:audio_for` — chapter numbers that should have a row in
-      `chapter_audios` (default `[1, 2, 3]` — `audio-autoplay.test.js`
+      `chapter_audios` (default `[1, 2, 3, 4, 5]` — `audio-autoplay.test.js`
       requires both a current chapter *and* a next chapter to have audio;
-      `autoplay-offline-chain.test.js` chains two autoplay boundaries
-      offline, which needs three consecutive audio-ready chapters).
+      `autoplay-offline-chain.test.js` proves the 3-chapter prefetch
+      horizon carries the autoplay chain across three offline boundaries
+      AND stops at the horizon, which needs a fifth audio-ready chapter
+      that is past it from chapter 1).
     * `:storage_dir` — directory for content + audio files. Defaults to
       `STORAGE_PATH` env var if set (matches the systemd unit) or
       `System.tmp_dir!()`.

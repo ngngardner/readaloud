@@ -95,8 +95,8 @@ pkgs.testers.nixosTest {
 
     # Verify seeded data — defensive sanity, not a substitute for the suite.
     server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM books;' | grep -q '^1$'")
-    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapters;' | grep -q '^3$'")
-    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapter_audios;' | grep -q '^3$'")
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapters;' | grep -q '^5$'")
+    server.succeed("sqlite3 /var/lib/readaloud/readaloud.db 'SELECT count(*) FROM chapter_audios;' | grep -q '^5$'")
     server.succeed("curl -sf http://localhost:4000/books/1 | grep -q 'Chapter 1'")
 
     # Set up the e2e test directory with pre-built node_modules.

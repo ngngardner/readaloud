@@ -37,7 +37,7 @@ defmodule ReadaloudWebWeb.PlayerEvents do
     mount destroy set-initial-src preserve-existing-src
     swap-to-chapter swap-play-ok swap-play-blocked
     prefetch-start prefetch-done prefetch-fail prefetch-aborted
-    prefetch-abort-stale prefetch-revoke-stale prefetch-discard-target-changed
+    prefetch-discard-target-changed prefetch-cache-evict prefetch-horizon
     prefetch-nav-done prefetch-nav-fail
     go-to-next-chapter go-to-prev-chapter
     next-chapter-blocked-no-target prev-chapter-blocked-no-target
