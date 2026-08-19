@@ -1,0 +1,73 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "5c8532fd2c18",
+  "session_id": "5816f6dd-7d64-4034-8949-b6320deddeb7",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-19T03:14:05.438555108Z",
+  "branch": "master",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "apps/readaloud_audiobook/lib/readaloud_audiobook/fixtures/e2e.ex",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/net_info.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "cells/app/checks/e2e.nix",
+    "e2e/tests/audio-autoplay.test.js",
+    "e2e/tests/audio-remount.test.js",
+    "e2e/tests/autoplay-offline-chain.test.js",
+    "e2e/tests/chapter-bar-jump.test.js",
+    "e2e/tests/manual-chapter-nav.test.js",
+    "e2e/tests/speed-badge.test.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "50c150b3c2a3",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 164,
+    "cache_creation_tokens": 214000,
+    "cache_read_tokens": 14880720,
+    "output_tokens": 78231,
+    "api_call_count": 82
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-19T03:14:05.35673007Z",
+    "agent_lines": 650,
+    "agent_removed": 239,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 650,
+    "total_lines_changed": 889,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 641,
+      "agent_lines_removed": 230
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 650,
+      "agent_lines_removed": 239
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+Here's a self-contained prompt for a fresh session in ~/projects/readaloud:
+
+# Task: multi-chapter offline prefetch horizon for the readaloud audio player
+
+## Context (read first)
+Memory files (auto-loaded) — read fully before touching code:
+- `project_incident_2026-08-18_commute_pullback.md` (the "Still open" paragraph is this task)
+- `project_incident_2026-06-11_commute_autoplay.md`
+- `project_playback_state_reconciliation.md` (the architecture rules; non-negotiable)
+
+Commit `157874b` fixed the rejoin pull-back. What's left from the 2026-08-18 commute
+is the **13:49:25 stall**: with the screen off, Android cut the page's network from
+~13:43:30 to 13:49:32 (WS dead, `fetch` → "TypeError: Failed to fetch",
+`navigator.onLine` never went false). The next-chapter prefetch is triggered at 15%
+of the current chapter and only reaches ONE chapter ahead, so the blackout spanned
+the whole prefetch window for chapter 16809: playback reached the end of 16808 with
+no blob, `swapToChapter` targeted the network URL, `audio-stalled`, silence until
+the user woke the phone. A 2–3-chapter horizon prefetched during 16807 (online at
+13:40) would have carried the chain through.
+
+## Goal
+Make the offline autoplay chain survive a network blackout of at least two full
+chapters: keep the next **N=3** chapters' audio blobs + `/nav` windows in memory,
+start filling as soon as a chapter starts (not at 15%), and let the chain consume
+them without any server round-trip.
+
+## Where the code is
+`apps/readaloud_web/assets/js/hooks/audio_player.ts`:
+- Single-slot prefetch state ~L555–660: `currentBlobUrl`, `prefetchedBlobUrl`,
+  `prefetchedFor`, `prefetchAbort`, `prefetchedNav`, `fetchPrefetchNav`,
+  `tryStartPrefetch`.
+- Consumer: `clientNavigate` ~L780–850 (uses the blob iff `prefetchedFor ===
+  target.networkUrl`, adopts `prefetchedNav` into `CHAPTER_WINDOW`, revokes
+  `currentBlobUrl`, resets the slot).
+- Trigger: `timeupdate` handler ~L1142 (`PREFETCH_TRIGGER_FRACTION = 0.15`).
+- `navTarget()` reads ONLY the client-owned `CHAPTER_WINDOW` WeakMap
+  (`lib/chapter_window.ts`, `/api/books/:b/chapters/:c/nav` → `parseChapterWindow`).
+- Diagnostics: `log("prefetch-*")` events; every new event name must be added to
+  `@known_events` in `apps/readaloud_web/lib/readaloud_web_web/player_events.ex`.
+- `retryPendingAutoplay` (`online`/`visibility-visible`) is the recovery path when the
+  chain runs past the horizon — keep it working.
+
+## Design constraints
+- Replace the single slot with a small cache keyed by network audio URL: entry =
+  `{blobUrl, nav: ChapterWindow|null, abort}`; walk forward from the loaded chapter
+  via each entry's `nav.next` to fill up to N; revoke blobs when the loaded chapter
+  moves past them or a manual jump makes them unreachable; abort in-flight fetches
+  that become unreachable. Bound memory (chapters are ~15–20 MB WAV; 3 ahead ≈ 60 MB
+  — acceptable, don't go higher). Prev-direction blobs are out of scope.
+- Fill trigger: on mount and on every swap (immediately), plus retry on `online` /
+  `visibility-visible` and on `timeupdate` (throttled) so a failed fetch retries.
+- Follow the reconciliation memory: `swapToChapter` stays the ONLY `audio.src`
+  writer; `navTarget` stays `CHAPTER_WINDOW`-only; on swap the window advances from
+  the consumed entry's `nav` (or goes empty — never stale). No new writers, no
+  per-edge patches.
+- Keep every existing `prefetch-*` event semantics where they still apply; add
+  e.g. `prefetch-cache-evict`, `prefetch-horizon` (depth reached) — and add
+  `navigator.onLine` + `connection?.effectiveType` to `prefetch-fail`/`prefetch-nav-fail`
+  detail (we couldn't tell blackout from Doze in the incident logs).
+- Add a Prometheus-visible signal only if trivial; logs are the priority.
+
+## Tests — IMPORTANT: the e2e VM run is ~5 min. Do at most TWO runs total:
+one to see the new test red (optional if you're confident), one green at the end.
+- Extend `e2e/tests/autoplay-offline-chain.test.js` (read it fully — the fixture is
+  3 chapters, all with audio; `AUDIO_FIXTURE_FILE` hiding + `page.setOfflineMode`
+  is how "offline" is simulated; note media-element requests bypass CDP emulation)
+  or add a sibling test: after mounting ch1 online with autoplay, wait for
+  `prefetch-done` for BOTH ch2 and ch3, go offline (hide the file too), dispatch
+  `ended` twice, and assert ch2 → ch3 both swap to `blob:` sources with no
+  `audio-stalled`/`prefetch-fail`-driven stop and no `nav-blocked-*`. If the fixture
+  needs a 4th chapter to prove the horizon *ends* correctly, extend
+  `ReadaloudAudiobook.Fixtures.E2E.seed!/1` (`audio_for`) — don't `t.skip`.
+- `mix precommit` and `mix assets.typecheck` must pass; ast-grep/lint-grep/treefmt run
+  in the pre-commit hook. `git add` new files before `mix test.e2e` (flake needs them).
+- Verification before claiming done: paste the e2e spec summary line.
+
+## Deliverable
+One conventional commit on master (`feat(reader): …` or `fix(reader): …`), then push,
+`nix flake update readaloud` in `~/projects/configs`, `deploy --on pylon`, confirm the
+new bundle serves (curl the app.js for a new event name), commit the configs
+`flake.lock` bump (that repo's format-check hook rewrites unrelated files and fails on
+a pre-existing parse error — restore them and use `--no-verify` for the lock-only
+commit). Update the incident memory's "Still open" paragraph when done.
+
+Do NOT touch `reprioritize_pending_jobs` / busy_timeout in this task.
+
+Two things I'd add if you want them as separate follow-ups later: the reprioritize_pending_jobs write-lock hog (json_extract scan of oban_jobs per handle_params), and a Grafana panel over the new lv-reconnected / rejoin-reassert-chapter counters so a pull-back regression shows up without log archaeology.
+
+---
+
+<task-notification>
+<task-id>b3m30f9js</task-id>
+<tool-use-id>toolu_016gvrGTuuC5U68qDw9supx6</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/087e6694-3a24-4799-abbc-be0cad08e97f/tasks/b3m30f9js.output</output-file>
+<status>completed</status>
+<summary>Background command "Stage files and run the e2e VM check" completed (exit code 0)</summary>
+</task-notification>
