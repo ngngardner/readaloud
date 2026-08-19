@@ -75,6 +75,14 @@ export interface HookContext<
   onDestroy(fn: () => void): void;
   onUpdate(fn: () => void): void;
 
+  // LiveView socket lifecycle. `onDisconnected` fires when the view's
+  // channel drops (LV shows its loader); `onReconnected` fires after the
+  // rejoin's DOM patch has been applied — i.e. AFTER any onUpdate handlers
+  // that patch triggered. Anything that must treat the rejoin patch
+  // specially has to arm itself in onDisconnected.
+  onDisconnected(fn: () => void): void;
+  onReconnected(fn: () => void): void;
+
   // Bind a DOM projection to a subscribable store. Runs apply once with the
   // current snapshot, re-runs on every store change, and re-runs on every
   // LiveView update so morphdom can't desync the DOM from the truth.
@@ -108,6 +116,8 @@ function isReadaloudEvent(event: string): boolean {
 interface HookState {
   readonly disposers: Array<() => void>;
   readonly updateHandlers: Array<() => void>;
+  readonly disconnectedHandlers: Array<() => void>;
+  readonly reconnectedHandlers: Array<() => void>;
 }
 
 // Per-mount state, keyed off the LV view-hook `this`. WeakMap avoids
@@ -123,6 +133,8 @@ export function defineHook<
     mounted(this: ViewHookInternal): void {
       const disposers: Array<() => void> = [];
       const updateHandlers: Array<() => void> = [];
+      const disconnectedHandlers: Array<() => void> = [];
+      const reconnectedHandlers: Array<() => void> = [];
       const lv = this;
 
       const ctx: HookContext<TEl, TDataset> = {
@@ -192,6 +204,14 @@ export function defineHook<
           updateHandlers.push(fn);
         },
 
+        onDisconnected(fn: () => void): void {
+          disconnectedHandlers.push(fn);
+        },
+
+        onReconnected(fn: () => void): void {
+          reconnectedHandlers.push(fn);
+        },
+
         bindStore<T>(
           store: ReadableStore<T>,
           apply: (snapshot: T) => void,
@@ -215,7 +235,12 @@ export function defineHook<
         },
       };
 
-      HOOK_STATE.set(this, { disposers, updateHandlers });
+      HOOK_STATE.set(this, {
+        disposers,
+        updateHandlers,
+        disconnectedHandlers,
+        reconnectedHandlers,
+      });
 
       try {
         setup(ctx);
@@ -241,6 +266,14 @@ export function defineHook<
       }
     },
 
+    disconnected(this: ViewHookInternal): void {
+      runHandlers(HOOK_STATE.get(this)?.disconnectedHandlers, "disconnected");
+    },
+
+    reconnected(this: ViewHookInternal): void {
+      runHandlers(HOOK_STATE.get(this)?.reconnectedHandlers, "reconnected");
+    },
+
     destroyed(this: ViewHookInternal): void {
       const state = HOOK_STATE.get(this);
       if (!state) return;
@@ -254,4 +287,18 @@ export function defineHook<
       HOOK_STATE.delete(this);
     },
   };
+}
+
+function runHandlers(
+  handlers: ReadonlyArray<() => void> | undefined,
+  label: string,
+): void {
+  if (!handlers) return;
+  for (const fn of handlers) {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`hook ${label} handler threw:`, err);
+    }
+  }
 }

@@ -869,6 +869,11 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
       if (newUrl) {
         history.pushState({}, "", newUrl);
         log("history-pushstate", { url: newUrl });
+        // LiveView rejoins from its own View.href, which raw pushState
+        // never touches — app.ts points it at the new URL so a rejoin
+        // after screen-off / force-reconnect mounts THIS chapter, not
+        // the page-load one.
+        ctx.dispatch("readaloud:client-pushstate", { url: newUrl });
       }
 
       // Persist the pivot through the durable buffer. If the WS is
@@ -1052,12 +1057,46 @@ export const AudioPlayerHook = defineHook<HTMLDivElement, AudioPlayerDataset>(
     // backwards. A dataset transition means the server moved the chapter;
     // the LOADED_CHAPTER check then skips the no-op case where the client
     // itself initiated that move.
+    //
+    // One dataset transition is NOT a server move: the rejoin patch. When
+    // the socket drops (every screen-off on Android) the LV process dies
+    // with it and the rejoin re-mounts from the URL LiveView holds; the
+    // client kept playing (and possibly chained chapters offline) in the
+    // meantime, so the freshly rendered dataset can lag the audio. That
+    // is a rehydration to be corrected, not an instruction to follow:
+    // the client re-asserts the loaded chapter with a pivot observation
+    // and the server's reconciler converges assigns onto it. LV applies
+    // the rejoin patch (→ onUpdate) BEFORE firing reconnected(), so the
+    // window is armed on disconnect and disarmed on reconnect.
     let lastSeenDatasetChapter = ctx.dataset.chapterId;
+    let rejoinPending = false;
+    ctx.onDisconnected(() => {
+      rejoinPending = true;
+      log("lv-disconnected", { loaded: LOADED_CHAPTER.get(audio) ?? null });
+    });
+    ctx.onReconnected(() => {
+      rejoinPending = false;
+      log("lv-reconnected", {
+        loaded: LOADED_CHAPTER.get(audio) ?? null,
+        dataset: ctx.dataset.chapterId ?? null,
+        url: window.location.pathname,
+      });
+    });
     const syncAudioToDataset = (): void => {
       const want = ctx.dataset.chapterId;
       if (!want || want === lastSeenDatasetChapter) return;
       lastSeenDatasetChapter = want;
-      if (LOADED_CHAPTER.get(audio) === want) return;
+      const loaded = LOADED_CHAPTER.get(audio);
+      if (loaded === want) return;
+      if (rejoinPending && loaded) {
+        log("rejoin-reassert-chapter", { dataset: want, loaded });
+        progress.observe({
+          chapter_id: loaded,
+          audio_position_ms: Math.round(audio.currentTime * 1000),
+          pivot: true,
+        });
+        return;
+      }
       // Server-driven moves preserve the user's play/pause state instead
       // of force-playing: jumping chapters while paused should stay paused.
       const wasPlaying = !audio.paused;

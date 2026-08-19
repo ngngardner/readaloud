@@ -53,6 +53,7 @@ defmodule ReadaloudWebWeb.PlayerEvents do
     heartbeat
     sync-audio-to-dataset state-divergence restore-position
     nav-ack-timeout force-reconnect
+    lv-disconnected lv-reconnected rejoin-reassert-chapter
   )
 
   @doc """

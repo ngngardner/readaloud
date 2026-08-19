@@ -32,11 +32,19 @@ export interface ReadaloudWindowEvents {
   // Emitted by the nav-ack watchdog (lib/nav_ack.ts) when a chapter-nav
   // pushEvent gets no channel ack while the page is visible — the socket
   // is wedged (open but not delivering). app.ts handles it with a
-  // LiveSocket disconnect/connect; the reconnect remounts from the
-  // current URL (already correct via history.pushState) so the reader
-  // text converges with the audio. The audio player hook mirrors it into
-  // the [player] diagnostics channel.
+  // LiveSocket disconnect/connect; the rejoin remounts from LiveView's
+  // View.href (kept current by "readaloud:client-pushstate" below) so the
+  // reader text converges with the audio. The audio player hook mirrors
+  // it into the [player] diagnostics channel.
   "readaloud:force-reconnect": undefined;
+  // Emitted by the audio player right after a client-owned chapter nav
+  // updates the URL via history.pushState. LiveView rejoins with its OWN
+  // notion of the URL (View.href), which only LV's push_patch/link paths
+  // update — raw pushState leaves it at the page-load URL, so a rejoin
+  // after screen-off (or force-reconnect) re-mounted the page-load
+  // chapter and dragged the audio backwards (2026-08-18 incident). app.ts
+  // handles it by pointing View.href at the new URL.
+  "readaloud:client-pushstate": { url: string };
   "phx:live_reload:attached": LiveReloader;
 }
 

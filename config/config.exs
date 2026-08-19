@@ -20,7 +20,16 @@ import Config
 config :readaloud_library,
   ecto_repos: [ReadaloudLibrary.Repo]
 
-config :readaloud_library, ReadaloudLibrary.Repo, database: "readaloud_dev.db"
+# busy_timeout: how long a writer waits on SQLite's lock before Exqlite
+# raises "Database busy". The ecto_sqlite3 default (2s) crashed ReaderLive
+# twice on 2026-08-18: on a socket rejoin the beacon progress POST, the
+# LV's replayed observation batch and reprioritize_pending_jobs (a
+# json_extract scan of oban_jobs per handle_params) all write at once, and
+# a crashed LV means a page reload mid-listen. Progress writes are tiny;
+# waiting beats dying.
+config :readaloud_library, ReadaloudLibrary.Repo,
+  database: "readaloud_dev.db",
+  busy_timeout: 15_000
 
 config :readaloud_library, Oban,
   engine: Oban.Engines.Lite,

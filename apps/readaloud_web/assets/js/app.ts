@@ -113,15 +113,36 @@ reloadable.reloadWithJitter = (view, log) => {
   document.addEventListener("visibilitychange", onVisible);
 };
 
+// --- Client-owned URL changes must reach LiveView's View.href ---------
+// Every (re)join sends View.href as the `url` param the server mounts
+// from. LV updates it only on its own paths (delivered push_patch, link
+// patch); a raw history.pushState from the audio player leaves it at the
+// page-load URL. Client-owned chapter navs deliberately skip push_patch,
+// so without this bridge a socket rejoin — Android kills the WS on every
+// screen-off — re-mounts the page-load chapter, the hook's dataset
+// transitions backwards and syncAudioToDataset yanks the audio back to
+// a chapter that already finished (2026-08-18 commute incident).
+// `main.setHref` is a public View method that phoenix_live_view's own
+// typings don't declare, hence the local shape.
+// ast-grep-ignore: no-as-cast, no-unknown-type
+const hrefable = liveSocket as unknown as {
+  main?: { setHref(href: string): void };
+};
+window.addEventListener("readaloud:client-pushstate", (e: Event) => {
+  if (!(e instanceof CustomEvent)) return;
+  const detail: { url?: string } | null = e.detail;
+  if (typeof detail?.url === "string") hrefable.main?.setHref(detail.url);
+});
+
 // --- Wedged-socket recovery -------------------------------------------
 // The nav-ack watchdog (lib/nav_ack.ts) fires this when a chapter-nav
 // pushEvent gets no channel ack while the page is visible: the socket is
 // open-but-not-delivering, so the reader text can't follow the audio.
 // A disconnect/connect cycle tears the zombie channel down and remounts
-// the LV from the current URL — which client-owned nav already updated
-// via history.pushState — so the remount lands on the chapter that's
-// actually playing. The <audio> element survives (phx-update="ignore" +
-// the hook's preserve-existing-src mount path), so playback continues.
+// the LV from View.href — kept current by the bridge above — so the
+// remount lands on the chapter that's actually playing. The <audio>
+// element survives (phx-update="ignore" + the hook's
+// preserve-existing-src mount path), so playback continues.
 window.addEventListener("readaloud:force-reconnect", () => {
   liveSocket.disconnect();
   liveSocket.connect();
