@@ -1,0 +1,109 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "e6a449222fb7",
+  "session_id": "087e6694-3a24-4799-abbc-be0cad08e97f",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-19T02:12:05.372695093Z",
+  "branch": "master",
+  "checkpoints_count": 4,
+  "save_step_count": 3,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/hook.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "config/config.exs",
+    "e2e/tests/autoplay-reconnect-pullback.test.js"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5",
+  "turn_id": "93cfe6e234a5",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 158,
+    "cache_creation_tokens": 218074,
+    "cache_read_tokens": 12474148,
+    "output_tokens": 61301,
+    "api_call_count": 79
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01FTT9z4fwPLw89M7WWt7BNT",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "superpowers:systematic-debugging"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "93cfe6e234a5",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 175,
+        "end": 176,
+        "entry_ids": [
+          "ff02033a-b3df-4b53-b8b0-d4e9d1db5761"
+        ],
+        "tool_use_id": "toolu_01FTT9z4fwPLw89M7WWt7BNT"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01FTT9z4fwPLw89M7WWt7BNT"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: superpowers:systematic-debugging",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-19T02:12:05.304691354Z",
+    "agent_lines": 450,
+    "agent_removed": 11,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 450,
+    "total_lines_changed": 461,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 238,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 238,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 450,
+      "agent_lines_removed": 11
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "e6a449222fb7",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "apps/readaloud_web/assets/js/app.ts",
+    "apps/readaloud_web/assets/js/hooks/audio_player.ts",
+    "apps/readaloud_web/assets/js/lib/events.ts",
+    "apps/readaloud_web/assets/js/lib/hook.ts",
+    "apps/readaloud_web/lib/readaloud_web_web/player_events.ex",
+    "config/config.exs",
+    "e2e/tests/autoplay-reconnect-pullback.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e6/a449222fb7/0/metadata.json",
+      "transcript": "/e6/a449222fb7/0/full.jsonl",
+      "compact_transcript": "/e6/a449222fb7/0/transcript.jsonl",
+      "content_hash": "/e6/a449222fb7/0/content_hash.txt",
+      "prompt": "/e6/a449222fb7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 158,
+    "cache_creation_tokens": 218074,
+    "cache_read_tokens": 12474148,
+    "output_tokens": 61301,
+    "api_call_count": 79
+  }
+}

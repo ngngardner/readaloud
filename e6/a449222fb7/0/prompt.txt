@@ -1,0 +1,19 @@
+tons of issues using readaloud on my commute this morning by running it in the background and when screen is off. wondering if they are solvable, detectable by the logs we set up, and if we need to consider some react native app or something to handle these once and for all
+
+---
+
+can we reproduce for e2e tests before going straight to fixes?
+
+---
+
+<task-notification>
+<task-id>brljfbkxb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects-readaloud/087e6694-3a24-4799-abbc-be0cad08e97f/tasks/brljfbkxb.output</output-file>
+<status>completed</status>
+<summary>Background command "Stage the new test and run the e2e VM suite (expect red)" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+go
