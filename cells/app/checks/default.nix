@@ -3,7 +3,7 @@ let
   inherit (inputs) nixpkgs self;
   l = nixpkgs.lib;
   pkgs = nixpkgs;
-  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+  beamPackages = nixpkgs.beam27Packages;
 
   # Dev deps for checks (formatting, credo).
   # fetchMixDeps gets source directories; --no-deps-check in each check

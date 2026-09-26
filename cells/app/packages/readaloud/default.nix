@@ -4,7 +4,7 @@
 }:
 let
   inherit (inputs) nixpkgs;
-  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+  beamPackages = nixpkgs.beam27Packages;
 
   mixFodDeps = beamPackages.fetchMixDeps {
     pname = "readaloud-deps";

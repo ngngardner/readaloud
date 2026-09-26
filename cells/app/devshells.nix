@@ -2,7 +2,7 @@
 let
   inherit (inputs) nixpkgs;
   l = nixpkgs.lib;
-  beamPackages = nixpkgs.beam.packagesWith nixpkgs.beam.interpreters.erlang_27;
+  beamPackages = nixpkgs.beam27Packages;
   lintGrep = import ./checks/lint-grep.nix { inherit nixpkgs; };
 in
 {
