@@ -20,21 +20,38 @@ defmodule ReadaloudTTS.LocalAIProvider do
       "bf_isabella",
       "bm_george",
       "bm_lewis"
-    ]
+    ],
+    "breeze-tts-2" => ["heath-miller"]
   }
+
+  # Voices cloned from a reference clip rather than picked from a model's
+  # presets. LocalAI's audio-cpp backend treats `voice` as a clone reference
+  # when it names a WAV that exists inside the LocalAI container, and Breeze
+  # also wants that clip's transcript. The clips live in LocalAI's models dir
+  # (/internalmedia/localai-models/voices on phanteks).
+  @cloned_voices %{
+    {"breeze-tts-2", "heath-miller"} => %{
+      # He Who Fights with Monsters book 1, ch. 10: plain narration, no
+      # character voices, so the clone picks up his narrating register.
+      reference: "/models/voices/heath-miller.wav",
+      transcript:
+        "The walls were black, like some long, dormant magma chamber. But even " <>
+          "starting from a natural cavern, it would have been a monumental labor " <>
+          "to bring it to its current state."
+    }
+  }
+
+  # Breeze samples each request's delivery fresh, so long requests drift in
+  # pitch and pace within themselves. ~400 characters is what it was
+  # evaluated at; everything else keeps the TextChunker default.
+  @max_chunk_chars %{"breeze-tts-2" => 400}
 
   @impl true
   def synthesize(text, %Voice{} = voice, opts \\ []) do
     config = Keyword.get(opts, :config, Config.from_env())
 
     case Req.post("#{config.base_url}/v1/audio/speech",
-           json: %{
-             model: voice.model,
-             input: text,
-             voice: voice.voice,
-             speed: voice.speed,
-             response_format: @response_format
-           },
+           json: speech_body(text, voice),
            receive_timeout: 300_000,
            retry: :transient,
            retry_delay: &retry_delay/1,
@@ -48,6 +65,43 @@ defmodule ReadaloudTTS.LocalAIProvider do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @impl true
+  def max_chunk_chars(%Voice{model: model}), do: Map.get(@max_chunk_chars, model)
+
+  @doc false
+  # Public so the request contract with LocalAI can be tested without a server.
+  def speech_body(text, %Voice{} = voice) do
+    case Map.get(@cloned_voices, {voice.model, voice.voice}) do
+      nil ->
+        %{
+          model: voice.model,
+          input: text,
+          voice: voice.voice,
+          speed: voice.speed,
+          response_format: @response_format
+        }
+
+      clone ->
+        # No `speed`: LocalAI forwards it to the backend as a request option,
+        # and Breeze refuses any option it does not know. Likewise the
+        # transcript goes as `reference_text`, Breeze's own name for it, not
+        # LocalAI's `ref_text` alias. A fixed seed keeps the delivery steady
+        # from chunk to chunk and makes a regenerated chapter come out the same.
+        %{
+          model: voice.model,
+          input: text,
+          voice: clone.reference,
+          response_format: @response_format,
+          params: %{
+            reference_text: clone.transcript,
+            seed: "42",
+            # Readaloud already chunks; stop the backend re-splitting a chunk.
+            text_chunk_size: "2000"
+          }
+        }
     end
   end
 

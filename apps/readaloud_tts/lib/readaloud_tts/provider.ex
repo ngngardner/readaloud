@@ -9,4 +9,7 @@ defmodule ReadaloudTTS.Provider do
 
   @callback catalog(opts :: keyword()) ::
               {:ok, [Catalog.Entry.t()]} | {:error, term()}
+
+  @doc "Longest text, in characters, to send in one synthesis request; nil for no preference."
+  @callback max_chunk_chars(voice :: Voice.t()) :: pos_integer() | nil
 end

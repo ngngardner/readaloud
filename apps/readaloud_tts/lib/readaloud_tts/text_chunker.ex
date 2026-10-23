@@ -15,6 +15,8 @@ defmodule ReadaloudTTS.TextChunker do
     ~r/\s+/
   ]
 
+  def default_max_chars, do: @default_max_chars
+
   def chunk(text, max_chars \\ @default_max_chars) do
     case String.trim(text) do
       "" ->

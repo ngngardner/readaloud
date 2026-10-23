@@ -23,7 +23,7 @@ defmodule ReadaloudTTS do
   other than the default (`ReadaloudTTS.LocalAIProvider`).
   """
 
-  alias ReadaloudTTS.{Catalog, LocalAIProvider, Voice, WordTiming}
+  alias ReadaloudTTS.{Catalog, LocalAIProvider, TextChunker, Voice, WordTiming}
 
   @type result(t) :: {:ok, t} | {:error, term()}
 
@@ -36,6 +36,16 @@ defmodule ReadaloudTTS do
   @spec transcribe(binary(), keyword()) :: result([WordTiming.t()])
   def transcribe(audio, opts \\ []) when is_binary(audio) do
     provider(opts).transcribe(audio, opts)
+  end
+
+  @doc """
+  Longest text to send in one `synthesize/3` call for this voice. Models
+  that hold a steady delivery only over short requests ask for less than
+  the `ReadaloudTTS.TextChunker` default.
+  """
+  @spec max_chunk_chars(Voice.t(), keyword()) :: pos_integer()
+  def max_chunk_chars(%Voice{} = voice, opts \\ []) do
+    provider(opts).max_chunk_chars(voice) || TextChunker.default_max_chars()
   end
 
   @spec catalog(keyword()) :: result([Catalog.Entry.t()])

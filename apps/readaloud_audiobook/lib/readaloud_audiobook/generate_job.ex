@@ -1,7 +1,7 @@
 defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, TimingAligner}
+  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, Loudness, TimingAligner}
   alias ReadaloudLibrary.{Repo, Tasks}
   alias ReadaloudTTS.{TextChunker, Voice}
 
@@ -29,13 +29,14 @@ defmodule ReadaloudAudiobook.GenerateJob do
     {:ok, task} = Tasks.start(task)
 
     chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
+    voice = %Voice{model: task.model, voice: task.voice, speed: task.speed || 1.0}
     started = System.monotonic_time()
 
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
-         chunks = TextChunker.chunk(clean_text),
+         chunks = TextChunker.chunk(clean_text, ReadaloudTTS.max_chunk_chars(voice)),
          :ok <- ensure_non_empty(chunks),
-         {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, task) do
+         {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, voice, task) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
       File.write!(audio_path, audio)
@@ -96,11 +97,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
   defp ensure_non_empty([]), do: {:error, :empty_chapter_content}
   defp ensure_non_empty(_chunks), do: :ok
 
-  defp synthesize_chunks(chunks, task) do
+  defp synthesize_chunks(chunks, voice, task) do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
-
-    voice = %Voice{model: task.model, voice: task.voice, speed: task.speed || 1.0}
 
     chunks
     |> Enum.with_index(1)
@@ -112,6 +111,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
       case ReadaloudTTS.synthesize(chunk, voice) do
         {:ok, chunk_audio} ->
           emit_chunk_stop(chunk_started, "ok")
+          # Level before anything else reads the audio, so the stitched
+          # chapter has no volume step at the join.
+          chunk_audio = Loudness.level(chunk_audio)
           chunk_duration_ms = round(calculate_duration(chunk_audio) * 1000)
 
           # Transcribe and align to source text

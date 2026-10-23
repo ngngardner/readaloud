@@ -67,4 +67,49 @@ defmodule ReadaloudTTS.LocalAIProviderTest do
       assert Enum.all?(timings, &(&1.start_ms == 0 and &1.end_ms == 4220))
     end
   end
+
+  describe "speech request body" do
+    alias ReadaloudTTS.{LocalAIProvider, Voice}
+
+    test "preset voices go to LocalAI by name with the requested speed" do
+      body =
+        LocalAIProvider.speech_body("Hi.", %Voice{model: "kokoro", voice: "af_heart", speed: 1.2})
+
+      assert body == %{
+               model: "kokoro",
+               input: "Hi.",
+               voice: "af_heart",
+               speed: 1.2,
+               response_format: "wav"
+             }
+    end
+
+    test "cloned voices send the reference clip, its transcript and a fixed seed" do
+      body =
+        LocalAIProvider.speech_body("Hi.", %Voice{model: "breeze-tts-2", voice: "heath-miller"})
+
+      assert body.voice == "/models/voices/heath-miller.wav"
+      assert body.params.reference_text =~ "The walls were black"
+      assert body.params.seed == "42"
+    end
+
+    # LocalAI turns `speed` into a backend request option, and Breeze refuses
+    # unknown options: "unknown BreezeTTS request option: speed".
+    test "cloned voices never send speed or LocalAI's ref_text alias" do
+      body =
+        LocalAIProvider.speech_body("Hi.", %Voice{model: "breeze-tts-2", voice: "heath-miller"})
+
+      refute Map.has_key?(body, :speed)
+      refute Map.has_key?(body.params, :ref_text)
+      refute Map.has_key?(body.params, :speed)
+    end
+
+    test "Breeze asks for shorter chunks than the default" do
+      assert LocalAIProvider.max_chunk_chars(%Voice{model: "breeze-tts-2", voice: "heath-miller"}) ==
+               400
+
+      assert LocalAIProvider.max_chunk_chars(%Voice{model: "kokoro", voice: "af_heart"}) == nil
+      assert ReadaloudTTS.max_chunk_chars(%Voice{model: "kokoro", voice: "af_heart"}) == 1500
+    end
+  end
 end
