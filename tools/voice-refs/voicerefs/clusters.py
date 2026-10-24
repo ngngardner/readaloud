@@ -231,11 +231,12 @@ def subclusters(X: np.ndarray, groups: list[str | None], mask: np.ndarray, min_s
 def enforce_group(tags: list[dict], picks: list[str | None], groups: dict[str, str],
                   sizes: dict[str, int]) -> list[str | None]:
     """A passage's voice must come from its own group: female lines never get a male voice, and dialogue
-    never gets a narration voice (speakers of unknown sex, like Gu worms, get a male voice)."""
+    never gets a narration voice. Speakers of unknown sex, like Gu worms, all get the default (largest) male voice."""
     out = []
     for tag, pick in zip(tags, picks):
         want = "narration" if tag["kind"] == "narration" else ("female" if tag["sex"] == "female" else "male")
-        if pick is not None and groups.get(pick) == want:
+        unknown_sex = tag["kind"] == "dialogue" and tag["sex"] not in ("female", "male")
+        if pick is not None and groups.get(pick) == want and not unknown_sex:
             out.append(pick)
             continue
         same = [c for c, g in groups.items() if g == want]

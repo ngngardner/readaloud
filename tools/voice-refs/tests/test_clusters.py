@@ -148,3 +148,9 @@ def test_dialogue_never_gets_narration_voice():
     sizes = {"male-0": 235, "male-2": 167, "female-0": 48, "narration-3": 119}
     tags = [{"kind": "dialogue", "sex": "unknown"}, {"kind": "dialogue", "sex": "male"}]
     assert enforce_group(tags, ["narration-3", "narration-3"], groups, sizes) == ["male-0", "male-0"]
+
+
+def test_unknown_sex_speakers_get_the_default_male_voice():
+    groups = {"male-0": "male", "male-2": "male"}
+    sizes = {"male-0": 235, "male-2": 167}
+    assert enforce_group([{"kind": "dialogue", "sex": "unknown"}], ["male-2"], groups, sizes) == ["male-0"]
