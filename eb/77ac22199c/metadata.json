@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "eb77ac22199c",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tools/voice-refs/tests/fixtures/verbose.json",
+    "tools/voice-refs/tests/test_whisper.py",
+    "tools/voice-refs/voicerefs/audio.py",
+    "tools/voice-refs/voicerefs/cli.py",
+    "tools/voice-refs/voicerefs/whisper.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/eb/77ac22199c/0/metadata.json",
+      "transcript": "/eb/77ac22199c/0/full.jsonl",
+      "compact_transcript": "/eb/77ac22199c/0/transcript.jsonl",
+      "content_hash": "/eb/77ac22199c/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 148242,
+    "cache_read_tokens": 3525007,
+    "output_tokens": 14696,
+    "api_call_count": 23
+  }
+}
