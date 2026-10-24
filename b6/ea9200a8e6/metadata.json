@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "b6ea9200a8e6",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 4,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/b6/ea9200a8e6/0/metadata.json",
+      "transcript": "/b6/ea9200a8e6/0/full.jsonl",
+      "compact_transcript": "/b6/ea9200a8e6/0/transcript.jsonl",
+      "content_hash": "/b6/ea9200a8e6/0/content_hash.txt",
+      "prompt": "/b6/ea9200a8e6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 53331,
+    "cache_read_tokens": 13462142,
+    "output_tokens": 34205,
+    "api_call_count": 36
+  }
+}
