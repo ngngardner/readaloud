@@ -1,5 +1,5 @@
 defmodule ReadaloudAudiobook do
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob}
+  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob, VoicePlan}
   alias ReadaloudLibrary.{Repo, Tasks, TtsProfile}
   alias ReadaloudLibrary.Tasks.Query, as: TaskQuery
   import Ecto.Query
@@ -32,6 +32,55 @@ defmodule ReadaloudAudiobook do
         error
     end
   end
+
+  @doc """
+  Saves a chapter's voice plan (see `ReadaloudAudiobook.VoicePlan`) and queues
+  the chapter to be read again with it, prioritised by distance from
+  `current_number`, the chapter the reader is on.
+
+  Nothing is queued when the book reads with a voice other than the plan's,
+  or when a job for the chapter is still waiting to start: that job reads
+  the plan when it runs. A job already running started without the plan, so
+  the chapter is queued again behind it.
+  """
+  @spec save_voice_plan(map(), map(), map(), integer() | nil) ::
+          {:ok, VoicePlan.t(), :queued | :already_queued | :voice_differs} | {:error, term()}
+  def save_voice_plan(book, chapter, plan_map, current_number) do
+    with {:ok, plan} <- VoicePlan.save(chapter, plan_map) do
+      {:ok, plan, queue_for_plan(book, chapter, plan, current_number)}
+    end
+  end
+
+  defp queue_for_plan(book, chapter, plan, current_number) do
+    waiting? =
+      AudiobookTask
+      |> where([t], t.chapter_id == ^chapter.id)
+      |> TaskQuery.pending()
+      |> Repo.exists?()
+
+    cond do
+      not reads_with?(book.audio_preferences, plan) ->
+        :voice_differs
+
+      waiting? ->
+        :already_queued
+
+      true ->
+        {:ok, _task} =
+          generate_for_chapter(book.id, chapter.id,
+            model: plan.model,
+            voice: plan.voice,
+            priority: chapter_priority(chapter.number, current_number)
+          )
+
+        :queued
+    end
+  end
+
+  defp reads_with?(%TtsProfile{model: model, voice: voice}, %VoicePlan{model: model, voice: voice}),
+       do: true
+
+  defp reads_with?(_profile, _plan), do: false
 
   def ensure_audio_generated(book, chapters, progress \\ nil) do
     if TtsProfile.empty?(book.audio_preferences) do

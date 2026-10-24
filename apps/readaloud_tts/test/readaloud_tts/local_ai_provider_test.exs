@@ -104,6 +104,34 @@ defmodule ReadaloudTTS.LocalAIProviderTest do
       refute Map.has_key?(body.params, :speed)
     end
 
+    # A voice plan gives each passage its own clip of the narrator: a woman's
+    # line is read from a clip of him voicing a woman, and so on.
+    test "a per-request reference and temperature replace the voice's own clip" do
+      body =
+        LocalAIProvider.speech_body(
+          "Leave.",
+          %Voice{model: "breeze-tts-2", voice: "heath-miller"},
+          reference: %{voice: "/models/voices/hwfwm-female-0.wav", text: "Get out of my sight."},
+          temperature: 0.6
+        )
+
+      assert body.voice == "/models/voices/hwfwm-female-0.wav"
+      assert body.params.reference_text == "Get out of my sight."
+      assert body.params.temperature == "0.6"
+      assert body.params.seed == "42"
+    end
+
+    test "preset voices ignore a reference" do
+      body =
+        LocalAIProvider.speech_body("Hi.", %Voice{model: "kokoro", voice: "af_heart"},
+          reference: %{voice: "/models/voices/x.wav", text: "x"},
+          temperature: 0.6
+        )
+
+      assert body.voice == "af_heart"
+      refute Map.has_key?(body, :params)
+    end
+
     test "Breeze asks for shorter chunks than the default" do
       assert LocalAIProvider.max_chunk_chars(%Voice{model: "breeze-tts-2", voice: "heath-miller"}) ==
                400

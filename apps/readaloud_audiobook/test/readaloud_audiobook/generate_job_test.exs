@@ -106,4 +106,140 @@ defmodule ReadaloudAudiobook.GenerateJobTest do
       assert {:error, :empty_chapter_content} = GenerateJob.perform(job)
     end
   end
+
+  # Stands in for LocalAI: records every request in the test process's
+  # mailbox and answers with a short, valid 24 kHz PCM WAV.
+  defmodule RecordingProvider do
+    @behaviour ReadaloudTTS.Provider
+
+    @impl true
+    def synthesize(text, voice, opts) do
+      send(self(), {:synthesize, text, voice, Keyword.drop(opts, [:provider])})
+      pcm = for i <- 0..2399, into: <<>>, do: <<round(:math.sin(i / 8) * 8000)::little-signed-16>>
+      {:ok, wav(pcm)}
+    end
+
+    @impl true
+    def transcribe(_audio, _opts), do: {:ok, []}
+
+    @impl true
+    def catalog(_opts), do: {:ok, []}
+
+    @impl true
+    def max_chunk_chars(_voice), do: 400
+
+    defp wav(pcm) do
+      size = byte_size(pcm)
+
+      <<"RIFF", 36 + size::little-32, "WAVE", "fmt ", 16::little-32, 1::little-16, 1::little-16,
+        24_000::little-32, 48_000::little-32, 2::little-16, 16::little-16, "data",
+        size::little-32, pcm::binary>>
+    end
+  end
+
+  describe "perform/1 with a voice plan" do
+    setup %{book: book} do
+      storage = Path.join(System.tmp_dir!(), "plan_job_#{System.unique_integer([:positive])}")
+      previous = System.get_env("STORAGE_PATH")
+      System.put_env("STORAGE_PATH", storage)
+      Application.put_env(:readaloud_audiobook, :tts_opts, provider: RecordingProvider)
+
+      on_exit(fn ->
+        Application.delete_env(:readaloud_audiobook, :tts_opts)
+
+        if previous,
+          do: System.put_env("STORAGE_PATH", previous),
+          else: System.delete_env("STORAGE_PATH")
+
+        File.rm_rf!(storage)
+      end)
+
+      path = Path.join(storage, "chapter.html")
+      File.mkdir_p!(storage)
+      File.write!(path, "<p>Feng Jiu Ge smiled.</p><p>\u201cLeave,\u201d she said.</p>")
+
+      {:ok, chapter} =
+        ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 7, content_path: path})
+
+      %{chapter: chapter}
+    end
+
+    defp breeze_task(book, chapter) do
+      %AudiobookTask{}
+      |> AudiobookTask.changeset(%{
+        book_id: book.id,
+        chapter_id: chapter.id,
+        model: "breeze-tts-2",
+        voice: "heath-miller",
+        status: :pending,
+        attempt_number: 1
+      })
+      |> Repo.insert!()
+    end
+
+    defp plan(model) do
+      %{
+        "model" => model,
+        "voice" => "heath-miller",
+        "temperature" => 0.6,
+        "chunks" => [
+          %{
+            "text" => "Feng Jiu Ge smiled.",
+            "spoken" => "Fung Jyo Guhh smiled.",
+            "voice" => "/models/voices/hwfwm-narration-0.wav",
+            "reference_text" => "The walls were black."
+          },
+          %{
+            "text" => "\u201cLeave,\u201d she said.",
+            "spoken" => "\u201cLeave,\u201d she said.",
+            "voice" => "/models/voices/hwfwm-female-0.wav",
+            "reference_text" => "Get out of my sight."
+          }
+        ]
+      }
+    end
+
+    test "each chunk is spoken from its own clip at the plan's temperature", %{
+      book: book,
+      chapter: chapter
+    } do
+      {:ok, _} = ReadaloudAudiobook.VoicePlan.save(chapter, plan("breeze-tts-2"))
+      task = breeze_task(book, chapter)
+
+      assert :ok = GenerateJob.perform(%Oban.Job{id: 0, args: %{"task_id" => task.id}})
+
+      assert_received {:synthesize, "Fung Jyo Guhh smiled.", _voice, opts1}
+      assert opts1[:reference].voice == "/models/voices/hwfwm-narration-0.wav"
+      assert opts1[:temperature] == 0.6
+
+      assert_received {:synthesize, "\u201cLeave,\u201d she said.", _voice, opts2}
+      assert opts2[:reference].voice == "/models/voices/hwfwm-female-0.wav"
+
+      assert ReadaloudAudiobook.get_chapter_audio(chapter.id).voice == "heath-miller"
+    end
+
+    test "without a plan the chapter is read as before, from the voice's own clip", %{
+      book: book,
+      chapter: chapter
+    } do
+      task = breeze_task(book, chapter)
+
+      assert :ok = GenerateJob.perform(%Oban.Job{id: 0, args: %{"task_id" => task.id}})
+
+      assert_received {:synthesize, text, _voice, opts}
+      assert text =~ "Feng Jiu Ge smiled."
+      refute Keyword.has_key?(opts, :reference)
+    end
+
+    test "a plan made for another voice is ignored", %{book: book, chapter: chapter} do
+      {:ok, _} = ReadaloudAudiobook.VoicePlan.save(chapter, plan("some-other-model"))
+      task = breeze_task(book, chapter)
+
+      assert :ok = GenerateJob.perform(%Oban.Job{id: 0, args: %{"task_id" => task.id}})
+
+      assert_received {:synthesize, text, _voice, opts}
+      assert text =~ "Feng Jiu Ge smiled."
+      refute Keyword.has_key?(opts, :reference)
+    end
+  end
 end

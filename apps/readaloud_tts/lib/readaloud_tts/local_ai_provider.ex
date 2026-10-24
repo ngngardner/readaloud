@@ -33,8 +33,8 @@ defmodule ReadaloudTTS.LocalAIProvider do
     {"breeze-tts-2", "heath-miller"} => %{
       # He Who Fights with Monsters book 1, ch. 10: plain narration, no
       # character voices, so the clone picks up his narrating register.
-      reference: "/models/voices/heath-miller.wav",
-      transcript:
+      voice: "/models/voices/heath-miller.wav",
+      text:
         "The walls were black, like some long, dormant magma chamber. But even " <>
           "starting from a natural cavern, it would have been a monumental labor " <>
           "to bring it to its current state."
@@ -51,7 +51,7 @@ defmodule ReadaloudTTS.LocalAIProvider do
     config = Keyword.get(opts, :config, Config.from_env())
 
     case Req.post("#{config.base_url}/v1/audio/speech",
-           json: speech_body(text, voice),
+           json: speech_body(text, voice, opts),
            receive_timeout: 300_000,
            retry: :transient,
            retry_delay: &retry_delay/1,
@@ -73,7 +73,13 @@ defmodule ReadaloudTTS.LocalAIProvider do
 
   @doc false
   # Public so the request contract with LocalAI can be tested without a server.
-  def speech_body(text, %Voice{} = voice) do
+  #
+  # A cloned voice can be given another clip of the same narrator for one
+  # request (`reference: %{voice: container_path, text: transcript}`) and a
+  # sampling `temperature`; a voice plan uses these to read each passage from
+  # a clip of him in the matching register. Preset voices have no clip, so
+  # both are ignored for them.
+  def speech_body(text, %Voice{} = voice, opts \\ []) do
     case Map.get(@cloned_voices, {voice.model, voice.voice}) do
       nil ->
         %{
@@ -84,7 +90,8 @@ defmodule ReadaloudTTS.LocalAIProvider do
           response_format: @response_format
         }
 
-      clone ->
+      default_clone ->
+        clone = Keyword.get(opts, :reference, default_clone)
         # No `speed`: LocalAI forwards it to the backend as a request option,
         # and Breeze refuses any option it does not know. Likewise the
         # transcript goes as `reference_text`, Breeze's own name for it, not
@@ -93,17 +100,23 @@ defmodule ReadaloudTTS.LocalAIProvider do
         %{
           model: voice.model,
           input: text,
-          voice: clone.reference,
+          voice: clone.voice,
           response_format: @response_format,
-          params: %{
-            reference_text: clone.transcript,
-            seed: "42",
-            # Readaloud already chunks; stop the backend re-splitting a chunk.
-            text_chunk_size: "2000"
-          }
+          params:
+            %{
+              reference_text: clone.text,
+              seed: "42",
+              # Readaloud already chunks; stop the backend re-splitting a chunk.
+              text_chunk_size: "2000"
+            }
+            |> put_temperature(Keyword.get(opts, :temperature))
         }
     end
   end
+
+  # Breeze takes every option as a string.
+  defp put_temperature(params, nil), do: params
+  defp put_temperature(params, t), do: Map.put(params, :temperature, to_string(t))
 
   @impl true
   def transcribe(audio, opts \\ []) do

@@ -1,7 +1,7 @@
 defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, Loudness, TimingAligner}
+  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, Loudness, TimingAligner, VoicePlan}
   alias ReadaloudLibrary.{Repo, Tasks}
   alias ReadaloudTTS.{TextChunker, Voice}
 
@@ -34,7 +34,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
     with {:ok, text} <- ReadaloudLibrary.get_chapter_content(chapter),
          clean_text = strip_html(text),
-         chunks = TextChunker.chunk(clean_text, ReadaloudTTS.max_chunk_chars(voice)),
+         {:ok, chunks} <- chunks(chapter, clean_text, voice),
          :ok <- ensure_non_empty(chunks),
          {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, voice, task) do
       audio_path = audio_storage_path(chapter)
@@ -97,18 +97,46 @@ defmodule ReadaloudAudiobook.GenerateJob do
   defp ensure_non_empty([]), do: {:error, :empty_chapter_content}
   defp ensure_non_empty(_chunks), do: :ok
 
+  # Each chunk is {text to speak, the book's text it covers, synthesis opts}.
+  # A voice plan made for this voice gives every chunk its own reference clip
+  # and respelled names; without one the chapter is cut by TextChunker and
+  # read from the voice's own clip.
+  defp chunks(chapter, clean_text, voice) do
+    case chapter |> VoicePlan.load() |> VoicePlan.for_voice(voice) do
+      {:ok, plan} ->
+        Logger.info("Using voice plan: #{length(plan.chunks)} chunks")
+
+        {:ok,
+         Enum.map(plan.chunks, fn c ->
+           {c.spoken, c.text, [reference: c.reference, temperature: plan.temperature]}
+         end)}
+
+      :none ->
+        {:ok,
+         clean_text
+         |> TextChunker.chunk(ReadaloudTTS.max_chunk_chars(voice, tts_opts()))
+         |> Enum.map(&{&1, &1, []})}
+
+      {:error, reason} ->
+        {:error, "Unreadable voice plan: #{inspect(reason)}"}
+    end
+  end
+
+  # Test seam: lets a test stand in a provider for LocalAI.
+  defp tts_opts, do: Application.get_env(:readaloud_audiobook, :tts_opts, [])
+
   defp synthesize_chunks(chunks, voice, task) do
     total = length(chunks)
     Logger.info("Synthesizing #{total} chunks for task #{task.id}")
 
     chunks
     |> Enum.with_index(1)
-    |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {chunk, idx},
+    |> Enum.reduce_while({:ok, <<>>, [], 0}, fn {{spoken, chunk, synth_opts}, idx},
                                                 {:ok, audio_acc, timings_acc, offset_ms} ->
-      Logger.info("Chunk #{idx}/#{total}: #{String.length(chunk)} chars")
+      Logger.info("Chunk #{idx}/#{total}: #{String.length(spoken)} chars")
       chunk_started = System.monotonic_time()
 
-      case ReadaloudTTS.synthesize(chunk, voice) do
+      case ReadaloudTTS.synthesize(spoken, voice, synth_opts ++ tts_opts()) do
         {:ok, chunk_audio} ->
           emit_chunk_stop(chunk_started, "ok")
           # Level before anything else reads the audio, so the stitched
@@ -118,7 +146,7 @@ defmodule ReadaloudAudiobook.GenerateJob do
 
           # Transcribe and align to source text
           chunk_timings =
-            case ReadaloudTTS.transcribe(chunk_audio) do
+            case ReadaloudTTS.transcribe(chunk_audio, tts_opts()) do
               {:ok, t} ->
                 aligned = TimingAligner.align(t, chunk)
                 # Offset timings by accumulated audio duration
