@@ -1,5 +1,6 @@
 """Breeze generation through LocalAI, per passage and method."""
 
+import functools
 import io
 import json
 import re
@@ -33,7 +34,7 @@ class TTSFailed(Exception):
 
 
 def speak(text: str, ref_file: str, ref_text: str, client: httpx.Client | None = None,
-          backoff_s: float = 5.0) -> np.ndarray:
+          backoff_s: float = 5.0, temperature: float | None = None) -> np.ndarray:
     client = client or httpx.Client(timeout=300)
     body = {
         "model": "breeze-tts-2",
@@ -41,6 +42,8 @@ def speak(text: str, ref_file: str, ref_text: str, client: httpx.Client | None =
         "voice": f"{CONTAINER_VOICES}/{ref_file}",
         "params": {"reference_text": ref_text, "seed": "42", "text_chunk_size": "2000"},
     }
+    if temperature is not None:
+        body["params"]["temperature"] = str(temperature)
     error = "no attempt"
     for attempt in range(ATTEMPTS):
         try:
@@ -57,14 +60,15 @@ def speak(text: str, ref_file: str, ref_text: str, client: httpx.Client | None =
     raise TTSFailed(error)
 
 
-def render(text: str, ref_file: str, ref_text: str, client: httpx.Client | None = None) -> np.ndarray:
+def render(text: str, ref_file: str, ref_text: str, client: httpx.Client | None = None,
+           temperature: float | None = None) -> np.ndarray:
     client = client or httpx.Client(timeout=300)
     gap = np.zeros(int(SAMPLE_RATE * GAP_S))
     parts: list[np.ndarray] = []
     for piece in chunk(text, MAX_CHARS):
         if parts:
             parts.append(gap)
-        parts.append(audio.level(speak(piece, ref_file, ref_text, client), TARGET_DBFS))
+        parts.append(audio.level(speak(piece, ref_file, ref_text, client, temperature=temperature), TARGET_DBFS))
     return np.concatenate(parts) if parts else np.zeros(0)
 
 
@@ -103,8 +107,9 @@ def _plan(passage: Passage, lib: dict, name_map: dict[str, str]) -> dict[str, tu
 
 
 def generate(passages: list[Passage], lib: dict[str, list[RefClip]], name_map: dict[str, str], out_dir: Path,
-             synth: Synth | None = None, methods: list[str] = METHODS) -> dict:
-    synth = synth or render
+             synth: Synth | None = None, methods: list[str] = METHODS,
+             matched_temperature: float | None = None) -> dict:
+    """`current` always renders as readaloud does today; the matched methods use matched_temperature."""
     out_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, dict] = {}
     for p in passages:
@@ -114,10 +119,14 @@ def generate(passages: list[Passage], lib: dict[str, list[RefClip]], name_map: d
                 continue
             name = f"{p.idx:03d}-{method}.opus"
             record = {"text": text, "ref": asdict(ref)}
+            temperature = None if method == "current" else matched_temperature
             signature = {"text": text, "ref_file": ref.file, "ref_text": ref.transcript}
+            if temperature is not None:
+                signature["temperature"] = temperature
+            run = synth or functools.partial(render, temperature=temperature)
             if not _fresh(out_dir / name, signature):
                 try:
-                    _render_to(out_dir / name, signature, synth, text, ref.file, ref.transcript)
+                    _render_to(out_dir / name, signature, run, text, ref.file, ref.transcript)
                 except TTSFailed as exc:
                     record["failed"] = str(exc)
                     print(f"passage {p.idx} {method}: FAILED {exc}", flush=True)

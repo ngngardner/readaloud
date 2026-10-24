@@ -51,6 +51,12 @@ def test_speak_request_contract():
     assert body["params"] == {"reference_text": "ref text", "seed": "42", "text_chunk_size": "2000"}
 
 
+def test_speak_passes_temperature_when_given():
+    client, calls = _client([200])
+    speak("Hello.", "x.wav", "ref", client=client, backoff_s=0, temperature=0.6)
+    assert calls[0]["params"]["temperature"] == "0.6"
+
+
 def test_generate_records_failure_and_continues(tmp_path):
     passages = [
         Passage(0, "“Mother!”", Tag("dialogue", "Feng Jin Huang", "female", "intense"), "female_intense"),

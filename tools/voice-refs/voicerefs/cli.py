@@ -7,7 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import audio, bonsai, chapter, clusters, laya_check, library, names, page, textunits, tts, whisper
-from .config import SOURCE_BOOK, VOICES_DIR, WORK_DIR
+from .config import MATCHED_TEMPERATURE, SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
 
@@ -242,7 +242,8 @@ def cmd_match(args) -> None:
     picks = clusters.assign_clusters([p["text"].strip() for p in pj["passages"]], menu, CHAPTER_CONTEXT)
     usable = {cid: g for cid, g in cl["groups"].items() if lib.get(cid)}
     tags = [p["tag"] for p in pj["passages"]]
-    picks = clusters.enforce_group(tags, clusters.one_voice_per_speaker(tags, picks), usable, cl["sizes"])
+    # Enforce groups first so the per-speaker vote only chooses among voices of the right group.
+    picks = clusters.one_voice_per_speaker(tags, clusters.enforce_group(tags, picks, usable, cl["sizes"]))
     for p, cid in zip(pj["passages"], picks):
         p["cluster"] = cid
     pj_path.write_text(json.dumps(pj, ensure_ascii=False, indent=1))
@@ -262,7 +263,8 @@ def cmd_generate(args) -> None:
         raise SystemExit("library.json missing: run `voicerefs cluster` before generating matched methods")
     gen_path = ch / "generation.json"
     gen = json.loads(gen_path.read_text()) if gen_path.exists() else {"passages": {}, "names": {}}
-    result = tts.generate(_load_passages(args.number), lib, name_map, ch / "audio", methods=methods)
+    result = tts.generate(_load_passages(args.number), lib, name_map, ch / "audio", methods=methods,
+                          matched_temperature=MATCHED_TEMPERATURE)
     for idx, by_method in result.items():
         gen["passages"].setdefault(idx, {}).update(by_method)
     gen["names"] = tts.generate_names(entries, ch / "audio")

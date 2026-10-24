@@ -141,3 +141,10 @@ def test_one_voice_per_speaker():
 def test_enforce_group_without_usable_cluster_falls_back():
     groups = {"male-0": "male", "narration-0": "narration"}
     assert enforce_group([{"kind": "dialogue", "sex": "female"}], ["male-0"], groups, {"male-0": 10}) == [None]
+
+
+def test_dialogue_never_gets_narration_voice():
+    groups = {"male-0": "male", "male-2": "male", "female-0": "female", "narration-3": "narration"}
+    sizes = {"male-0": 235, "male-2": 167, "female-0": 48, "narration-3": 119}
+    tags = [{"kind": "dialogue", "sex": "unknown"}, {"kind": "dialogue", "sex": "male"}]
+    assert enforce_group(tags, ["narration-3", "narration-3"], groups, sizes) == ["male-0", "male-0"]

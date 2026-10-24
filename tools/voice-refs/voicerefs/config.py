@@ -13,6 +13,8 @@ BONSAI_URL = "http://127.0.0.1:18120/v1/chat/completions"
 
 MAX_CHARS = 400
 TARGET_DBFS = -20.0
+# Lower than Breeze's default 0.9: steadier delivery from chunk to chunk (Oct 2026 seam tests).
+MATCHED_TEMPERATURE = 0.6
 SAMPLE_RATE = 24000
 
 SOURCE_BOOK = Path(
