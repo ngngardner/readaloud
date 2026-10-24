@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "023cf2542617",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tools/voice-refs/tests/test_bonsai.py",
+    "tools/voice-refs/voicerefs/bonsai.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/02/3cf2542617/0/metadata.json",
+      "transcript": "/02/3cf2542617/0/full.jsonl",
+      "compact_transcript": "/02/3cf2542617/0/transcript.jsonl",
+      "content_hash": "/02/3cf2542617/0/content_hash.txt",
+      "prompt": "/02/3cf2542617/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 62,
+    "cache_creation_tokens": 68035,
+    "cache_read_tokens": 6323208,
+    "output_tokens": 44822,
+    "api_call_count": 31
+  }
+}
