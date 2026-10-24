@@ -6,7 +6,8 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio, bonsai, chapter, clusters, laya_check, library, names, page, proofread, textunits, tts, whisper
+from . import (audio, bonsai, chapter, clusters, laya_check, library, names, page, plan, proofread, readaloud,
+               textunits, tts, whisper)
 from .config import FALLBACK_REF, MATCHED_TEMPERATURE, SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
@@ -384,6 +385,72 @@ def cmd_proofread(args) -> None:
     print("word fixes:", words)
 
 
+def _load(path: Path) -> dict:
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def _save(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n")
+
+
+def cmd_plan(args) -> None:
+    """Plan chapters for readaloud: tag speakers, pick each passage's clip, respell names, upload the plan."""
+    import time
+
+    api = readaloud.Readaloud()
+    cl = json.loads((WORK_DIR / "clusters.json").read_text())
+    lib = library.load_library(WORK_DIR / "library.json")
+    menu = {cid: f"{lab['label']} ({lab['sex']}): {lab['description']}"
+            for cid, lab in cl["labels"].items() if lib.get(cid)}
+    usable = {cid: g for cid, g in cl["groups"].items() if lib.get(cid)}
+    curated = {name: e["respelling"] for name, e in json.loads(NAMES_FILE.read_text()).items()}
+    words = _load(WORDS_FILE)
+    state = WORK_DIR / "plans" / f"book-{args.book}"
+    learned_path, speakers_path = state / "names.json", state / "speakers.json"
+    learned, speakers = _load(learned_path), _load(speakers_path)
+
+    todo = [c for c in api.chapters(args.book)
+            if c["number"] >= args.start and (args.force or not c["voice_plan"])][:args.count]
+    print(f"planning {len(todo)} chapters from {args.start}", flush=True)
+    for n, ch in enumerate(todo, 1):
+        started = time.monotonic()
+        try:
+            paragraphs = textunits.html_to_paragraphs(api.text(args.book, ch["id"])["html"])
+            units = textunits.split_units(paragraphs)
+            if not units:
+                print(f"{ch['number']}: empty, skipped", flush=True)
+                continue
+            tags = bonsai.tag_units([u.text for u in units], CHAPTER_CONTEXT)
+            for i, (u, t) in enumerate(zip(units, tags)):
+                if t.kind == "narration" and laya_check.ask(laya_check.ACTION, u.text) >= ACTION_MIN:
+                    tags[i] = bonsai.Tag(t.kind, t.speaker, t.sex, "action")
+            passages = chapter.build_passages(units, tags)
+            ptags = [asdict(p.tag) for p in passages]
+            picks = clusters.assign_clusters([p.text.strip() for p in passages], menu, CHAPTER_CONTEXT)
+            picks = clusters.one_voice_per_speaker(ptags, clusters.enforce_group(ptags, picks, usable, cl["sizes"]))
+            picks = plan.remember_speakers(ptags, picks, speakers, usable)
+            for p, cid in zip(passages, picks):
+                p.cluster = cid
+
+            text = "\n".join(paragraphs)
+            found = [e["name"] for e in bonsai.chat_json(NAMES_SYSTEM, text, NAMES_SCHEMA)["names"]]
+            fresh = plan.new_names(found, text, {**learned, **curated})
+            learned.update(fresh)
+            name_map = {**learned, **curated, **words}
+
+            doc = plan.document(passages, lib, name_map, MATCHED_TEMPERATURE)
+            _save(state / f"{ch['number']:04d}.json", doc)
+            result = api.put_plan(args.book, ch["id"], doc)
+            _save(learned_path, learned)
+            _save(speakers_path, speakers)
+            print(f"[{n}/{len(todo)}] {ch['number']} {ch['title'][:40]!r}: {len(doc['chunks'])} chunks, "
+                  f"{result['queue']}, {time.monotonic() - started:.0f}s"
+                  + (f", new names {fresh}" if fresh else ""), flush=True)
+        except Exception as exc:  # one bad chapter must not stop a run of hundreds
+            print(f"[{n}/{len(todo)}] {ch['number']}: FAILED {type(exc).__name__}: {exc}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -422,5 +489,11 @@ def main() -> None:
     p.add_argument("--method", default="matched_names")
     p.add_argument("--fix", action="store_true", help="ask bonsai for fixes and save them to the word list")
     p.set_defaults(func=cmd_proofread)
+    p = sub.add_parser("plan", help="plan chapters for readaloud and upload the plans")
+    p.add_argument("--book", type=int, default=BOOK_ID)
+    p.add_argument("--start", type=int, required=True, help="first readaloud chapter number to plan")
+    p.add_argument("--count", type=int, default=100)
+    p.add_argument("--force", action="store_true", help="re-plan chapters that already have a plan")
+    p.set_defaults(func=cmd_plan)
     args = parser.parse_args()
     args.func(args)

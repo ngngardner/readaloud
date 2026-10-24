@@ -33,3 +33,10 @@ def test_chunk_short_text_is_one_chunk():
 def test_html_to_paragraphs_drops_header():
     html = "<p>Chapter 946</p><p>Translator: Atlas Studios</p><p>Hei Lou Lan&rsquo;s eyes</p>"
     assert html_to_paragraphs(html) == ["Chapter 946", "Hei Lou Lan’s eyes"]
+
+
+def test_html_to_paragraphs_drops_script_style_and_iframe_bodies():
+    # Reverend Insanity's source injected an ad <script> whose body readaloud once read aloud.
+    html = ("<p>Fang Yuan laughed.</p><script>window.h12_autoplaced=1;</script>"
+            "<style>.x{color:red}</style><iframe src='x'>frame text</iframe><p>Then he left.</p>")
+    assert html_to_paragraphs(html) == ["Fang Yuan laughed.", "Then he left."]

@@ -25,7 +25,12 @@ class Unit:
     quoted: bool
 
 
+# Same blocks readaloud's GenerateJob drops whole: their bodies are code, not prose.
+_OPAQUE = re.compile(r"<(script|style|iframe)\b[^>]*>.*?</\1\s*>", re.I | re.S)
+
+
 def html_to_paragraphs(doc: str) -> list[str]:
+    doc = _OPAQUE.sub(" ", doc)
     text = re.sub(r"<\s*br\s*/?>|</\s*(p|div|h\d|li)\s*>", "\n", doc, flags=re.I)
     text = html.unescape(re.sub(r"<[^>]+>", "", text))
     lines = (line.strip() for line in text.split("\n"))
