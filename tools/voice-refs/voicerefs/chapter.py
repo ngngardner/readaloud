@@ -15,6 +15,7 @@ class Passage:
     text: str
     tag: Tag
     category: str | None
+    cluster: str | None = None
 
 
 def build_passages(units: list[Unit], tags: list[Tag]) -> list[Passage]:

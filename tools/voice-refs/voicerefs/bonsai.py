@@ -86,25 +86,26 @@ def chat_json(system: str, user: str, schema: dict, client: httpx.Client | None 
         raise ValueError(f"reply is not JSON: {exc}") from exc
 
 
-def _window_tags(texts: list[str], start: int, end: int, context: str, client) -> dict[int, Tag]:
+def _window(texts, start, end, system, schema, parse, client) -> dict[int, object]:
     lines = [f"[{i}] CONTEXT: {texts[i]}" for i in range(max(0, start - CONTEXT), start)]
     lines += [f"[{i}] TAG: {texts[i]}" for i in range(start, end)]
     if end < len(texts):
         lines += [f"[{i}] CONTEXT: {texts[i]}" for i in range(end, min(len(texts), end + CONTEXT))]
     want = set(range(start, end))
-    best: dict[int, Tag] = {}
+    key = next(iter(schema["properties"]))
+    best: dict[int, object] = {}
     for _attempt in range(2):
         try:
-            reply = chat_json(SYSTEM.format(context=context), "\n".join(lines), TAG_SCHEMA, client)
+            reply = chat_json(system, "\n".join(lines), schema, client)
         except ValueError:
             continue
-        got: dict[int, Tag] = {}
+        got: dict[int, object] = {}
         seen: list[int] = []
-        for e in reply.get("tags", []):
+        for e in reply.get(key, []):
             i = e.get("i")
             seen.append(i)
             if i in want:
-                got[i] = Tag(e["kind"], e["speaker"], e["sex"], e["mood"])
+                got[i] = parse(e)
         if sorted(seen) == sorted(want):
             return got
         if len(got) > len(best):
@@ -112,11 +113,17 @@ def _window_tags(texts: list[str], start: int, end: int, context: str, client) -
     return best
 
 
-def tag_units(texts: list[str], context: str, client: httpx.Client | None = None) -> list[Tag]:
+def label_units(texts: list[str], system: str, schema: dict, parse, fallback, client: httpx.Client | None = None) -> list:
+    """Label every text in windows of WINDOW, retrying a window once when indices are missing or duplicated."""
     client = client or httpx.Client(timeout=900)
-    tags: list[Tag] = []
+    out: list = []
     for start in range(0, len(texts), WINDOW):
         end = min(start + WINDOW, len(texts))
-        got = _window_tags(texts, start, end, context, client)
-        tags.extend(got.get(i, FALLBACK_TAG) for i in range(start, end))
-    return tags
+        got = _window(texts, start, end, system, schema, parse, client)
+        out.extend(got.get(i, fallback) for i in range(start, end))
+    return out
+
+
+def tag_units(texts: list[str], context: str, client: httpx.Client | None = None) -> list[Tag]:
+    return label_units(texts, SYSTEM.format(context=context), TAG_SCHEMA,
+                       lambda e: Tag(e["kind"], e["speaker"], e["sex"], e["mood"]), FALLBACK_TAG, client)

@@ -6,8 +6,11 @@ requires-python = ">=3.10"
 dependencies = [
   "httpx>=0.27",
   "numpy>=1.26",
+  "praat-parselmouth>=0.4.7",
   "pypinyin>=0.55.0",
+  "scikit-learn>=1.7.2",
   "soundfile>=0.12",
+  "speechbrain>=1.1.2",
 ]
 
 [project.optional-dependencies]

@@ -49,26 +49,31 @@ def category_of(tag: Tag) -> str | None:
     return None
 
 
-def candidates(tagged: list[dict]) -> list[Candidate]:
+def _category_key(seg: dict) -> tuple[str, str] | None:
+    cat = category_of(Tag(**seg["tag"]))
+    return None if cat is None else (cat, seg["tag"]["speaker"])
+
+
+def candidates(tagged: list[dict], key=_category_key) -> list[Candidate]:
+    """Merge contiguous segments sharing key(seg) = (category, speaker) into 6–15 s spans."""
     out: list[Candidate] = []
     run: list[dict] = []
-    key = None
+    run_key = None
 
     def flush():
         if run and run[-1]["end"] - run[0]["start"] >= MIN_S:
-            out.append(Candidate(key[0], key[1], run[0]["start"], run[-1]["end"],
+            out.append(Candidate(run_key[0], run_key[1], run[0]["start"], run[-1]["end"],
                                  " ".join(s["text"] for s in run)))
 
     for seg in tagged:
-        cat = category_of(Tag(**seg["tag"]))
-        seg_key = (cat, seg["tag"]["speaker"])
+        seg_key = key(seg)
         contiguous = run and seg["start"] - run[-1]["end"] < MAX_GAP_S
         fits = run and seg["end"] - run[0]["start"] <= MAX_S
-        if cat is not None and seg_key == key and contiguous and fits:
+        if seg_key is not None and seg_key == run_key and contiguous and fits:
             run.append(seg)
             continue
         flush()
-        run, key = ([seg], seg_key) if cat is not None else ([], None)
+        run, run_key = ([seg], seg_key) if seg_key is not None else ([], None)
     flush()
     return out
 

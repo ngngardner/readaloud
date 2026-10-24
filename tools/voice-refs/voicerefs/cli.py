@@ -6,8 +6,8 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio, bonsai, chapter, laya_check, library, names, page, textunits, tts, whisper
-from .config import CATEGORIES, SOURCE_BOOK, VOICES_DIR, WORK_DIR
+from . import audio, bonsai, chapter, clusters, laya_check, library, names, page, textunits, tts, whisper
+from .config import SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
 
@@ -62,26 +62,67 @@ def cmd_tag_source(args) -> None:
 
 
 PAD_S = 0.12
-MAX_TRIES = 30
+MAX_TRIES = 20
 AGREEMENT_MIN = 0.85
 ACTION_MIN = 0.7
+SAMPLE_LINES = 15
 
 
-def cmd_library(args) -> None:
-    tagged = json.loads((WORK_DIR / "source" / "tagged.json").read_text())
-    cands = library.candidates(tagged)
-    # Bonsai rarely calls narration "action"; laya decides that for narration candidates.
+def _summaries(tagged, labels, dist, pros) -> list[dict]:
+    import numpy as np
+    from collections import Counter
+
+    out = []
+    for c in sorted(set(labels)):
+        idx = np.flatnonzero(labels == c)
+        near = idx[np.argsort(dist[idx])][:SAMPLE_LINES]
+        tags = Counter(f"{tagged[i]['tag']['kind']}/{tagged[i]['tag']['sex']}/{tagged[i]['tag']['mood']}" for i in idx)
+        speakers = Counter(tagged[i]["tag"]["speaker"] for i in idx)
+        p = pros[idx].mean(axis=0)
+        out.append({
+            "id": f"c{c}", "segments": int(len(idx)),
+            "sound": {"pitch_semitones_re_100hz": round(float(p[0]), 1), "pitch_range_st": round(float(p[1]), 1),
+                      "loudness_dbfs": round(float(p[2]), 1), "words_per_second": round(float(p[4]), 2)},
+            "tag_counts": dict(tags.most_common(4)), "speakers": dict(speakers.most_common(5)),
+            "lines": [tagged[i]["text"] for i in near],
+        })
+    return out
+
+
+def cmd_cluster(args) -> None:
+    import numpy as np
+
+    src = WORK_DIR / "source"
+    tagged = json.loads((src / "tagged.json").read_text())
+    feats = np.load(src / "features.npz")
+    X = clusters.feature_matrix(feats["emb"], feats["pros"])
+    k, labels = clusters.choose_k(X, ks=range(args.min_k, args.max_k + 1))
+    centroids = np.array([X[labels == c].mean(axis=0) for c in range(k)])
+    dist = np.linalg.norm(X - centroids[labels], axis=1)
+    summaries = _summaries(tagged, labels, dist, feats["pros"])
+    names_by_id = clusters.label_clusters(summaries)
+    print(f"k={k}")
+    for sm in summaries:
+        lab = names_by_id[sm["id"]]
+        print(f"{sm['id']:>4} {sm['segments']:5d}  {lab['label']}  |  {lab['description']}")
+
+    by_start = {}
+    for seg, c, d in zip(tagged, labels, dist):
+        seg["cluster"] = int(c)
+        by_start[seg["start"]] = d
+    cands = library.candidates(tagged, key=lambda s: (f"c{s['cluster']}", s["tag"]["speaker"]))
     for c in cands:
-        if c.category.startswith("narration"):
-            c.category = "narration_action" if laya_check.ask(laya_check.ACTION, c.text) >= ACTION_MIN else "narration_calm"
+        ds = [d for t, d in by_start.items() if c.start <= t < c.end]
+        c.centrality = float(np.mean(ds)) if ds else 99.0
     cut_dir = WORK_DIR / "library" / "cuts"
-    accepted: list[library.RefClip] = []
-    for cat in CATEGORIES:
-        pool = sorted((c for c in cands if c.category == cat), key=lambda c: abs((c.end - c.start) - 10))
-        print(f"{cat}: {len(pool)} candidates", flush=True)
-        ok = 0
+    lib: dict[str, list[library.RefClip]] = {}
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
+    for sm in summaries:
+        cid, lab = sm["id"], names_by_id[sm["id"]]
+        pool = sorted((c for c in cands if c.category == cid), key=lambda c: c.centrality)
+        clips = []
         for n, c in enumerate(pool[:MAX_TRIES]):
-            wav = audio.extract(SOURCE_BOOK, c.start - PAD_S, c.end - c.start + 2 * PAD_S, cut_dir / f"{cat}-{n}.wav")
+            wav = audio.extract(SOURCE_BOOK, c.start - PAD_S, c.end - c.start + 2 * PAD_S, cut_dir / f"{cid}-{n}.wav")
             samples, rate = audio.read(wav)
             if not library.signal_ok(samples, rate):
                 continue
@@ -89,26 +130,18 @@ def cmd_library(args) -> None:
             score = library.word_agreement(c.text, heard)
             if score < AGREEMENT_MIN:
                 continue
-            accepted.append(library.RefClip(cat, str(wav), heard, c.speaker, c.start, c.end, score=score))
-            ok += 1
-            if ok >= args.per_category * 2:
-                break
-    lib = library.select(accepted, per_category=args.per_category)
-    VOICES_DIR.mkdir(parents=True, exist_ok=True)
-    for cat, clips in lib.items():
-        for n, clip in enumerate(clips):
-            name = f"hwfwm-{cat}-{n}.wav"
-            samples, rate = audio.read(Path(clip.file))
+            name = f"hwfwm-{cid}-{len(clips)}.wav"
             audio.write(VOICES_DIR / name, samples, rate)
-            (VOICES_DIR / name).with_suffix(".txt").write_text(clip.transcript)
-            clip.file = name
+            (VOICES_DIR / name).with_suffix(".txt").write_text(heard)
+            clips.append(library.RefClip(lab["label"], name, heard, c.speaker, c.start, c.end, score=score))
+            if len(clips) >= args.per_cluster:
+                break
+        lib[cid] = clips
+        print(f"{cid}: {len(pool)} candidates, {len(clips)} clips" + (f" e.g. {clips[0].transcript[:70]!r}" if clips else ""))
     library.save_library(lib, WORK_DIR / "library.json")
-    for cat in CATEGORIES:
-        clips = lib.get(cat, [])
-        if not clips:
-            print(f"{cat}: NO CLIP (matched methods fall back to heath-miller.wav)")
-        for clip in clips:
-            print(f"{cat}: {clip.speaker} {clip.end - clip.start:.1f}s {clip.score:.2f} {clip.transcript[:80]}")
+    (WORK_DIR / "clusters.json").write_text(json.dumps(
+        {"k": k, "labels": names_by_id, "summaries": summaries}, ensure_ascii=False, indent=1))
+    (src / "clustered.json").write_text(json.dumps(tagged))
 
 
 CHAPTER_CONTEXT = (
@@ -178,7 +211,24 @@ def cmd_names(args) -> None:
 
 def _load_passages(number: int) -> list[chapter.Passage]:
     raw = json.loads((_chapter_dir(number) / "passages.json").read_text())["passages"]
-    return [chapter.Passage(p["idx"], p["text"], bonsai.Tag(**p["tag"]), p["category"]) for p in raw]
+    return [chapter.Passage(p["idx"], p["text"], bonsai.Tag(**p["tag"]), p["category"], p.get("cluster"))
+            for p in raw]
+
+
+def cmd_match(args) -> None:
+    pj_path = _chapter_dir(args.number) / "passages.json"
+    pj = json.loads(pj_path.read_text())
+    cl = json.loads((WORK_DIR / "clusters.json").read_text())
+    lib = library.load_library(WORK_DIR / "library.json")
+    menu = {cid: f"{lab['label']} ({lab['sex']}): {lab['description']}"
+            for cid, lab in cl["labels"].items() if lib.get(cid)}
+    picks = clusters.assign_clusters([p["text"].strip() for p in pj["passages"]], menu, CHAPTER_CONTEXT)
+    for p, cid in zip(pj["passages"], picks):
+        p["cluster"] = cid
+    pj_path.write_text(json.dumps(pj, ensure_ascii=False, indent=1))
+    for p in pj["passages"]:
+        lab = cl["labels"].get(p["cluster"] or "", {}).get("label", "-")
+        print(f"{p['idx']:3d} {p['tag']['speaker'][:16]:16s} {lab[:30]:30s} {p['text'].strip()[:50]!r}")
 
 
 def cmd_generate(args) -> None:
@@ -189,7 +239,7 @@ def cmd_generate(args) -> None:
     name_map = {name: e["respelling"] for name, e in entries.items()}
     methods = args.methods.split(",") if args.methods else tts.METHODS
     if any(m != "current" for m in methods) and not lib:
-        raise SystemExit("library.json missing: run `voicerefs library` before generating matched methods")
+        raise SystemExit("library.json missing: run `voicerefs cluster` before generating matched methods")
     gen_path = ch / "generation.json"
     gen = json.loads(gen_path.read_text()) if gen_path.exists() else {"passages": {}, "names": {}}
     result = tts.generate(_load_passages(args.number), lib, name_map, ch / "audio", methods=methods)
@@ -209,6 +259,35 @@ def cmd_page(args) -> None:
     print(f"{index}  +{len(files)} audio files, {total / 1e6:.1f} MB")
 
 
+def cmd_features(args) -> None:
+    import numpy as np
+
+    src = WORK_DIR / "source"
+    segments = json.loads((src / "segments.json").read_text())
+    starts = sorted(int(p.stem) for p in (src / "pieces").glob("*.json"))
+    tmp = WORK_DIR / "features-tmp"
+    emb, pros = [], []
+    loaded: dict[int, tuple] = {}
+    for n, seg in enumerate(segments):
+        piece = max(s for s in starts if s <= seg["start"])
+        if piece not in loaded:
+            loaded.clear()
+            wav = audio.extract(SOURCE_BOOK, piece, PIECE_S + 30, tmp / f"{piece}.wav", rate=clusters.ECAPA_RATE)
+            loaded[piece] = audio.read(wav)
+            wav.unlink()
+        samples, rate = loaded[piece]
+        clip = samples[int((seg["start"] - piece) * rate): int((seg["end"] - piece) * rate)]
+        if len(clip) < rate // 2:
+            clip = np.pad(clip, (0, rate // 2 - len(clip)))
+        words = len(seg["text"].split())
+        emb.append(clusters.embed(clip, rate))
+        pros.append(np.append(clusters.prosody(clip, rate), words / max(0.5, seg["end"] - seg["start"])))
+        if n % 250 == 0:
+            print(f"{n}/{len(segments)}", flush=True)
+    np.savez(src / "features.npz", emb=np.array(emb), pros=np.array(pros))
+    print(f"wrote features for {len(segments)} segments")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -217,9 +296,16 @@ def main() -> None:
     p.set_defaults(func=cmd_source)
     p = sub.add_parser("tag-source", help="tag source segments with bonsai")
     p.set_defaults(func=cmd_tag_source)
-    p = sub.add_parser("library", help="screen candidates and write the reference clip library")
-    p.add_argument("--per-category", type=int, default=3)
-    p.set_defaults(func=cmd_library)
+    p = sub.add_parser("features", help="voice embedding + prosody for every source segment")
+    p.set_defaults(func=cmd_features)
+    p = sub.add_parser("cluster", help="cluster source segments by sound, label clusters, cut reference clips")
+    p.add_argument("--min-k", type=int, default=4)
+    p.add_argument("--max-k", type=int, default=16)
+    p.add_argument("--per-cluster", type=int, default=2)
+    p.set_defaults(func=cmd_cluster)
+    p = sub.add_parser("match", help="assign each passage of a chapter a voice cluster")
+    p.add_argument("--number", type=int, default=195)
+    p.set_defaults(func=cmd_match)
     for name, func, help_ in (("chapter", cmd_chapter, "tag a chapter and build passages"),
                               ("names", cmd_names, "extract the chapter's names into the book's name list")):
         p = sub.add_parser(name, help=help_)

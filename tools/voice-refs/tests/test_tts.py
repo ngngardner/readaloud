@@ -117,3 +117,13 @@ def test_generate_limits_methods(tmp_path):
     result = generate(p, {}, {}, tmp_path, synth=synth, methods=["current"])
     assert calls == ["heath-miller.wav"]
     assert list(result["0"]) == ["current"]
+
+
+def test_plan_prefers_passage_cluster():
+    from voicerefs.tts import _plan
+
+    lib = {"c2": [RefClip("young woman, warm", "hwfwm-c2-0.wav", "t", "Farrah", 0, 8)]}
+    p = Passage(0, "“Mother!”", Tag("dialogue", "Feng Jin Huang", "female", "calm"), "female_calm", cluster="c2")
+    plan = _plan(p, lib, {})
+    assert plan["matched"][1].file == "hwfwm-c2-0.wav"
+    assert plan["current"][1].file == "heath-miller.wav"

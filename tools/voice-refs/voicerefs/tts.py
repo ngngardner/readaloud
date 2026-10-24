@@ -78,7 +78,7 @@ CURRENT_REF = RefClip("current", FALLBACK_REF[0], FALLBACK_REF[1], "narrator", 0
 
 
 def _plan(passage: Passage, lib: dict, name_map: dict[str, str]) -> dict[str, tuple[str, RefClip]]:
-    matched = pick(lib, passage.category)
+    matched = pick(lib, passage.cluster or passage.category)
     return {
         "current": (passage.text, CURRENT_REF),
         "matched": (passage.text, matched),

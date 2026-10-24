@@ -165,6 +165,19 @@ Noah confirmed this picture of the site ("That's right").
 - Noah's split: bonsai for working out who is talking, laya for simple
   decisions.
 
+### Change 2026-10-24 (Noah): clusters replace the fixed categories
+
+The narrator may have more delivery types than the six fixed categories
+(e.g. HWFWM's system-message voice). So the reference library is built
+by clustering the source segments on their *audio* (an ECAPA voice
+embedding plus pitch level/range, loudness and speaking rate), choosing
+the number of clusters from the data. Bonsai labels each cluster from
+sample lines, their tags and the prosody summary. For each target
+passage bonsai picks the best-fitting cluster, and the reference clip
+comes from that cluster's cleanest, most central segments. This replaces
+the fixed-category clip choice for methods 2 and 3 (not an extra method).
+The bonsai tags from step 1 are kept as input to cluster labelling.
+
 ## Constraints
 
 - Work on phanteks; readaloud runs on pylon and is not touched.
