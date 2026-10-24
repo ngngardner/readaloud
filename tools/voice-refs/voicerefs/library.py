@@ -101,6 +101,42 @@ def signal_ok(samples: np.ndarray, rate: int) -> bool:
     return longest * FRAME_S <= 1.2
 
 
+_SPEECH = r"(said|says|asked|explained|replied|told|added|called|shouted|yelled|whispered|muttered|continued|answered|admitted|agreed|grumbled|laughed)"
+_ATTRIBUTION = re.compile(
+    rf"\b([A-Z][a-z]+|he|she|they)\s+{_SPEECH}\b"  # "Humphrey said"
+    rf"|\b{_SPEECH}\s+[A-Z][a-z]+\b"  # "said Humphrey"
+    r"|,\s+([A-Z][a-z]+|he|she|they)\s+[a-z]+ed\b"  # ", she scolded" / ", Belinda cautioned"
+)
+
+
+def has_attribution(text: str) -> bool:
+    """A dialogue tag like "Farrah explained" means the clip also contains narration."""
+    return bool(_ATTRIBUTION.search(text))
+
+
+def whole_sentences(text: str) -> bool:
+    """Starts at the start of a sentence and ends at the end of one."""
+    t = text.strip().lstrip("“\"'")
+    return bool(t) and t[0].isupper() and t.rstrip("”\"' ")[-1:] in (".", "!", "?")
+
+
+def _ends_sentence(word: str) -> bool:
+    return word.rstrip("”\"')")[-1:] in (".", "!", "?")
+
+
+def trim_to_sentences(words: list[tuple[str, float, float]]) -> tuple[float, float, str] | None:
+    """Drop words before the first sentence start and after the last sentence end."""
+    first = next((i for i, (w, _, _) in enumerate(words)
+                  if w.lstrip("“\"'")[:1].isupper() and (i == 0 or _ends_sentence(words[i - 1][0]))), None)
+    if first is None:
+        return None
+    last = next((i for i in range(len(words) - 1, first - 1, -1) if _ends_sentence(words[i][0])), None)
+    if last is None:
+        return None
+    kept = words[first:last + 1]
+    return kept[0][1], kept[-1][2], " ".join(w for w, _, _ in kept)
+
+
 def _words(text: str) -> list[str]:
     return [w for w in re.sub(r"[^\w\s]", "", text.lower()).split() if w]
 

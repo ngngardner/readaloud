@@ -127,3 +127,20 @@ def label_units(texts: list[str], system: str, schema: dict, parse, fallback, cl
 def tag_units(texts: list[str], context: str, client: httpx.Client | None = None) -> list[Tag]:
     return label_units(texts, SYSTEM.format(context=context), TAG_SCHEMA,
                        lambda e: Tag(e["kind"], e["speaker"], e["sex"], e["mood"]), FALLBACK_TAG, client)
+
+
+PURE_SCHEMA = {
+    "type": "object",
+    "properties": {"pure_speech": {"type": "boolean"}, "reason": {"type": "string"}},
+    "required": ["pure_speech", "reason"],
+}
+PURE_SYSTEM = """This is a transcript of a short audiobook clip. Answer pure_speech = true only if the whole clip is one character speaking aloud: no narration (e.g. "Vincent turned to look at him"), no dialogue tags (e.g. "Humphrey interjected", "she asked"), and no second character replying. Give a short reason."""
+
+
+def pure_speech(text: str, client: httpx.Client | None = None) -> bool:
+    for _attempt in range(2):
+        try:
+            return bool(chat_json(PURE_SYSTEM, text, PURE_SCHEMA, client, max_tokens=200)["pure_speech"])
+        except (ValueError, KeyError):
+            continue
+    return False

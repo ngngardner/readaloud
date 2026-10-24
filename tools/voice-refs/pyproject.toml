@@ -4,13 +4,20 @@ version = "0.1.0"
 description = "Matched reference clips for the breeze voice: comparison experiment"
 requires-python = ">=3.10"
 dependencies = [
+  "accelerate>=1.15.0",
   "httpx>=0.27",
   "numpy>=1.26",
+  "pillow>=12.3.0",
   "praat-parselmouth>=0.4.7",
   "pypinyin>=0.55.0",
   "scikit-learn>=1.7.2",
+  "sentence-transformers[image]>=6.2.0",
   "soundfile>=0.12",
   "speechbrain>=1.1.2",
+  "torch>=2.14.1",
+  "torchaudio>=2.11.0",
+  "torchvision>=0.29.1",
+  "transformers>=4.57",
 ]
 
 [project.optional-dependencies]
@@ -25,3 +32,14 @@ dev = ["pytest>=8"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# phanteks runs NVIDIA driver 555 (CUDA 12.5); the default torch wheels need a newer driver.
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+torchaudio = { index = "pytorch-cu126" }

@@ -84,3 +84,40 @@ def test_pick_falls_back_when_category_empty():
     assert ref.fallback and ref.file == "heath-miller.wav"
     assert pick(lib, None).fallback
     assert pick(lib, "male_casual").speaker == "Jason"
+
+
+from voicerefs.library import has_attribution
+
+
+def test_has_attribution():
+    assert has_attribution("point for all the green marble, Farah explained. There")
+    assert has_attribution("They don't, Humphrey said.")
+    assert has_attribution("she asked quietly")
+    assert not has_attribution("I never said I would go.")
+    assert not has_attribution("The protection I set up in here will hide your aura.")
+
+
+def test_whole_sentences():
+    from voicerefs.library import whole_sentences
+
+    assert whole_sentences("The protection I set up will hide your aura. But you can't stay here.")
+    assert not whole_sentences("about gravity? No, you can't.")
+    assert not whole_sentences("I never said the Mercer sent me. And I suppose I can")
+    assert whole_sentences("Mother, is father alright?")
+
+
+def test_trim_to_sentences():
+    from voicerefs.library import trim_to_sentences
+
+    words = [("gravity?", 0.0, 0.5), ("No,", 0.6, 0.9), ("you", 1.0, 1.2), ("can't.", 1.2, 1.6),
+             ("Some", 1.8, 2.0), ("things", 2.0, 2.4), ("people", 2.4, 2.8)]
+    assert trim_to_sentences(words) == (0.6, 1.6, "No, you can't.")
+    assert trim_to_sentences([("and", 0, 1), ("then", 1, 2)]) is None
+    whole = [("It", 0, 1), ("works.", 1, 2)]
+    assert trim_to_sentences(whole) == (0, 2, "It works.")
+
+
+def test_has_attribution_catches_any_ed_tag():
+    assert has_attribution("I don't know what a flirty Santa Claus is, she scolded, but no.")
+    assert has_attribution("Let's not go making assumptions, Belinda cautioned.")
+    assert not has_attribution("It was finished, and nobody cared.")

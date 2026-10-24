@@ -62,28 +62,30 @@ def cmd_tag_source(args) -> None:
 
 
 PAD_S = 0.12
-MAX_TRIES = 20
+MAX_TRIES = 40
+MIN_CLIP_S = 4.5
 AGREEMENT_MIN = 0.85
 ACTION_MIN = 0.7
 SAMPLE_LINES = 15
 
 
-def _summaries(tagged, labels, dist, pros) -> list[dict]:
+def _summaries(tagged, labels, dist, pros, intense) -> list[dict]:
     import numpy as np
     from collections import Counter
 
     out = []
-    for c in sorted(set(labels)):
-        idx = np.flatnonzero(labels == c)
+    lab = np.array([x or "" for x in labels])
+    for cid in sorted({x for x in labels if x}):
+        idx = np.flatnonzero(lab == cid)
         near = idx[np.argsort(dist[idx])][:SAMPLE_LINES]
-        tags = Counter(f"{tagged[i]['tag']['kind']}/{tagged[i]['tag']['sex']}/{tagged[i]['tag']['mood']}" for i in idx)
-        speakers = Counter(tagged[i]["tag"]["speaker"] for i in idx)
         p = pros[idx].mean(axis=0)
         out.append({
-            "id": f"c{c}", "segments": int(len(idx)),
+            "id": cid, "group": cid.rsplit("-", 1)[0], "segments": int(len(idx)),
+            "audio_intensity": round(float(intense[idx].mean()), 2),
             "sound": {"pitch_semitones_re_100hz": round(float(p[0]), 1), "pitch_range_st": round(float(p[1]), 1),
                       "loudness_dbfs": round(float(p[2]), 1), "words_per_second": round(float(p[4]), 2)},
-            "tag_counts": dict(tags.most_common(4)), "speakers": dict(speakers.most_common(5)),
+            "moods": dict(Counter(tagged[i]["tag"]["mood"] for i in idx).most_common(4)),
+            "speakers": dict(Counter(tagged[i]["tag"]["speaker"] for i in idx).most_common(5)),
             "lines": [tagged[i]["text"] for i in near],
         })
     return out
@@ -91,56 +93,71 @@ def _summaries(tagged, labels, dist, pros) -> list[dict]:
 
 def cmd_cluster(args) -> None:
     import numpy as np
+    from collections import Counter
 
     src = WORK_DIR / "source"
     tagged = json.loads((src / "tagged.json").read_text())
     feats = np.load(src / "features.npz")
-    X = clusters.feature_matrix(feats["emb"], feats["pros"])
-    k, labels = clusters.choose_k(X, ks=range(args.min_k, args.max_k + 1))
-    centroids = np.array([X[labels == c].mean(axis=0) for c in range(k)])
-    dist = np.linalg.norm(X - centroids[labels], axis=1)
-    summaries = _summaries(tagged, labels, dist, feats["pros"])
+    X = clusters.voice_space(feats["emb"], np.load(src / "emb-egemma.npy"))
+    scores = clusters.probe_scores(X, tagged)
+    ok = clusters.confident(tagged, scores)
+    groups = [clusters.group_of(t["tag"]) for t in tagged]
+    print("confident segments per group:", dict(Counter(g for g, o in zip(groups, ok) if o and g)),
+          "of", dict(Counter(g for g in groups if g)))
+    labels = clusters.subclusters(X, groups, ok, min_size=args.min_size, max_k=args.max_k)
+    lab = np.array([x or "" for x in labels])
+    dist = np.full(len(X), 99.0)
+    for cid in set(labels) - {None}:
+        idx = lab == cid
+        dist[idx] = np.linalg.norm(X[idx] - X[idx].mean(axis=0), axis=1)
+    summaries = _summaries(tagged, labels, dist, feats["pros"], scores["intense"])
     names_by_id = clusters.label_clusters(summaries)
-    print(f"k={k}")
     for sm in summaries:
-        lab = names_by_id[sm["id"]]
-        print(f"{sm['id']:>4} {sm['segments']:5d}  {lab['label']}  |  {lab['description']}")
+        lab_ = names_by_id[sm["id"]]
+        print(f"{sm['id']:>12} {sm['segments']:5d}  {lab_['label']}  |  {lab_['description']}")
 
-    by_start = {}
-    for seg, c, d in zip(tagged, labels, dist):
-        seg["cluster"] = int(c)
-        by_start[seg["start"]] = d
-    cands = library.candidates(tagged, key=lambda s: (f"c{s['cluster']}", s["tag"]["speaker"]))
+    for seg, cid, d in zip(tagged, labels, dist):
+        seg["cluster"], seg["centrality"] = cid, float(d)
+    cands = library.candidates(tagged, key=lambda s: (s["cluster"], s["tag"]["speaker"]) if s["cluster"] else None)
     for c in cands:
-        ds = [d for t, d in by_start.items() if c.start <= t < c.end]
+        ds = [s["centrality"] for s in tagged if c.start <= s["start"] < c.end]
         c.centrality = float(np.mean(ds)) if ds else 99.0
     cut_dir = WORK_DIR / "library" / "cuts"
     lib: dict[str, list[library.RefClip]] = {}
     VOICES_DIR.mkdir(parents=True, exist_ok=True)
     for sm in summaries:
-        cid, lab = sm["id"], names_by_id[sm["id"]]
+        cid, lab_ = sm["id"], names_by_id[sm["id"]]
         pool = sorted((c for c in cands if c.category == cid), key=lambda c: c.centrality)
         clips = []
         for n, c in enumerate(pool[:MAX_TRIES]):
+            words = [tuple(w) for s in tagged if c.start <= s["start"] < c.end for w in s["words"]]
+            trimmed = library.trim_to_sentences(words)
+            if trimmed is None or trimmed[1] - trimmed[0] < MIN_CLIP_S:
+                continue
+            c.start, c.end, c.text = trimmed
             wav = audio.extract(SOURCE_BOOK, c.start - PAD_S, c.end - c.start + 2 * PAD_S, cut_dir / f"{cid}-{n}.wav")
             samples, rate = audio.read(wav)
             if not library.signal_ok(samples, rate):
                 continue
             heard = " ".join(s.text for s in whisper.transcribe(wav))
             score = library.word_agreement(c.text, heard)
-            if score < AGREEMENT_MIN:
+            if score < AGREEMENT_MIN or not library.whole_sentences(heard):
+                continue
+            if not cid.startswith("narration") and (library.has_attribution(heard) or not bonsai.pure_speech(heard)):
                 continue
             name = f"hwfwm-{cid}-{len(clips)}.wav"
             audio.write(VOICES_DIR / name, samples, rate)
             (VOICES_DIR / name).with_suffix(".txt").write_text(heard)
-            clips.append(library.RefClip(lab["label"], name, heard, c.speaker, c.start, c.end, score=score))
+            clips.append(library.RefClip(lab_["label"], name, heard, c.speaker, c.start, c.end, score=score))
             if len(clips) >= args.per_cluster:
                 break
         lib[cid] = clips
         print(f"{cid}: {len(pool)} candidates, {len(clips)} clips" + (f" e.g. {clips[0].transcript[:70]!r}" if clips else ""))
     library.save_library(lib, WORK_DIR / "library.json")
     (WORK_DIR / "clusters.json").write_text(json.dumps(
-        {"k": k, "labels": names_by_id, "summaries": summaries}, ensure_ascii=False, indent=1))
+        {"labels": names_by_id, "groups": {sm["id"]: sm["group"] for sm in summaries},
+         "sizes": {sm["id"]: sm["segments"] for sm in summaries}, "summaries": summaries},
+        ensure_ascii=False, indent=1))
     (src / "clustered.json").write_text(json.dumps(tagged))
 
 
@@ -223,6 +240,8 @@ def cmd_match(args) -> None:
     menu = {cid: f"{lab['label']} ({lab['sex']}): {lab['description']}"
             for cid, lab in cl["labels"].items() if lib.get(cid)}
     picks = clusters.assign_clusters([p["text"].strip() for p in pj["passages"]], menu, CHAPTER_CONTEXT)
+    usable = {cid: g for cid, g in cl["groups"].items() if lib.get(cid)}
+    picks = clusters.enforce_group([p["tag"] for p in pj["passages"]], picks, usable, cl["sizes"])
     for p, cid in zip(pj["passages"], picks):
         p["cluster"] = cid
     pj_path.write_text(json.dumps(pj, ensure_ascii=False, indent=1))
@@ -266,7 +285,8 @@ def cmd_features(args) -> None:
     segments = json.loads((src / "segments.json").read_text())
     starts = sorted(int(p.stem) for p in (src / "pieces").glob("*.json"))
     tmp = WORK_DIR / "features-tmp"
-    emb, pros = [], []
+    emb, pros, egem = [], [], []
+    encode_egemma = clusters.egemma_encoder()
     loaded: dict[int, tuple] = {}
     for n, seg in enumerate(segments):
         piece = max(s for s in starts if s <= seg["start"])
@@ -281,10 +301,12 @@ def cmd_features(args) -> None:
             clip = np.pad(clip, (0, rate // 2 - len(clip)))
         words = len(seg["text"].split())
         emb.append(clusters.embed(clip, rate))
+        egem.append(encode_egemma(clip))
         pros.append(np.append(clusters.prosody(clip, rate), words / max(0.5, seg["end"] - seg["start"])))
         if n % 250 == 0:
             print(f"{n}/{len(segments)}", flush=True)
     np.savez(src / "features.npz", emb=np.array(emb), pros=np.array(pros))
+    np.save(src / "emb-egemma.npy", np.array(egem))
     print(f"wrote features for {len(segments)} segments")
 
 
@@ -299,8 +321,8 @@ def main() -> None:
     p = sub.add_parser("features", help="voice embedding + prosody for every source segment")
     p.set_defaults(func=cmd_features)
     p = sub.add_parser("cluster", help="cluster source segments by sound, label clusters, cut reference clips")
-    p.add_argument("--min-k", type=int, default=4)
-    p.add_argument("--max-k", type=int, default=16)
+    p.add_argument("--min-size", type=int, default=40, help="about this many segments per sub-cluster")
+    p.add_argument("--max-k", type=int, default=4, help="most sub-clusters per group")
     p.add_argument("--per-cluster", type=int, default=2)
     p.set_defaults(func=cmd_cluster)
     p = sub.add_parser("match", help="assign each passage of a chapter a voice cluster")

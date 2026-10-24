@@ -65,3 +65,14 @@ def test_windows_cover_all_units_once():
     assert [t.speaker for t in tags] == [f"S{i}" for i in range(n)]
     # second window shows the 5 previous units as context
     assert "u35" in calls[1]["messages"][1]["content"]
+
+
+def test_pure_speech_check():
+    from voicerefs.bonsai import pure_speech
+
+    client, calls = _client([json.dumps({"pure_speech": False, "reason": "contains 'Vincent turned'"})])
+    assert pure_speech("Vincent turned to look at Humphrey. Mr. Geller, you failed.", client=client) is False
+    client, _ = _client([json.dumps({"pure_speech": True, "reason": ""})])
+    assert pure_speech("The protection I set up in here will hide your aura.", client=client) is True
+    client, _ = _client(["garbage", "garbage"])
+    assert pure_speech("x", client=client) is False

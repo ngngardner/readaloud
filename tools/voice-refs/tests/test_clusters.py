@@ -72,3 +72,57 @@ def test_assign_clusters_menu_and_missing():
     schema = calls[0]["response_format"]["json_schema"]["schema"]
     assert schema["properties"]["picks"]["items"]["properties"]["cluster"]["enum"] == ["c0", "c1"]
     assert "young woman, warm" in calls[0]["messages"][0]["content"]
+
+
+from voicerefs.clusters import confident, enforce_group, group_of, probe_scores, subclusters
+
+
+def _tagged(kinds, sexes):
+    return [{"tag": {"kind": k, "speaker": "x", "sex": s, "mood": "calm"}} for k, s in zip(kinds, sexes)]
+
+
+def test_group_of():
+    assert group_of({"kind": "narration", "sex": "unknown"}) == "narration"
+    assert group_of({"kind": "dialogue", "sex": "female"}) == "female"
+    assert group_of({"kind": "dialogue", "sex": "male"}) == "male"
+    assert group_of({"kind": "dialogue", "sex": "unknown"}) is None
+
+
+def test_probe_scores_learn_separable_audio():
+    rng = np.random.default_rng(0)
+    n = 300
+    kinds = ["dialogue"] * 200 + ["narration"] * 100
+    sexes = ["female"] * 100 + ["male"] * 100 + ["unknown"] * 100
+    X = np.vstack([rng.normal([3, 3], 0.5, (100, 2)), rng.normal([3, -3], 0.5, (100, 2)),
+                   rng.normal([-3, 0], 0.5, (100, 2))])
+    s = probe_scores(X, _tagged(kinds, sexes))
+    assert s["dialogue"][:200].mean() > 0.9 and s["dialogue"][200:].mean() < 0.1
+    assert s["female"][:100].mean() > 0.9 and s["female"][100:200].mean() < 0.1
+    assert len(s["intense"]) == n
+
+
+def test_confident_requires_text_and_audio_agreement():
+    tagged = _tagged(["dialogue", "dialogue", "narration", "dialogue"], ["female", "female", "unknown", "male"])
+    scores = {"dialogue": np.array([0.9, 0.9, 0.2, 0.9]), "female": np.array([0.8, 0.3, 0.5, 0.1])}
+    assert confident(tagged, scores).tolist() == [True, False, True, True]
+
+
+def test_subclusters_split_within_group():
+    rng = np.random.default_rng(2)
+    X = np.vstack([rng.normal([0, 0], 0.3, (60, 2)), rng.normal([5, 5], 0.3, (60, 2)), rng.normal([9, 0], 0.3, (30, 2))])
+    groups = ["male"] * 120 + ["female"] * 30
+    mask = np.ones(150, bool)
+    mask[0] = False
+    labels = subclusters(X, groups, mask, min_size=40, max_k=4)
+    assert labels[0] is None
+    assert len({labels[i] for i in range(1, 60)}) == 1 and labels[1] != labels[60]
+    assert {labels[i] for i in range(120, 150)} == {"female-0"}
+
+
+def test_enforce_group_overrides_wrong_sex():
+    groups = {"female-0": "female", "male-0": "male", "male-1": "male", "narration-0": "narration"}
+    sizes = {"female-0": 50, "male-0": 200, "male-1": 300, "narration-0": 900}
+    tags = [{"kind": "dialogue", "sex": "female"}, {"kind": "dialogue", "sex": "male"},
+            {"kind": "narration", "sex": "unknown"}, {"kind": "dialogue", "sex": "unknown"}]
+    picks = ["male-0", "male-0", "female-0", "male-1"]
+    assert enforce_group(tags, picks, groups, sizes) == ["female-0", "male-0", "narration-0", "male-1"]
