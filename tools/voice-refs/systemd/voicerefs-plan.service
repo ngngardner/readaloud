@@ -1,0 +1,11 @@
+# Temporary (Oct 2026): voice plans for readaloud's Reverend Insanity, see
+# ~/projects/readaloud/tools/voice-refs. Remove with the timer once the log says all chapters are planned.
+[Unit]
+Description=Plan Reverend Insanity chapters for readaloud's matched narrator voice
+
+[Service]
+Type=oneshot
+ExecStart=/internalmedia/voice-refs-work/plan-rest.sh
+ExecStopPost=/internalmedia/voice-refs-work/plan-release.sh
+TimeoutStartSec=infinity
+Nice=10
