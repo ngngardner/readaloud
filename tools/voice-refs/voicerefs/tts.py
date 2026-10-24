@@ -1,6 +1,8 @@
 """Breeze generation through LocalAI, per passage and method."""
 
 import io
+import json
+import re
 import subprocess
 import tempfile
 import time
@@ -74,6 +76,20 @@ def encode_opus(samples: np.ndarray, out: Path) -> Path:
     return out
 
 
+def _fresh(out: Path, signature: dict) -> bool:
+    """The output exists and was made from exactly this text and reference clip."""
+    sidecar = out.with_suffix(".json")
+    try:
+        return out.exists() and json.loads(sidecar.read_text()) == signature
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def _render_to(out: Path, signature: dict, synth: Synth, text: str, ref_file: str, ref_text: str) -> None:
+    encode_opus(synth(text, ref_file, ref_text), out)
+    out.with_suffix(".json").write_text(json.dumps(signature))
+
+
 CURRENT_REF = RefClip("current", FALLBACK_REF[0], FALLBACK_REF[1], "narrator", 0.0, 0.0)
 
 
@@ -98,9 +114,10 @@ def generate(passages: list[Passage], lib: dict[str, list[RefClip]], name_map: d
                 continue
             name = f"{p.idx:03d}-{method}.opus"
             record = {"text": text, "ref": asdict(ref)}
-            if not (out_dir / name).exists():
+            signature = {"text": text, "ref_file": ref.file, "ref_text": ref.transcript}
+            if not _fresh(out_dir / name, signature):
                 try:
-                    encode_opus(synth(text, ref.file, ref.transcript), out_dir / name)
+                    _render_to(out_dir / name, signature, synth, text, ref.file, ref.transcript)
                 except TTSFailed as exc:
                     record["failed"] = str(exc)
                     print(f"passage {p.idx} {method}: FAILED {exc}", flush=True)
@@ -115,16 +132,19 @@ def generate_names(entries: dict[str, dict], out_dir: Path, synth: Synth | None 
     synth = synth or render
     out_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, dict[str, str]] = {}
-    for k, (name, e) in enumerate(entries.items()):
+    for name, e in entries.items():
         forms = {"original": name, "respelling": e.get("respelling", ""), "hanzi": e.get("hanzi", "")}
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         out[name] = {}
         for form, spoken in forms.items():
             if not spoken:
                 continue
-            file = f"name-{k:02d}-{form}.opus"
-            if not (out_dir / file).exists():
+            file = f"name-{slug}-{form}.opus"
+            sentence = f"{spoken} nodded slowly."
+            signature = {"text": sentence, "ref_file": FALLBACK_REF[0], "ref_text": FALLBACK_REF[1]}
+            if not _fresh(out_dir / file, signature):
                 try:
-                    encode_opus(synth(f"{spoken} nodded slowly.", *FALLBACK_REF), out_dir / file)
+                    _render_to(out_dir / file, signature, synth, sentence, *FALLBACK_REF)
                 except TTSFailed as exc:
                     print(f"name {name} {form}: FAILED {exc}", flush=True)
                     continue

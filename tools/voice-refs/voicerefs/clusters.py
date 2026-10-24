@@ -238,7 +238,8 @@ def enforce_group(tags: list[dict], picks: list[str | None], groups: dict[str, s
             out.append(pick)
             continue
         same = [c for c, g in groups.items() if g == want]
-        out.append(max(same, key=lambda c: sizes.get(c, 0)) if same else pick)
+        # No usable voice of the right group: None makes pick() use the narration clip, marked as a fallback.
+        out.append(max(same, key=lambda c: sizes.get(c, 0)) if same else None)
     return out
 
 

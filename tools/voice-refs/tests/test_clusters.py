@@ -136,3 +136,8 @@ def test_one_voice_per_speaker():
             {"kind": "narration", "speaker": "narrator"}]
     picks = ["narration-3", "female-1", "narration-3", "narration-0", "narration-1"]
     assert one_voice_per_speaker(tags, picks) == ["narration-3", "narration-3", "narration-3", "narration-0", "narration-1"]
+
+
+def test_enforce_group_without_usable_cluster_falls_back():
+    groups = {"male-0": "male", "narration-0": "narration"}
+    assert enforce_group([{"kind": "dialogue", "sex": "female"}], ["male-0"], groups, {"male-0": 10}) == [None]

@@ -127,3 +127,26 @@ def test_plan_prefers_passage_cluster():
     plan = _plan(p, lib, {})
     assert plan["matched"][1].file == "hwfwm-c2-0.wav"
     assert plan["current"][1].file == "heath-miller.wav"
+
+
+def test_generate_regenerates_when_reference_changes(tmp_path):
+    p = [Passage(0, "“Mother!”", Tag("dialogue", "Feng Jin Huang", "female", "calm"), "female_calm", cluster="female-0")]
+    calls = []
+
+    def synth(text, ref_file, ref_text):
+        calls.append(ref_file)
+        return np.zeros(2400)
+
+    generate(p, {}, {}, tmp_path, synth=synth, methods=["matched"])
+    lib = {"female-0": [RefClip("female, warm", "hwfwm-female-0-0.wav", "t", "Farrah", 0, 8)]}
+    result = generate(p, lib, {}, tmp_path, synth=synth, methods=["matched"])
+    assert calls == ["heath-miller.wav", "hwfwm-female-0-0.wav"]
+    assert result["0"]["matched"]["ref"]["file"] == "hwfwm-female-0-0.wav"
+
+
+def test_name_samples_are_named_by_name(tmp_path):
+    from voicerefs.tts import generate_names
+
+    out = generate_names({"Fang Yuan": {"hanzi": "", "respelling": "Fahng Yoo-en"}}, tmp_path,
+                         synth=lambda *a: np.zeros(2400))
+    assert out["Fang Yuan"]["original"] == "name-fang-yuan-original.opus"
