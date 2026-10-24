@@ -241,7 +241,8 @@ def cmd_match(args) -> None:
             for cid, lab in cl["labels"].items() if lib.get(cid)}
     picks = clusters.assign_clusters([p["text"].strip() for p in pj["passages"]], menu, CHAPTER_CONTEXT)
     usable = {cid: g for cid, g in cl["groups"].items() if lib.get(cid)}
-    picks = clusters.enforce_group([p["tag"] for p in pj["passages"]], picks, usable, cl["sizes"])
+    tags = [p["tag"] for p in pj["passages"]]
+    picks = clusters.enforce_group(tags, clusters.one_voice_per_speaker(tags, picks), usable, cl["sizes"])
     for p, cid in zip(pj["passages"], picks):
         p["cluster"] = cid
     pj_path.write_text(json.dumps(pj, ensure_ascii=False, indent=1))
@@ -272,7 +273,8 @@ def cmd_generate(args) -> None:
 
 def cmd_page(args) -> None:
     out = Path(args.out)
-    index = page.build(_chapter_dir(args.number), NAMES_FILE, VOICES_DIR, out)
+    index = page.build(_chapter_dir(args.number), NAMES_FILE, VOICES_DIR, out,
+                       clusters_path=WORK_DIR / "clusters.json", library_path=WORK_DIR / "library.json")
     files = sorted(p for p in (out / "audio").iterdir())
     total = sum(p.stat().st_size for p in files) + index.stat().st_size
     print(f"{index}  +{len(files)} audio files, {total / 1e6:.1f} MB")

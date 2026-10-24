@@ -240,3 +240,15 @@ def enforce_group(tags: list[dict], picks: list[str | None], groups: dict[str, s
         same = [c for c, g in groups.items() if g == want]
         out.append(max(same, key=lambda c: sizes.get(c, 0)) if same else pick)
     return out
+
+
+def one_voice_per_speaker(tags: list[dict], picks: list[str | None]) -> list[str | None]:
+    """Each character keeps the voice bonsai picked most often for them; narration stays per passage."""
+    from collections import Counter
+
+    votes: dict[str, Counter] = {}
+    for tag, pick in zip(tags, picks):
+        if tag["kind"] == "dialogue" and pick:
+            votes.setdefault(tag["speaker"], Counter())[pick] += 1
+    return [votes[t["speaker"]].most_common(1)[0][0] if t["kind"] == "dialogue" and t["speaker"] in votes else p
+            for t, p in zip(tags, picks)]

@@ -126,3 +126,13 @@ def test_enforce_group_overrides_wrong_sex():
             {"kind": "narration", "sex": "unknown"}, {"kind": "dialogue", "sex": "unknown"}]
     picks = ["male-0", "male-0", "female-0", "male-1"]
     assert enforce_group(tags, picks, groups, sizes) == ["female-0", "male-0", "narration-0", "male-1"]
+
+
+def test_one_voice_per_speaker():
+    from voicerefs.clusters import one_voice_per_speaker
+
+    tags = [{"kind": "dialogue", "speaker": "Fear Gu"}, {"kind": "dialogue", "speaker": "Fear Gu"},
+            {"kind": "dialogue", "speaker": "Fear Gu"}, {"kind": "narration", "speaker": "narrator"},
+            {"kind": "narration", "speaker": "narrator"}]
+    picks = ["narration-3", "female-1", "narration-3", "narration-0", "narration-1"]
+    assert one_voice_per_speaker(tags, picks) == ["narration-3", "narration-3", "narration-3", "narration-0", "narration-1"]

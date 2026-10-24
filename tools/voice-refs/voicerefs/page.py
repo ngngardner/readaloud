@@ -31,7 +31,8 @@ def _copy(src_dir: Path, name: str, out_audio: Path) -> str:
     return f"audio/{name}"
 
 
-def build(chapter_dir: Path, names_path: Path, voices_dir: Path, out_dir: Path) -> Path:
+def build(chapter_dir: Path, names_path: Path, voices_dir: Path, out_dir: Path,
+          clusters_path: Path | None = None, library_path: Path | None = None) -> Path:
     out_audio = out_dir / "audio"
     out_audio.mkdir(parents=True, exist_ok=True)
     src_audio = chapter_dir / "audio"
@@ -67,7 +68,18 @@ def build(chapter_dir: Path, names_path: Path, voices_dir: Path, out_dir: Path) 
                           "respelling": e.get("respelling", ""),
                           "audio": {form: _copy(src_audio, f, out_audio) for form, f in files.items()}})
 
-    data = {"title": passages["title"], "methods": METHOD_LABELS, "passages": rows, "names": name_rows}
+    voices = []
+    if clusters_path and clusters_path.exists() and library_path and library_path.exists():
+        cl = json.loads(clusters_path.read_text())
+        lib = json.loads(library_path.read_text())
+        for cid, lab in cl["labels"].items():
+            clips = [{"speaker": c["speaker"], "transcript": c["transcript"], "seconds": round(c["end"] - c["start"], 1),
+                      "audio": _ref_audio(c, voices_dir, out_audio, ref_cache)} for c in lib.get(cid, [])]
+            voices.append({"id": cid, "group": cl["groups"].get(cid, ""), "segments": cl["sizes"].get(cid, 0),
+                           "label": lab["label"], "description": lab.get("description", ""), "clips": clips})
+
+    data = {"title": passages["title"], "methods": METHOD_LABELS, "passages": rows, "names": name_rows,
+            "voices": voices}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     html = TEMPLATE.read_text().replace("/*__DATA__*/{}", blob)
     index = out_dir / "index.html"

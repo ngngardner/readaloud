@@ -117,9 +117,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   <header>
     <div class="eyebrow">Reverend Insanity · Breeze voice cloned from Heath Miller</div>
     <h1 id="title"></h1>
-    <p class="lede">Every passage below was read three ways from the same text. The current voice uses one clip of calm narration for everything. The matched takes use a clip from <i>He Who Fights with Monsters</i> where Heath Miller is doing the same kind of speech.</p>
+    <p class="lede">Every passage below was read three ways from the same text. The current voice uses one clip of calm narration for everything. The matched takes use a clip from <i>He Who Fights with Monsters</i> of the narrator voice that best fits the line, and each character keeps one voice for the whole chapter.</p>
     <ul class="legend" id="legend"></ul>
   </header>
+
+  <section class="names" aria-labelledby="voices-h" id="voices-sec">
+    <h2 id="voices-h">Narrator voices</h2>
+    <p class="lede">The voices found in about four hours of <i>He Who Fights with Monsters</i>, grouped by how they sound and named by bonsai. Each line in the chapter is read with one of these clips.</p>
+    <div class="name-table" id="voices"></div>
+  </section>
 
   <section class="names" aria-labelledby="names-h">
     <h2 id="names-h">Names</h2>
@@ -147,7 +153,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const fmt = s => !isFinite(s) ? "–:––" : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const DESC = {
     current: "One fixed clip of calm narration, as Readaloud does today.",
-    matched: "A clip of the narrator doing the same kind of speech.",
+    matched: "The narrator voice matched to the line or character.",
     matched_names: "The matched clip, with names respelled for Mandarin.",
   };
   const CAT = {
@@ -202,6 +208,28 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     });
     return b;
   };
+
+  // Voices
+  const voicesBox = document.getElementById("voices");
+  const GROUP = { narration: "Narration", female: "Female dialogue", male: "Male dialogue" };
+  if (!data.voices || !data.voices.length) document.getElementById("voices-sec").hidden = true;
+  for (const v of data.voices || []) {
+    const row = el("div", "name-row");
+    const who = el("div", "who");
+    who.append(el("strong", null, v.label), el("span", "py", `${GROUP[v.group] || v.group} · ${v.segments} lines`));
+    const desc = el("p", "resp", v.description);
+    desc.style.flexBasis = "100%";
+    who.append(desc);
+    const forms = el("div", "forms");
+    if (!v.clips.length) forms.append(el("span", "badge", "no clean clip"));
+    v.clips.forEach((c, i) => {
+      const b = playButton(`Clip ${i + 1} · ${c.seconds.toFixed(1)} s`, c.audio, "mini m-matched");
+      b.title = c.transcript;
+      forms.append(b);
+    });
+    row.append(who, forms);
+    voicesBox.append(row);
+  }
 
   // Names
   const namesBox = document.getElementById("names");

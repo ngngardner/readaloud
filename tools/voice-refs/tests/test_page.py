@@ -75,3 +75,22 @@ def test_build_escapes_script_close(tmp_path):
     (ch / "passages.json").write_text(json.dumps(pj))
     html = build(ch, names, voices, tmp_path / "site").read_text()
     assert _data(html)["passages"][0]["text"] == "</script><b>x"
+
+
+def test_build_lists_discovered_voices(tmp_path):
+    ch, voices, names = _setup(tmp_path)
+    cl = tmp_path / "clusters.json"
+    cl.write_text(json.dumps({
+        "labels": {"female-0": {"label": "female, warm", "sex": "female", "description": "Farrah's voice."},
+                   "male-1": {"label": "male, steady", "sex": "male", "description": "Jason."}},
+        "groups": {"female-0": "female", "male-1": "male"}, "sizes": {"female-0": 48, "male-1": 169}}))
+    lib = tmp_path / "library.json"
+    lib.write_text(json.dumps({"female-0": [{"category": "female, warm", "file": "hwfwm-female_calm-0.wav",
+                                             "transcript": "There are villages.", "speaker": "Farrah",
+                                             "start": 1, "end": 8, "score": 1, "fallback": False}],
+                               "male-1": []}))
+    html = build(ch, names, voices, tmp_path / "site", clusters_path=cl, library_path=lib).read_text()
+    v = _data(html)["voices"]
+    assert [x["id"] for x in v] == ["female-0", "male-1"]
+    assert v[0]["clips"][0]["audio"].startswith("audio/ref-")
+    assert v[1]["clips"] == []
