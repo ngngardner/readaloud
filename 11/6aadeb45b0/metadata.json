@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "116aadeb45b0",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/superpowers/specs/2026-10-24-matched-reference-voice-design.md",
+    "tools/voice-refs/pyproject.toml",
+    "tools/voice-refs/tests/test_clusters.py",
+    "tools/voice-refs/tests/test_tts.py",
+    "tools/voice-refs/uv.lock",
+    "tools/voice-refs/voicerefs/bonsai.py",
+    "tools/voice-refs/voicerefs/chapter.py",
+    "tools/voice-refs/voicerefs/cli.py",
+    "tools/voice-refs/voicerefs/clusters.py",
+    "tools/voice-refs/voicerefs/library.py",
+    "tools/voice-refs/voicerefs/tts.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/11/6aadeb45b0/0/metadata.json",
+      "transcript": "/11/6aadeb45b0/0/full.jsonl",
+      "compact_transcript": "/11/6aadeb45b0/0/transcript.jsonl",
+      "content_hash": "/11/6aadeb45b0/0/content_hash.txt",
+      "prompt": "/11/6aadeb45b0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 20914,
+    "cache_read_tokens": 3327925,
+    "output_tokens": 19818,
+    "api_call_count": 12
+  }
+}
