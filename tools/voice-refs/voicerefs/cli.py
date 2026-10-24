@@ -6,8 +6,8 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio, bonsai, chapter, clusters, laya_check, library, names, page, textunits, tts, whisper
-from .config import MATCHED_TEMPERATURE, SOURCE_BOOK, VOICES_DIR, WORK_DIR
+from . import audio, bonsai, chapter, clusters, laya_check, library, names, page, proofread, textunits, tts, whisper
+from .config import FALLBACK_REF, MATCHED_TEMPERATURE, SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
 
@@ -258,6 +258,8 @@ def cmd_generate(args) -> None:
     lib = library.load_library(lib_path) if lib_path.exists() else {}
     entries = json.loads(NAMES_FILE.read_text())
     name_map = {name: e["respelling"] for name, e in entries.items()}
+    if WORDS_FILE.exists():
+        name_map.update(json.loads(WORDS_FILE.read_text()))  # misread English words, e.g. feathermen
     methods = args.methods.split(",") if args.methods else tts.METHODS
     if any(m != "current" for m in methods) and not lib:
         raise SystemExit("library.json missing: run `voicerefs cluster` before generating matched methods")
@@ -314,6 +316,73 @@ def cmd_features(args) -> None:
     print(f"wrote features for {len(segments)} segments")
 
 
+WORDS_FILE = NAMES_FILE.with_name("reverend-insanity-words.json")
+
+
+def cmd_names_probe(args) -> None:
+    """Pick each name's respelling by ear-proxy: say every variant, keep the syllable spellings Whisper hears as meant."""
+    import tempfile
+
+    entries = json.loads(NAMES_FILE.read_text())
+    for name, e in entries.items():
+        scores = {}
+        for v in names.respell_variants(name):
+            samples = tts.render(f"{v} nodded slowly.", *FALLBACK_REF, temperature=MATCHED_TEMPERATURE)
+            with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+                audio.write(Path(tmp.name), samples)
+                heard = " ".join(s.text for s in whisper.transcribe(Path(tmp.name)))
+            scores[v] = round(names.score_heard(heard, v, name), 3)
+        best = names.combine_best(name, scores)
+        e["respelling"], e["probe"] = best, scores
+        print(f"{name:16s} -> {best:20s} " + "  ".join(f"{v}={sc}" for v, sc in scores.items()), flush=True)
+    NAMES_FILE.write_text(json.dumps(entries, ensure_ascii=False, indent=1) + "\n")
+
+
+FIX_SCHEMA = {
+    "type": "object",
+    "properties": {"fixes": {"type": "array", "items": {
+        "type": "object", "properties": {"word": {"type": "string"}, "fix": {"type": "string"}},
+        "required": ["word", "fix"]}}},
+    "required": ["fixes"],
+}
+FIX_SYSTEM = """A text-to-speech voice read a novel aloud and a speech recogniser transcribed the audio. Each line gives the word(s) in the text, what was heard instead, and how often.
+For each, decide whether the voice really misread the word (e.g. "feathermen" heard as "fearmen") or the recogniser just spelled it differently (homophones, "grey"/"gray", numbers, a name it doesn't know, a dropped "the").
+If it was misread, give fix = a spelling the voice will read correctly, keeping the meaning (e.g. split compounds: "feather men"). Otherwise give fix = the word unchanged."""
+
+
+def cmd_proofread(args) -> None:
+    from collections import Counter
+
+    ch = _chapter_dir(args.number)
+    gen = json.loads((ch / "generation.json").read_text())
+    entries = json.loads(NAMES_FILE.read_text())
+    ignore = {t for n, e in entries.items() for t in proofread._tokens(n + " " + e["respelling"])}
+    found: Counter = Counter()
+    where: dict[str, list[str]] = {}
+    for idx, by_method in gen["passages"].items():
+        rec = by_method.get(args.method)
+        if not rec or "file" not in rec:
+            continue
+        wav = WORK_DIR / "proofread.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(ch / "audio" / rec["file"]), str(wav)], check=True)
+        heard = " ".join(s.text for s in whisper.transcribe(wav))
+        for exp, got in proofread.misheard(rec["text"], heard, ignore):
+            found[(exp, got)] += 1
+            where.setdefault(exp, []).append(idx)
+    for (exp, got), n in found.most_common():
+        print(f"{n:3d}  {exp!r} heard as {got!r}  (passages {', '.join(sorted(set(where[exp]), key=int))})")
+    if not found or not args.fix:
+        return
+    lines = "\n".join(f"- text: {exp!r}, heard: {got!r}, times: {n}" for (exp, got), n in found.most_common())
+    reply = bonsai.chat_json(FIX_SYSTEM, lines, FIX_SCHEMA)
+    words = json.loads(WORDS_FILE.read_text()) if WORDS_FILE.exists() else {}
+    for f in reply["fixes"]:
+        if f["fix"].strip().lower() != f["word"].strip().lower():
+            words[f["word"].strip()] = f["fix"].strip()
+    WORDS_FILE.write_text(json.dumps(dict(sorted(words.items())), ensure_ascii=False, indent=1) + "\n")
+    print("word fixes:", words)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -345,5 +414,12 @@ def main() -> None:
     p.add_argument("--number", type=int, default=195)
     p.add_argument("--out", default=str(WORK_DIR / "site"))
     p.set_defaults(func=cmd_page)
+    p = sub.add_parser("names-probe", help="choose name respellings from what Whisper hears")
+    p.set_defaults(func=cmd_names_probe)
+    p = sub.add_parser("proofread", help="find words the voice misread in a chapter's audio")
+    p.add_argument("--number", type=int, default=195)
+    p.add_argument("--method", default="matched_names")
+    p.add_argument("--fix", action="store_true", help="ask bonsai for fixes and save them to the word list")
+    p.set_defaults(func=cmd_proofread)
     args = parser.parse_args()
     args.func(args)

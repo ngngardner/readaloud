@@ -52,3 +52,10 @@ def test_hanzi_matches_checks_syllables():
     assert hanzi_matches("Hei Lou Lan", "黑楼兰")
     assert not hanzi_matches("Fang Yuan", "方")
     assert not hanzi_matches("Bai Qing", "白凝冰")
+
+
+def test_lowercase_word_fixes_match_any_case_and_keep_capital():
+    m = {"feathermen": "feather men", "Fang Yuan": "Fahng Yoo-en"}
+    assert apply_names("Feathermen and feathermen met Fang Yuan.", m) == \
+        "Feather men and feather men met Fahng Yoo-en."
+    assert apply_names("fang yuan", m) == "fang yuan"

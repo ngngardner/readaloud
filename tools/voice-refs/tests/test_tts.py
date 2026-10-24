@@ -106,8 +106,8 @@ def test_generate_names_forms(tmp_path):
         return np.zeros(2400)
 
     out = generate_names(entries, tmp_path, synth=synth)
-    assert seen == ["Fang Yuan nodded slowly.", "Fahng Yoo-en nodded slowly.", "方源 nodded slowly.",
-                    "Kong Jue nodded slowly.", "Kong Jweh nodded slowly."]
+    assert seen == ["Fang Yuan nodded slowly.", "Fahng Yoo-en nodded slowly.",
+                    "Kong Jue nodded slowly.", "Kong Jweh nodded slowly."]  # hanzi dropped: needs more than the source text
     assert set(out["Kong Jue"]) == {"original", "respelling"}
     assert all((tmp_path / f).exists() for forms in out.values() for f in forms.values())
 

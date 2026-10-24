@@ -129,7 +129,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
   <section class="names" aria-labelledby="names-h">
     <h2 id="names-h">Names</h2>
-    <p class="lede">Each name said in a short sentence, three ways. Pick the form that sounds closest to the Mandarin; “Matched + names” below uses the respelling.</p>
+    <p class="lede">Each name said in a short sentence, as written and respelled. The respelling is chosen per syllable: every candidate spelling was spoken and transcribed, and the spellings heard as intended were kept. “Matched + names” uses it, along with fixes for English words the voice misread.</p>
     <div class="name-table" id="names"></div>
   </section>
 
@@ -239,10 +239,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const row = el("div", "name-row");
     const who = el("div", "who");
     who.append(el("strong", null, n.name));
-    if (n.hanzi) who.append(el("span", "han", n.hanzi));
     who.append(el("span", "py", n.pinyin), el("span", "resp", `→ ${n.respelling}`));
     const forms = el("div", "forms");
-    for (const f of ["original", "respelling", "hanzi"]) {
+    for (const f of ["original", "respelling"]) {
       if (n.audio[f]) forms.append(playButton(FORM[f], n.audio[f], "mini m-matched"));
     }
     row.append(who, forms);

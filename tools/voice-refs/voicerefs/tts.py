@@ -142,7 +142,8 @@ def generate_names(entries: dict[str, dict], out_dir: Path, synth: Synth | None 
     out_dir.mkdir(parents=True, exist_ok=True)
     out: dict[str, dict[str, str]] = {}
     for name, e in entries.items():
-        forms = {"original": name, "respelling": e.get("respelling", ""), "hanzi": e.get("hanzi", "")}
+        # Hanzi is left out: it needs the original characters, which the source text doesn't have.
+        forms = {"original": name, "respelling": e.get("respelling", "")}
         slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
         out[name] = {}
         for form, spoken in forms.items():
