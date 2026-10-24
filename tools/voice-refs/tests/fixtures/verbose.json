@@ -1,0 +1,358 @@
+{
+ "text": " Jason watched in horror as its body started climbing up and around the outside of the well like the thread of a screw. Despite the wet and slippery surface of the well, the snake started winding its way up, as if adhered to the sides. Jason resumed his climb more energetically than ever. The snake was fast, but its circuitous path around the sides was long.",
+ "usage": null,
+ "language": null,
+ "duration": null,
+ "words": [
+  {
+   "start": 0.699999999,
+   "end": 1.34,
+   "text": " Jason"
+  },
+  {
+   "start": 1.34,
+   "end": 1.56,
+   "text": " watched"
+  },
+  {
+   "start": 1.56,
+   "end": 1.92,
+   "text": " in"
+  },
+  {
+   "start": 1.92,
+   "end": 2.3,
+   "text": " horror"
+  },
+  {
+   "start": 2.3,
+   "end": 2.86,
+   "text": " as"
+  },
+  {
+   "start": 2.86,
+   "end": 3.02,
+   "text": " its"
+  },
+  {
+   "start": 3.02,
+   "end": 3.32,
+   "text": " body"
+  },
+  {
+   "start": 3.32,
+   "end": 3.64,
+   "text": " started"
+  },
+  {
+   "start": 3.64,
+   "end": 4.179999999,
+   "text": " climbing"
+  },
+  {
+   "start": 4.179999999,
+   "end": 4.5600000000000005,
+   "text": " up"
+  },
+  {
+   "start": 4.5600000000000005,
+   "end": 4.96,
+   "text": " and"
+  },
+  {
+   "start": 4.96,
+   "end": 5.28,
+   "text": " around"
+  },
+  {
+   "start": 5.28,
+   "end": 5.5,
+   "text": " the"
+  },
+  {
+   "start": 5.5,
+   "end": 5.84,
+   "text": " outside"
+  },
+  {
+   "start": 5.84,
+   "end": 6.12,
+   "text": " of"
+  },
+  {
+   "start": 6.12,
+   "end": 6.2,
+   "text": " the"
+  },
+  {
+   "start": 6.2,
+   "end": 6.4,
+   "text": " well"
+  },
+  {
+   "start": 6.4,
+   "end": 7.04,
+   "text": " like"
+  },
+  {
+   "start": 7.04,
+   "end": 7.2,
+   "text": " the"
+  },
+  {
+   "start": 7.2,
+   "end": 7.54,
+   "text": " thread"
+  },
+  {
+   "start": 7.54,
+   "end": 7.72,
+   "text": " of"
+  },
+  {
+   "start": 7.72,
+   "end": 7.8,
+   "text": " a"
+  },
+  {
+   "start": 7.8,
+   "end": 8.039999999,
+   "text": " screw."
+  },
+  {
+   "start": 8.359999999,
+   "end": 9,
+   "text": " Despite"
+  },
+  {
+   "start": 9,
+   "end": 9.28,
+   "text": " the"
+  },
+  {
+   "start": 9.28,
+   "end": 9.52,
+   "text": " wet"
+  },
+  {
+   "start": 9.52,
+   "end": 9.68,
+   "text": " and"
+  },
+  {
+   "start": 9.68,
+   "end": 9.92,
+   "text": " slippery"
+  },
+  {
+   "start": 9.92,
+   "end": 10.5,
+   "text": " surface"
+  },
+  {
+   "start": 10.5,
+   "end": 10.7,
+   "text": " of"
+  },
+  {
+   "start": 10.7,
+   "end": 10.76,
+   "text": " the"
+  },
+  {
+   "start": 10.76,
+   "end": 11,
+   "text": " well,"
+  }
+ ],
+ "segments": [
+  {
+   "id": 0,
+   "avg_logprob": null,
+   "compression_ratio": null,
+   "end": 6.4,
+   "no_speech_prob": null,
+   "seek": null,
+   "start": 0.699999999,
+   "temperature": null,
+   "text": " Jason watched in horror as its body started climbing up and around the outside of the well",
+   "tokens": null,
+   "words": [
+    {
+     "start": 0.699999999,
+     "end": 1.34,
+     "text": " Jason"
+    },
+    {
+     "start": 1.34,
+     "end": 1.56,
+     "text": " watched"
+    },
+    {
+     "start": 1.56,
+     "end": 1.92,
+     "text": " in"
+    },
+    {
+     "start": 1.92,
+     "end": 2.3,
+     "text": " horror"
+    },
+    {
+     "start": 2.3,
+     "end": 2.86,
+     "text": " as"
+    },
+    {
+     "start": 2.86,
+     "end": 3.02,
+     "text": " its"
+    },
+    {
+     "start": 3.02,
+     "end": 3.32,
+     "text": " body"
+    },
+    {
+     "start": 3.32,
+     "end": 3.64,
+     "text": " started"
+    },
+    {
+     "start": 3.64,
+     "end": 4.179999999,
+     "text": " climbing"
+    },
+    {
+     "start": 4.179999999,
+     "end": 4.5600000000000005,
+     "text": " up"
+    },
+    {
+     "start": 4.5600000000000005,
+     "end": 4.96,
+     "text": " and"
+    },
+    {
+     "start": 4.96,
+     "end": 5.28,
+     "text": " around"
+    },
+    {
+     "start": 5.28,
+     "end": 5.5,
+     "text": " the"
+    },
+    {
+     "start": 5.5,
+     "end": 5.84,
+     "text": " outside"
+    },
+    {
+     "start": 5.84,
+     "end": 6.12,
+     "text": " of"
+    },
+    {
+     "start": 6.12,
+     "end": 6.2,
+     "text": " the"
+    },
+    {
+     "start": 6.2,
+     "end": 6.4,
+     "text": " well"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "avg_logprob": null,
+   "compression_ratio": null,
+   "end": 11.0,
+   "no_speech_prob": null,
+   "seek": null,
+   "start": 6.4,
+   "temperature": null,
+   "text": " like the thread of a screw. Despite the wet and slippery surface of the well,",
+   "tokens": null,
+   "words": [
+    {
+     "start": 6.4,
+     "end": 7.04,
+     "text": " like"
+    },
+    {
+     "start": 7.04,
+     "end": 7.2,
+     "text": " the"
+    },
+    {
+     "start": 7.2,
+     "end": 7.54,
+     "text": " thread"
+    },
+    {
+     "start": 7.54,
+     "end": 7.72,
+     "text": " of"
+    },
+    {
+     "start": 7.72,
+     "end": 7.8,
+     "text": " a"
+    },
+    {
+     "start": 7.8,
+     "end": 8.039999999,
+     "text": " screw."
+    },
+    {
+     "start": 8.359999999,
+     "end": 9,
+     "text": " Despite"
+    },
+    {
+     "start": 9,
+     "end": 9.28,
+     "text": " the"
+    },
+    {
+     "start": 9.28,
+     "end": 9.52,
+     "text": " wet"
+    },
+    {
+     "start": 9.52,
+     "end": 9.68,
+     "text": " and"
+    },
+    {
+     "start": 9.68,
+     "end": 9.92,
+     "text": " slippery"
+    },
+    {
+     "start": 9.92,
+     "end": 10.5,
+     "text": " surface"
+    },
+    {
+     "start": 10.5,
+     "end": 10.7,
+     "text": " of"
+    },
+    {
+     "start": 10.7,
+     "end": 10.76,
+     "text": " the"
+    },
+    {
+     "start": 10.76,
+     "end": 11,
+     "text": " well,"
+    }
+   ]
+  }
+ ]
+}
