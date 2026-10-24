@@ -1,0 +1,298 @@
+<title>Breeze Reference Trial</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Literata:opsz,wght@7..72,400;7..72,600&family=Noto+Serif+SC:wght@500&display=swap">
+<style>
+/* Layout: one reading column; each passage is a block of book text with its three takes stacked under it. */
+:root {
+  --bg: #f4f6f4;
+  --surface: #ffffff;
+  --ink: #1b2321;
+  --muted: #5b6965;
+  --line: #dce3df;
+  --current: #4b5b6c;
+  --matched: #2a7663;
+  --names: #9a6610;
+  --seal: #b1422e;
+  --female: #a2456b;
+  --male: #2f5f93;
+  --track: #e6ebe8;
+  --f-read: "Literata", Georgia, "Times New Roman", serif;
+  --f-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --f-han: "Noto Serif SC", "Songti SC", "SimSun", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111715; --surface: #18201e; --ink: #e3eae7; --muted: #98a7a2; --line: #2a3431;
+    --current: #a3b6ca; --matched: #5fc2a6; --names: #e2ac4f; --seal: #ec7a62;
+    --female: #e88bb1; --male: #86b3e8; --track: #26302d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111715; --surface: #18201e; --ink: #e3eae7; --muted: #98a7a2; --line: #2a3431;
+  --current: #a3b6ca; --matched: #5fc2a6; --names: #e2ac4f; --seal: #ec7a62;
+  --female: #e88bb1; --male: #86b3e8; --track: #26302d; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-ui); }
+.wrap {
+  max-width: 760px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+  display: grid; gap: 28px;
+}
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1.3 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 600 clamp(24px, 5vw, 32px)/1.15 var(--f-read); margin: 0; text-wrap: balance; }
+h2 { font: 600 18px/1.3 var(--f-read); margin: 0; }
+p { margin: 0; max-width: 65ch; }
+.lede { color: var(--muted); }
+.legend { display: grid; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.legend li { display: grid; grid-template-columns: 12px 9.5em 1fr; gap: 10px; align-items: baseline; }
+.legend li > span:last-child { min-width: 0; color: var(--muted); }
+.sw { width: 12px; height: 12px; border-radius: 3px; align-self: center; }
+.m-current { --m: var(--current); } .m-matched { --m: var(--matched); } .m-matched_names { --m: var(--names); }
+.sw { background: var(--m); }
+.legend b { font-weight: 600; }
+
+section.names { display: grid; gap: 12px; }
+.name-table { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.name-row .who { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; min-width: 0; }
+.name-row .who strong { font: 600 16px/1.3 var(--f-read); }
+.han { font: 500 17px/1.3 var(--f-han); }
+.py, .resp { font: 13px/1.3 var(--f-mono); color: var(--muted); }
+.forms { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.chip { font: 500 13px/1 var(--f-ui); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip .n { font-family: var(--f-mono); opacity: .7; margin-left: 4px; }
+.chip:focus-visible, .play:focus-visible { outline: 2px solid var(--matched); outline-offset: 2px; }
+
+.list { display: grid; gap: 14px; }
+.passage { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.tagline { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font: 12px/1.3 var(--f-mono); color: var(--muted); }
+.tagline .idx { color: var(--muted); }
+.tagline .speaker { color: var(--ink); font-weight: 500; }
+.sex-female { color: var(--female); } .sex-male { color: var(--male); }
+.text { font: 17px/1.6 var(--f-read); white-space: pre-line; max-width: 65ch; }
+.takes { display: grid; gap: 8px; }
+.play {
+  --m: var(--current);
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg);
+  color: var(--ink); font: 500 14px/1.2 var(--f-ui); text-align: left; cursor: pointer;
+}
+.play .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--m); display: grid; place-items: center; }
+.play .dot::before { content: ""; border-left: 9px solid var(--surface); border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+.play.on .dot::before { border: 0; width: 9px; height: 10px; margin: 0; background: linear-gradient(90deg, var(--surface) 0 3px, transparent 3px 6px, var(--surface) 6px 9px); }
+.play .body { display: grid; gap: 6px; min-width: 0; }
+.play .bar { height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.play .bar i { display: block; height: 100%; width: 0; background: var(--m); }
+.play .time { font: 12px/1 var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.play.small { grid-template-columns: 22px minmax(0, 1fr) auto; padding: 6px 8px; font-size: 13px; }
+.play.small .dot { width: 22px; height: 22px; }
+.play.mini { display: inline-flex; width: auto; gap: 6px; padding: 5px 9px 5px 5px; font-size: 12px; }
+.play.mini .dot { width: 20px; height: 20px; }
+.play.mini .bar, .play.mini .time { display: none; }
+.failed { padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--seal); color: var(--seal); font-size: 13px; }
+.spoken { font: 12px/1.4 var(--f-mono); color: var(--muted); padding-left: 2px; }
+.ref { --m: var(--muted); }
+.badge { font: 500 11px/1 var(--f-mono); padding: 3px 6px; border-radius: 4px; border: 1px solid var(--seal); color: var(--seal); white-space: nowrap; }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+@media (max-width: 480px) {
+  .legend li { grid-template-columns: 12px 1fr; }
+  .legend li > span:last-child { grid-column: 2; }
+  .name-row { grid-template-columns: 1fr; }
+  .forms { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Reverend Insanity · Breeze voice cloned from Heath Miller</div>
+    <h1 id="title"></h1>
+    <p class="lede">Every passage below was read three ways from the same text. The current voice uses one clip of calm narration for everything. The matched takes use a clip from <i>He Who Fights with Monsters</i> where Heath Miller is doing the same kind of speech.</p>
+    <ul class="legend" id="legend"></ul>
+  </header>
+
+  <section class="names" aria-labelledby="names-h">
+    <h2 id="names-h">Names</h2>
+    <p class="lede">Each name said in a short sentence, three ways. Pick the form that sounds closest to the Mandarin; “Matched + names” below uses the respelling.</p>
+    <div class="name-table" id="names"></div>
+  </section>
+
+  <section aria-labelledby="passages-h" style="display:grid;gap:4px">
+    <h2 id="passages-h">Passages</h2>
+    <div class="filters" id="filters" role="toolbar" aria-label="Filter passages"></div>
+    <div class="list" id="list"></div>
+  </section>
+</div>
+
+<script type="application/json" id="data">/*__DATA__*/{}</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const fmt = s => !isFinite(s) ? "–:––" : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const DESC = {
+    current: "One fixed clip of calm narration, as Readaloud does today.",
+    matched: "A clip of the narrator doing the same kind of speech.",
+    matched_names: "The matched clip, with names respelled for Mandarin.",
+  };
+  const CAT = {
+    female_calm: "female · calm", female_intense: "female · intense", male_casual: "male · casual",
+    male_intense: "male · intense", narration_action: "narration · action", narration_calm: "narration · calm",
+  };
+
+  document.getElementById("title").textContent = data.title;
+  const legend = document.getElementById("legend");
+  for (const [m, label] of Object.entries(data.methods)) {
+    const li = el("li", `m-${m}`);
+    li.append(el("span", "sw"), el("b", null, label), el("span", null, DESC[m] || ""));
+    legend.append(li);
+  }
+
+  // One shared audio element: starting any take stops the one before it.
+  const player = new Audio();
+  player.preload = "none";
+  let active = null;
+  const stop = () => {
+    if (!active) return;
+    active.classList.remove("on");
+    active.setAttribute("aria-pressed", "false");
+    active = null;
+  };
+  player.addEventListener("timeupdate", () => {
+    if (!active) return;
+    const bar = active.querySelector(".bar i"), time = active.querySelector(".time");
+    if (bar) bar.style.width = `${(player.currentTime / player.duration) * 100 || 0}%`;
+    if (time) time.textContent = `${fmt(player.currentTime)} / ${fmt(player.duration)}`;
+  });
+  player.addEventListener("ended", stop);
+  const playButton = (label, src, cls, extra) => {
+    const b = el("button", `play ${cls || ""}`);
+    b.type = "button";
+    b.setAttribute("aria-pressed", "false");
+    const body = el("span", "body");
+    const lbl = el("span", "lbl", label);
+    body.append(lbl);
+    if (extra) body.append(extra);
+    const bar = el("span", "bar"); bar.append(el("i"));
+    body.append(bar);
+    b.append(el("span", "dot"), body, el("span", "time", ""));
+    b.addEventListener("click", () => {
+      if (active === b) { player.pause(); stop(); return; }
+      stop();
+      active = b;
+      b.classList.add("on");
+      b.setAttribute("aria-pressed", "true");
+      player.src = src;
+      player.play().catch(stop);
+    });
+    return b;
+  };
+
+  // Names
+  const namesBox = document.getElementById("names");
+  if (!data.names.length) namesBox.append(el("p", "empty", "No names in this chapter."));
+  const FORM = { original: "As written", respelling: "Respelled", hanzi: "Hanzi" };
+  for (const n of data.names) {
+    const row = el("div", "name-row");
+    const who = el("div", "who");
+    who.append(el("strong", null, n.name));
+    if (n.hanzi) who.append(el("span", "han", n.hanzi));
+    who.append(el("span", "py", n.pinyin), el("span", "resp", `→ ${n.respelling}`));
+    const forms = el("div", "forms");
+    for (const f of ["original", "respelling", "hanzi"]) {
+      if (n.audio[f]) forms.append(playButton(FORM[f], n.audio[f], "mini m-matched"));
+    }
+    row.append(who, forms);
+    namesBox.append(row);
+  }
+
+  // Passages
+  const groupOf = p => p.kind === "narration" ? "narration"
+    : p.tag.sex === "female" ? "female" : p.tag.sex === "male" ? "male" : "other";
+  const usesFallback = p => Object.values(p.methods).some(m => m.ref && m.ref.fallback);
+  const hasFailure = p => Object.values(p.methods).some(m => m.failed);
+  const FILTERS = [
+    ["all", "All", () => true],
+    ["female", "Female dialogue", p => groupOf(p) === "female"],
+    ["male", "Male dialogue", p => groupOf(p) === "male"],
+    ["narration", "Narration", p => groupOf(p) === "narration"],
+    ["fallback", "No matching clip", usesFallback],
+    ["failed", "Failed", hasFailure],
+  ];
+  const respellings = data.names.map(n => n.respelling).filter(Boolean);
+
+  const list = document.getElementById("list");
+  const cards = data.passages.map(p => {
+    const card = el("article", "passage");
+    const tl = el("div", "tagline");
+    tl.append(el("span", "idx", `#${p.idx + 1}`), el("span", null, p.kind));
+    if (p.kind === "dialogue") {
+      tl.append(el("span", "speaker", p.tag.speaker), el("span", `sex-${p.tag.sex}`, p.tag.sex));
+    }
+    tl.append(el("span", null, p.tag.mood));
+    card.append(tl, el("div", "text", p.text.trim()));
+
+    const takes = el("div", "takes");
+    for (const [m, rec] of Object.entries(p.methods)) {
+      if (rec.failed) {
+        takes.append(el("div", "failed", `${rec.label}: generation failed (${rec.failed})`));
+        continue;
+      }
+      takes.append(playButton(rec.label, rec.file, `m-${m}`));
+      if (m === "matched_names") {
+        const used = respellings.filter(r => rec.text.includes(r));
+        if (used.length) takes.append(el("div", "spoken", `Spoken as: ${used.join(", ")}`));
+      }
+    }
+    const ref = (p.methods.matched || p.methods.matched_names || {}).ref;
+    if (ref) {
+      const extra = el("span", "tagline");
+      if (ref.fallback) extra.append(el("span", "badge", "no matching clip · narration clip used"));
+      const dur = ref.end > ref.start ? ` · ${(ref.end - ref.start).toFixed(1)} s` : "";
+      const label = ref.fallback ? "Reference clip: calm narration" : `Reference clip: ${ref.speaker} · ${CAT[ref.category] || ref.category}${dur}`;
+      takes.append(playButton(label, ref.audio, "small ref", extra));
+    }
+    card.append(takes);
+    list.append(card);
+    return [p, card];
+  });
+  const empty = el("p", "empty", "No passages match this filter.");
+  list.append(empty);
+
+  const filters = document.getElementById("filters");
+  let current = "all";
+  const apply = () => {
+    let shown = 0;
+    const test = FILTERS.find(f => f[0] === current)[2];
+    for (const [p, card] of cards) { const ok = test(p); card.hidden = !ok; shown += ok; }
+    empty.hidden = shown > 0;
+    for (const b of filters.children) b.setAttribute("aria-pressed", String(b.dataset.f === current));
+  };
+  for (const [key, label, test] of FILTERS) {
+    const count = data.passages.filter(test).length;
+    if (key !== "all" && count === 0) continue;
+    const b = el("button", "chip", label);
+    b.type = "button";
+    b.dataset.f = key;
+    b.append(el("span", "n", String(count)));
+    b.addEventListener("click", () => { current = key; apply(); });
+    filters.append(b);
+  }
+  apply();
+})();
+</script>

@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio, bonsai, chapter, laya_check, library, names, textunits, tts, whisper
+from . import audio, bonsai, chapter, laya_check, library, names, page, textunits, tts, whisper
 from .config import CATEGORIES, SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
@@ -201,6 +201,14 @@ def cmd_generate(args) -> None:
     print(f"generated {len(gen['passages'])} passages; {len(failed)} failed: {failed}")
 
 
+def cmd_page(args) -> None:
+    out = Path(args.out)
+    index = page.build(_chapter_dir(args.number), NAMES_FILE, VOICES_DIR, out)
+    files = sorted(p for p in (out / "audio").iterdir())
+    total = sum(p.stat().st_size for p in files) + index.stat().st_size
+    print(f"{index}  +{len(files)} audio files, {total / 1e6:.1f} MB")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -221,5 +229,9 @@ def main() -> None:
     p.add_argument("--number", type=int, default=195)
     p.add_argument("--methods", default="", help="comma separated subset of current,matched,matched_names")
     p.set_defaults(func=cmd_generate)
+    p = sub.add_parser("page", help="build the comparison page")
+    p.add_argument("--number", type=int, default=195)
+    p.add_argument("--out", default=str(WORK_DIR / "site"))
+    p.set_defaults(func=cmd_page)
     args = parser.parse_args()
     args.func(args)
