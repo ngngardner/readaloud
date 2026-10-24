@@ -94,3 +94,11 @@ def test_build_lists_discovered_voices(tmp_path):
     assert [x["id"] for x in v] == ["female-0", "male-1"]
     assert v[0]["clips"][0]["audio"].startswith("audio/ref-")
     assert v[1]["clips"] == []
+
+
+def test_build_includes_word_fixes(tmp_path):
+    ch, voices, names = _setup(tmp_path)
+    words = tmp_path / "words.json"
+    words.write_text(json.dumps({"feathermen": "feather men"}))
+    html = build(ch, names, voices, tmp_path / "site", words_path=words).read_text()
+    assert _data(html)["fixes"] == {"feathermen": "feather men"}

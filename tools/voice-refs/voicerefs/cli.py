@@ -278,7 +278,8 @@ def cmd_generate(args) -> None:
 def cmd_page(args) -> None:
     out = Path(args.out)
     index = page.build(_chapter_dir(args.number), NAMES_FILE, VOICES_DIR, out,
-                       clusters_path=WORK_DIR / "clusters.json", library_path=WORK_DIR / "library.json")
+                       clusters_path=WORK_DIR / "clusters.json", library_path=WORK_DIR / "library.json",
+                       words_path=WORDS_FILE)
     files = sorted(p for p in (out / "audio").iterdir())
     total = sum(p.stat().st_size for p in files) + index.stat().st_size
     print(f"{index}  +{len(files)} audio files, {total / 1e6:.1f} MB")

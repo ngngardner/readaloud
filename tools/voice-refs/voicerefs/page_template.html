@@ -153,8 +153,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const fmt = s => !isFinite(s) ? "–:––" : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const DESC = {
     current: "One fixed clip of calm narration, as Readaloud does today.",
-    matched: "The narrator voice matched to the line or character.",
-    matched_names: "The matched clip, with names respelled for Mandarin.",
+    matched: "The narrator voice matched to the line or character, with steadier delivery (temperature 0.6).",
+    matched_names: "The matched take, with names respelled for Mandarin and misread words fixed.",
   };
   const CAT = {
     female_calm: "female · calm", female_intense: "female · intense", male_casual: "male · casual",
@@ -261,7 +261,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     ["fallback", "No matching clip", usesFallback],
     ["failed", "Failed", hasFailure],
   ];
-  const respellings = data.names.map(n => n.respelling).filter(Boolean);
+  const respellings = data.names.map(n => n.respelling).filter(Boolean)
+    .concat(Object.values(data.fixes || {}));
 
   const list = document.getElementById("list");
   const cards = data.passages.map(p => {

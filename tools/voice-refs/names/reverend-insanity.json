@@ -2,51 +2,94 @@
  "Bai Qing": {
   "hanzi": "白清",
   "pinyin": "bái qīng",
-  "respelling": "Bye Ching"
+  "respelling": "Bye Ching",
+  "probe": {
+   "Bye Ching": 1.0,
+   "Bigh Ching": 0.941
+  }
  },
  "Fang Yuan": {
   "hanzi": "方源",
   "pinyin": "fāng yuán",
-  "respelling": "Fahng Yoo-en"
+  "respelling": "Fahng Yoo-en",
+  "probe": {
+   "Fahng Yoo-en": 1.0,
+   "Fung Yoo-en": 0.875
+  }
  },
  "Feng Jin Huang": {
   "hanzi": "凤金煌",
   "pinyin": "fèng jīn huáng",
-  "respelling": "Fung Jeen Hwahng"
+  "respelling": "Fuhng Jeen Hwahng",
+  "probe": {
+   "Fung Jeen Hwahng": 0.667,
+   "Fuhng Jeen Hwahng": 1.0,
+   "Fung Jin Hwahng": 0.621
+  }
  },
  "Feng Jiu Ge": {
   "hanzi": "凤九歌",
   "pinyin": "fèng jiǔ gē",
-  "respelling": "Fung Jyo Guh"
+  "respelling": "Fung Jyo Guhh",
+  "probe": {
+   "Fung Jyo Guh": 0.889,
+   "Fuhng Jyo Guh": 0.889,
+   "Fung Jyoh Guh": 0.889,
+   "Fung Jyo Gur": 0.889,
+   "Fung Jyo Guhh": 1.0
+  }
  },
  "Hei Cheng": {
   "hanzi": "黑城",
   "pinyin": "hēi chéng",
-  "respelling": "Hay Chung"
+  "respelling": "Hay Chung",
+  "probe": {
+   "Hay Chung": 1.0,
+   "Hay Chuhng": 0.875
+  }
  },
  "Hei Lou Lan": {
   "hanzi": "黑楼兰",
   "pinyin": "hēi lóu lán",
-  "respelling": "Hay Loh Lahn"
+  "respelling": "Hay Loe Lahn",
+  "probe": {
+   "Hay Loh Lahn": 0.429,
+   "Hay Loe Lahn": 0.5
+  }
  },
  "Huang Er": {
   "hanzi": "凰儿",
   "pinyin": "huáng ér",
-  "respelling": "Hwahng Ar"
+  "respelling": "Hwahng Ar",
+  "probe": {
+   "Hwahng Ar": 0.714,
+   "Hwahng Er": 0.7,
+   "Hwahng Arr": 0.667
+  }
  },
  "Kong Jue": {
   "hanzi": "空绝",
   "pinyin": "kōng jué",
-  "respelling": "Kong Jweh"
+  "respelling": "Kong Jweh",
+  "probe": {
+   "Kong Jweh": 1.0
+  }
  },
  "Li Shan": {
   "hanzi": "李山",
   "pinyin": "lǐ shān",
-  "respelling": "Lee Shahn"
+  "respelling": "Lee Shahn",
+  "probe": {
+   "Lee Shahn": 1.0
+  }
  },
  "Ren Zu": {
   "hanzi": "人祖",
   "pinyin": "rén zǔ",
-  "respelling": "Run Dzoo"
+  "respelling": "Ren Dzoo",
+  "probe": {
+   "Run Dzoo": 0.5,
+   "Ren Dzoo": 0.909
+  }
  }
 }

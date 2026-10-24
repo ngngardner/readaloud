@@ -32,7 +32,8 @@ def _copy(src_dir: Path, name: str, out_audio: Path) -> str:
 
 
 def build(chapter_dir: Path, names_path: Path, voices_dir: Path, out_dir: Path,
-          clusters_path: Path | None = None, library_path: Path | None = None) -> Path:
+          clusters_path: Path | None = None, library_path: Path | None = None,
+          words_path: Path | None = None) -> Path:
     out_audio = out_dir / "audio"
     out_audio.mkdir(parents=True, exist_ok=True)
     src_audio = chapter_dir / "audio"
@@ -79,7 +80,8 @@ def build(chapter_dir: Path, names_path: Path, voices_dir: Path, out_dir: Path,
                            "label": lab["label"], "description": lab.get("description", ""), "clips": clips})
 
     data = {"title": passages["title"], "methods": METHOD_LABELS, "passages": rows, "names": name_rows,
-            "voices": voices}
+            "voices": voices,
+            "fixes": json.loads(words_path.read_text()) if words_path and words_path.exists() else {}}
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     html = TEMPLATE.read_text().replace("/*__DATA__*/{}", blob)
     index = out_dir / "index.html"
