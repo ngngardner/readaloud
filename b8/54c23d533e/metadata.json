@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "b854c23d533e",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tools/voice-refs/names/reverend-insanity.json",
+    "tools/voice-refs/pyproject.toml",
+    "tools/voice-refs/tests/test_chapter.py",
+    "tools/voice-refs/tests/test_names.py",
+    "tools/voice-refs/uv.lock",
+    "tools/voice-refs/voicerefs/chapter.py",
+    "tools/voice-refs/voicerefs/cli.py",
+    "tools/voice-refs/voicerefs/names.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b8/54c23d533e/0/metadata.json",
+      "transcript": "/b8/54c23d533e/0/full.jsonl",
+      "compact_transcript": "/b8/54c23d533e/0/transcript.jsonl",
+      "content_hash": "/b8/54c23d533e/0/content_hash.txt",
+      "prompt": "/b8/54c23d533e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}
