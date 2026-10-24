@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>b8hyr60fc</task-id>
+<tool-use-id>toolu_011BrnUxYgpNunHnBbgxJhdv</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects/b86370ea-0ee9-4b1b-bdc0-78a14f9fab73/tasks/b8hyr60fc.output</output-file>
+<status>completed</status>
+<summary>Background command "Transcribe ~4h of HWFWM via LiteLLM whisper" completed (exit code 0)</summary>
+</task-notification>

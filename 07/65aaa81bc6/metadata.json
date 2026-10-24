@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "0765aaa81bc6",
+  "strategy": "manual-commit",
+  "branch": "voice-refs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tools/voice-refs/tests/test_library.py",
+    "tools/voice-refs/voicerefs/laya_check.py",
+    "tools/voice-refs/voicerefs/library.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/07/65aaa81bc6/0/metadata.json",
+      "transcript": "/07/65aaa81bc6/0/full.jsonl",
+      "compact_transcript": "/07/65aaa81bc6/0/transcript.jsonl",
+      "content_hash": "/07/65aaa81bc6/0/content_hash.txt",
+      "prompt": "/07/65aaa81bc6/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}
