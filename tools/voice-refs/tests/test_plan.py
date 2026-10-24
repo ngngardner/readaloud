@@ -154,3 +154,16 @@ def test_find_names_caps_the_list_so_a_runaway_reply_ends():
 
     plan.find_names("text", chat)
     assert seen["schema"]["properties"]["names"]["maxItems"] <= 60
+
+
+def test_library_export_lists_usable_voices_with_their_clip():
+    cl = {"labels": {"female-0": {"label": "female, warm", "sex": "female", "description": "Warm."},
+                     "male-1": {"label": "male, steady", "sex": "male", "description": "Steady."}},
+          "groups": {"female-0": "female", "male-1": "male"}, "sizes": {"female-0": 48, "male-1": 169}}
+    out = plan.export_library(cl, LIB | {"female-0": [FEMALE], "male-1": []}, temperature=0.6)
+    assert out["model"] == "breeze-tts-2" and out["voice"] == "heath-miller" and out["temperature"] == 0.6
+    assert out["fallback"]["voice"] == "/models/voices/heath-miller.wav"
+    # A voice with no clip can't be used, so it is left out (male-1 here).
+    assert out["voices"] == {"female-0": {
+        "label": "female, warm", "sex": "female", "description": "Warm.", "group": "female", "size": 48,
+        "clip": {"voice": "/models/voices/hwfwm-female-0.wav", "text": "Get out of my sight."}}}

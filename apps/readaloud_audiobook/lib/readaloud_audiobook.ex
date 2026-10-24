@@ -1,5 +1,5 @@
 defmodule ReadaloudAudiobook do
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob, VoicePlan}
+  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, GenerateJob, PlanJob, Planner, VoicePlan}
   alias ReadaloudLibrary.{Repo, Tasks, TtsProfile}
   alias ReadaloudLibrary.Tasks.Query, as: TaskQuery
   import Ecto.Query
@@ -26,6 +26,7 @@ defmodule ReadaloudAudiobook do
         |> GenerateJob.new(job_opts)
         |> Oban.insert()
 
+        maybe_queue_planning(task, job_opts)
         {:ok, task}
 
       error ->
@@ -85,6 +86,18 @@ defmodule ReadaloudAudiobook do
 
   defp reads_with?(_profile, _plan), do: false
 
+  # Voices with a narrator library are planned ahead on the :plan queue, at the
+  # generation job's priority, so the TTS queue rarely waits on the model.
+  defp maybe_queue_planning(task, job_opts) do
+    voice = %ReadaloudTTS.Voice{model: task.model || "", voice: task.voice || ""}
+
+    with {:ok, _library} <- Planner.Library.for_voice(voice) do
+      %{"chapter_id" => task.chapter_id, "model" => task.model, "voice" => task.voice}
+      |> PlanJob.new(job_opts)
+      |> Oban.insert()
+    end
+  end
+
   def ensure_audio_generated(book, chapters, progress \\ nil) do
     if TtsProfile.empty?(book.audio_preferences) do
       {:ok, 0}
@@ -96,6 +109,10 @@ defmodule ReadaloudAudiobook do
   defp do_ensure_audio_generated(book, chapters, progress) do
     %TtsProfile{model: model, voice: voice} = book.audio_preferences
     chapter_ids = Enum.map(chapters, & &1.id)
+
+    library? =
+      match?({:ok, _}, Planner.Library.for_voice(%ReadaloudTTS.Voice{model: model, voice: voice}))
+
     current_number = current_chapter_number(chapters, progress)
 
     # Load existing state
@@ -120,7 +137,12 @@ defmodule ReadaloudAudiobook do
         has_pending = MapSet.member?(pending_chapter_ids, ch.id)
         failed_task = Map.get(failed_by_chapter, ch.id)
 
-        needs_audio = audio == nil || audio.model != model || audio.voice != voice
+        # A voice with a narrator library also needs the chapter planned: audio read
+        # from the plain clip (before plans, or while the model was down) is redone.
+        needs_audio =
+          audio == nil || audio.model != model || audio.voice != voice ||
+            (library? and not VoicePlan.exists?(ch))
+
         not_in_flight = !has_pending
         not_exhausted = failed_task == nil || failed_task.attempt_number < @max_attempts
 

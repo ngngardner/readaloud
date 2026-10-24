@@ -1,11 +1,26 @@
 defmodule ReadaloudAudiobook.GenerateJob do
   use Oban.Worker, queue: :tts, max_attempts: 3
 
-  alias ReadaloudAudiobook.{AudiobookTask, ChapterAudio, Loudness, TimingAligner, VoicePlan}
+  alias ReadaloudAudiobook.{
+    AudiobookTask,
+    ChapterAudio,
+    Loudness,
+    Planner,
+    TimingAligner,
+    VoicePlan
+  }
+
   alias ReadaloudLibrary.{Repo, Tasks}
   alias ReadaloudTTS.{TextChunker, Voice}
 
   require Logger
+
+  # Planning a chapter inline waits on the language model; past this it waits again
+  # later instead of holding the TTS queue.
+  @plan_budget :timer.minutes(20)
+  @plan_retry_s 300
+  # ~1 hour of retries while the model is unreachable, then the task fails.
+  @max_plan_waits 12
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"task_id" => task_id}} = job) do
@@ -16,6 +31,41 @@ defmodule ReadaloudAudiobook.GenerateJob do
     # can be traced end-to-end in Loki.
     Logger.metadata(task_id: task.id, book_id: task.book_id, chapter_id: task.chapter_id)
 
+    case ensure_plan(task) do
+      :ok ->
+        generate(task, job)
+
+      {:wait, reason} when job.attempt < @max_plan_waits ->
+        Logger.warning(
+          "Voice planning unavailable, retrying in #{@plan_retry_s}s: #{inspect(reason)}"
+        )
+
+        {:snooze, @plan_retry_s}
+
+      {:wait, reason} ->
+        {:ok, _task} = Tasks.fail(task, "Voice planning unavailable: #{inspect(reason)}")
+        {:cancel, reason}
+    end
+  end
+
+  # A chapter of a voice with a narrator library is planned before it is read. The
+  # model being unreachable is temporary: the job waits rather than reading the
+  # chapter from the plain clip for good.
+  defp ensure_plan(task) do
+    chapter = ReadaloudLibrary.get_chapter!(task.chapter_id)
+    voice = %Voice{model: task.model, voice: task.voice, speed: task.speed || 1.0}
+    opts = Application.get_env(:readaloud_audiobook, :planner_opts, [])
+
+    planning = Task.async(fn -> Planner.plan_chapter(chapter, voice, opts) end)
+
+    case Task.yield(planning, @plan_budget) || Task.shutdown(planning, :brutal_kill) do
+      {:ok, {:error, {:transient, reason}}} -> {:wait, reason}
+      {:ok, _planned_or_not} -> :ok
+      nil -> {:wait, :planning_timeout}
+    end
+  end
+
+  defp generate(task, job) do
     # Crash recovery: a still-:processing row means the previous run was killed
     # by a restart. Compensate Oban's attempt counter so crashes don't burn
     # real attempts — only genuine TTS failures should count.
@@ -75,9 +125,9 @@ defmodule ReadaloudAudiobook.GenerateJob do
   rescue
     exception ->
       # Prevent zombie tasks: ensure transition to :failed even on unexpected
-      # exceptions outside the `with` block. Fresh lookup — task_id is bound
-      # from the function head, always safe.
-      if failed_task = Repo.get(AudiobookTask, task_id) do
+      # exceptions outside the `with` block. Fresh lookup by the id from the
+      # function head, always bound.
+      if failed_task = Repo.get(AudiobookTask, task.id) do
         Tasks.fail(failed_task, "Unexpected error: #{Exception.message(exception)}")
       end
 
@@ -101,28 +151,33 @@ defmodule ReadaloudAudiobook.GenerateJob do
   defp ensure_non_empty(_chunks), do: :ok
 
   # Each chunk is {text to speak, the book's text it covers, synthesis opts}.
-  # A voice plan made for this voice gives every chunk its own reference clip
-  # and respelled names; without one the chapter is cut by TextChunker and
-  # read from the voice's own clip.
+  # A voice plan made for this voice (ensure_plan/1 makes one when the voice has a
+  # narrator library) gives every chunk its own reference clip and respelled names;
+  # otherwise the chapter is cut by TextChunker and read from the voice's own clip.
   defp chunks(chapter, clean_text, voice) do
     case chapter |> VoicePlan.load() |> VoicePlan.for_voice(voice) do
       {:ok, plan} ->
         Logger.info("Using voice plan: #{length(plan.chunks)} chunks")
-
-        {:ok,
-         Enum.map(plan.chunks, fn c ->
-           {c.spoken, c.text, [reference: c.reference, temperature: plan.temperature]}
-         end)}
+        {:ok, plan_chunks(plan)}
 
       :none ->
-        {:ok,
-         clean_text
-         |> TextChunker.chunk(ReadaloudTTS.max_chunk_chars(voice, tts_opts()))
-         |> Enum.map(&{&1, &1, []})}
+        {:ok, plain_chunks(clean_text, voice)}
 
       {:error, reason} ->
         {:error, "Unreadable voice plan: #{inspect(reason)}"}
     end
+  end
+
+  defp plan_chunks(plan) do
+    Enum.map(plan.chunks, fn c ->
+      {c.spoken, c.text, [reference: c.reference, temperature: plan.temperature]}
+    end)
+  end
+
+  defp plain_chunks(clean_text, voice) do
+    clean_text
+    |> TextChunker.chunk(ReadaloudTTS.max_chunk_chars(voice, tts_opts()))
+    |> Enum.map(&{&1, &1, []})
   end
 
   # Test seam: lets a test stand in a provider for LocalAI.

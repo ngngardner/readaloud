@@ -110,3 +110,18 @@ def find_names(text: str, chat=None) -> list[str]:
         except (ValueError, KeyError, TypeError):
             continue
     return []
+
+
+def export_library(cl: dict, lib: dict[str, list[RefClip]], temperature: float | None) -> dict:
+    """The narrator's voices as readaloud's planner reads them (priv/voice_libraries/): each usable voice's
+    label and group, and the clip it is read from. Voices without a clip are left out."""
+    from .config import FALLBACK_REF
+
+    return {
+        "model": MODEL, "voice": VOICE, "temperature": temperature,
+        "fallback": {"voice": f"{CONTAINER_VOICES}/{FALLBACK_REF[0]}", "text": FALLBACK_REF[1]},
+        "voices": {cid: {"label": lab["label"], "sex": lab["sex"], "description": lab.get("description", ""),
+                         "group": cl["groups"][cid], "size": cl["sizes"].get(cid, 0),
+                         "clip": {"voice": f"{CONTAINER_VOICES}/{lib[cid][0].file}", "text": lib[cid][0].transcript}}
+                   for cid, lab in sorted(cl["labels"].items()) if lib.get(cid)},
+    }

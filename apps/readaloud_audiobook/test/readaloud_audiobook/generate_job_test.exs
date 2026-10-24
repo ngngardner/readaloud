@@ -231,6 +231,54 @@ defmodule ReadaloudAudiobook.GenerateJobTest do
       refute Keyword.has_key?(opts, :reference)
     end
 
+    test "a chapter with no plan is planned first, then read from its plan", %{
+      book: book,
+      chapter: chapter
+    } do
+      Application.put_env(:readaloud_audiobook, :planner_opts,
+        chat: ReadaloudAudiobook.PlannerTest.model()
+      )
+
+      on_exit(fn -> Application.delete_env(:readaloud_audiobook, :planner_opts) end)
+      task = breeze_task(book, chapter)
+
+      assert :ok = GenerateJob.perform(%Oban.Job{id: 0, args: %{"task_id" => task.id}})
+
+      assert {:ok, _} = ReadaloudAudiobook.VoicePlan.load(chapter)
+      assert_received {:synthesize, _text, _voice, opts}
+      assert opts[:reference].voice =~ "/models/voices/hwfwm-"
+    end
+
+    # The model being down is temporary: the job waits rather than reading the
+    # chapter from the plain clip for good. Existing audio stays playable.
+    test "an unreachable model snoozes the job without starting it", %{
+      book: book,
+      chapter: chapter
+    } do
+      down = fn _, _, _ -> {:error, {:transport, :econnrefused}} end
+      Application.put_env(:readaloud_audiobook, :planner_opts, chat: down)
+      on_exit(fn -> Application.delete_env(:readaloud_audiobook, :planner_opts) end)
+      task = breeze_task(book, chapter)
+
+      assert {:snooze, _} =
+               GenerateJob.perform(%Oban.Job{id: 0, attempt: 1, args: %{"task_id" => task.id}})
+
+      refute_received {:synthesize, _, _, _}
+      assert Repo.get!(AudiobookTask, task.id).status == :pending
+    end
+
+    test "after an hour of snoozing the task fails instead", %{book: book, chapter: chapter} do
+      down = fn _, _, _ -> {:error, {:transport, :econnrefused}} end
+      Application.put_env(:readaloud_audiobook, :planner_opts, chat: down)
+      on_exit(fn -> Application.delete_env(:readaloud_audiobook, :planner_opts) end)
+      task = breeze_task(book, chapter)
+
+      assert {:cancel, _} =
+               GenerateJob.perform(%Oban.Job{id: 0, attempt: 20, args: %{"task_id" => task.id}})
+
+      assert Repo.get!(AudiobookTask, task.id).status == :failed
+    end
+
     test "a plan made for another voice is ignored", %{book: book, chapter: chapter} do
       {:ok, _} = ReadaloudAudiobook.VoicePlan.save(chapter, plan("some-other-model"))
       task = breeze_task(book, chapter)

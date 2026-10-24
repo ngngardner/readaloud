@@ -1,0 +1,272 @@
+{
+ "respell": {
+  "Bai Cang Shui": "Bye Tsahng Shway",
+  "Bai Ning Bing": "Bye Ning Bing",
+  "Bai Qing": "Bye Ching",
+  "Bi Chen Tian": "Bee Chun Tyen",
+  "Bo Qing": "Baw Ching",
+  "Chou Jiu": "Choh Jyo",
+  "Dan Yu": "Dahn Yoo",
+  "Ding Hao": "Ding How",
+  "Er Gou": "Ar Goh",
+  "Fang Yuan": "Fahng Yoo-en",
+  "Fei You Wang": "Fay Yoh Wahng",
+  "Feng Jin Huang": "Fung Jeen Hwahng",
+  "Feng Jiu Ge": "Fung Jyo Guh",
+  "Gu Yue Bo": "Goo Yweh Baw",
+  "Gua Lao": "Gwah Low",
+  "He Lang Zi": "Huh Lahng Dzuh",
+  "Hei Cheng": "Hay Chung",
+  "Hei Lou Lan": "Hay Loh Lahn",
+  "Hong Chi Ming": "Hong Chr Ming",
+  "Hong Fei Yu": "Hong Fay Yoo",
+  "Hu Mei Er": "Hoo May Ar",
+  "Huang Er": "Hwahng Ar",
+  "Huang Xiao": "Hwahng Shyow",
+  "Hui Feng Zi": "Hway Fung Dzuh",
+  "Jia Yi": "Jyah Ee",
+  "Jian Yi Sheng": "Jyen Ee Shung",
+  "Jiang Yu": "Jyahng Yoo",
+  "Jin Lie Yang": "Jeen Lyeh Yahng",
+  "Ju Kai Bei": "Jyoo Kye Bay",
+  "Kong Jue": "Kong Jweh",
+  "Lan Mei He": "Lahn May Huh",
+  "Lan Tian Hong": "Lahn Tyen Hong",
+  "Lang Ya": "Lahng Yah",
+  "Li Mei Hua": "Lee May Hwah",
+  "Li Shan": "Lee Shahn",
+  "Lian Jiu Sheng": "Lyen Jyo Shung",
+  "Long": "Long",
+  "Lu Zuan Feng": "Loo Dzwahn Fung",
+  "Lü Bu": "Lyoo Boo",
+  "Ma Hong Yun": "Mah Hong Yoon",
+  "Men Ke": "Mun Kuh",
+  "Mo Tan Sang": "Maw Tahn Sahng",
+  "Mo Wu Tian": "Maw Woo Tyen",
+  "Mo Yao": "Maw Yow",
+  "Nüwa": "Nyoowah",
+  "Peng Shi Long": "Pung Shr Long",
+  "Qi Yun Tian": "Chee Yoon Tyen",
+  "Qin Bai Sheng": "Cheen Bye Shung",
+  "Ren Hai Yang": "Run Hye Yahng",
+  "Ren Zu": "Run Dzoo",
+  "Shang Fu Xi": "Shahng Foo Shee",
+  "Shang Gui Cai": "Shahng Gway Tsye",
+  "Shang Yan Fei": "Shahng Yen Fay",
+  "Sheng Shou": "Shung Shoh",
+  "Sheng Ying": "Shung Ying",
+  "Shi Ren": "Shr Run",
+  "Song Zi Xing": "Song Dzuh Shing",
+  "Spirit Spring": null,
+  "Su Bai Man": "Soo Bye Mahn",
+  "Su Shou": "Soo Shoh",
+  "Su Xian Er": "Soo Shyen Ar",
+  "Sun Pang Hu": "Swun Pahng Hoo",
+  "Tai Bai Yun Sheng": "Tye Bye Yoon Shung",
+  "Wang Kai": "Wahng Kye",
+  "Wang Xiao": "Wahng Shyow",
+  "Wei Yang": "Way Yahng",
+  "Wu Hui": "Woo Hway",
+  "Wu Shen Tong": "Woo Shun Tong",
+  "Wu Xie": "Woo Shyeh",
+  "Xiao Cui Er": "Shyow Tsway Ar",
+  "Xiao Hun": "Shyow Hwun",
+  "Xiao Mang": "Shyow Mahng",
+  "Xiao Shan": "Shyow Shahn",
+  "Xiao Zi Feng": "Shyow Dzuh Fung",
+  "Xing Xiang Zi": "Shing Shyahng Dzuh",
+  "Xue Hu": "Shweh Hoo",
+  "Xue Song Zi": "Shweh Song Dzuh",
+  "Xyzzy": null,
+  "Yan Jun": "Yen Jyoon",
+  "Yan Shi": "Yen Shr",
+  "Yan Tu": "Yen Too",
+  "Ye Qing Tang": "Yeh Ching Tahng",
+  "Yi Yan": "Ee Yen",
+  "Ying Wu Xie": "Ying Woo Shyeh",
+  "Yu Fei": "Yoo Fay",
+  "Yu Mu Chun": "Yoo Moo Chwun",
+  "Zhang San": "Jahng Sahn",
+  "Zheng Ling": "Jung Ling",
+  "Zhong He Zi": "Jong Huh Dzuh",
+  "Zhou Xing Xing": "Joh Shing Shing",
+  "Zhou Zhong": "Joh Jong"
+ },
+ "apply_names": [
+  {
+   "text": "Feng Jiu Ge smiled at Feng Jiu.",
+   "map": {
+    "Feng Jiu Ge": "Fung Jyo Guhh",
+    "Feng Jiu": "Fung Jyo"
+   },
+   "out": "Fung Jyo Guhh smiled at Fung Jyo."
+  },
+  {
+   "text": "The feathermen and Feathermen came.",
+   "map": {
+    "feathermen": "feather men"
+   },
+   "out": "The feather men and Feather men came."
+  },
+  {
+   "text": "Peopleir, Hei Cheng's son.",
+   "map": {
+    "Peopleir": "People",
+    "Hei Cheng": "Hay Chung"
+   },
+   "out": "People, Hay Chung's son."
+  },
+  {
+   "text": "Long ago, Long Hu waited.",
+   "map": {
+    "Long Hu": "Long Hoo"
+   },
+   "out": "Long ago, Long Hoo waited."
+  }
+ ],
+ "html": [
+  {
+   "html": "<p>Chapter 946</p><p>Translator: Atlas Studios</p><p>Hei Lou Lan&rsquo;s eyes</p>",
+   "paragraphs": [
+    "Chapter 946",
+    "Hei Lou Lan’s eyes"
+   ],
+   "units": [
+    {
+     "para": 0,
+     "text": "Chapter 946",
+     "quoted": false
+    },
+    {
+     "para": 1,
+     "text": "Hei Lou Lan’s eyes",
+     "quoted": false
+    }
+   ]
+  },
+  {
+   "html": "<p>Fang Yuan laughed.</p><script>window.h12_autoplaced=1;</script><style>.x{}</style><iframe src='x'>t</iframe><p>Then he left.</p>",
+   "paragraphs": [
+    "Fang Yuan laughed.",
+    "Then he left."
+   ],
+   "units": [
+    {
+     "para": 0,
+     "text": "Fang Yuan laughed.",
+     "quoted": false
+    },
+    {
+     "para": 1,
+     "text": "Then he left.",
+     "quoted": false
+    }
+   ]
+  },
+  {
+   "html": "<h3>Chapter 1 &amp; More</h3><div>Line one<br/>Line two</div><p>&ldquo;Leave,&rdquo; she said. &ldquo;Now!&rdquo;</p><p>&#8220;Numeric&#8221; &#x2014; dash &hellip; &nbsp;end</p>",
+   "paragraphs": [
+    "Chapter 1 & More",
+    "Line one",
+    "Line two",
+    "“Leave,” she said. “Now!”",
+    "“Numeric” — dash …  end"
+   ],
+   "units": [
+    {
+     "para": 0,
+     "text": "Chapter 1 & More",
+     "quoted": false
+    },
+    {
+     "para": 1,
+     "text": "Line one",
+     "quoted": false
+    },
+    {
+     "para": 2,
+     "text": "Line two",
+     "quoted": false
+    },
+    {
+     "para": 3,
+     "text": "“Leave,”",
+     "quoted": true
+    },
+    {
+     "para": 3,
+     "text": " she said. ",
+     "quoted": false
+    },
+    {
+     "para": 3,
+     "text": "“Now!”",
+     "quoted": true
+    },
+    {
+     "para": 4,
+     "text": "“Numeric”",
+     "quoted": true
+    },
+    {
+     "para": 4,
+     "text": " — dash …  end",
+     "quoted": false
+    }
+   ]
+  },
+  {
+   "html": "<p>Hei Lou Lan said: “Father… you abandoned me—again.” She smiled.</p><p>“The quote continues</p><p>\"Straight quotes,\" he said.</p>",
+   "paragraphs": [
+    "Hei Lou Lan said: “Father… you abandoned me—again.” She smiled.",
+    "“The quote continues",
+    "\"Straight quotes,\" he said."
+   ],
+   "units": [
+    {
+     "para": 0,
+     "text": "Hei Lou Lan said: ",
+     "quoted": false
+    },
+    {
+     "para": 0,
+     "text": "“Father… you abandoned me—again.”",
+     "quoted": true
+    },
+    {
+     "para": 0,
+     "text": " She smiled.",
+     "quoted": false
+    },
+    {
+     "para": 1,
+     "text": "“The quote continues",
+     "quoted": true
+    },
+    {
+     "para": 2,
+     "text": "\"Straight quotes,\"",
+     "quoted": true
+    },
+    {
+     "para": 2,
+     "text": " he said.",
+     "quoted": false
+    }
+   ]
+  },
+  {
+   "html": "<p><strong>Bold</strong> and <i>italic</i> text.</p><p>Editor: Someone</p><p>Proofreader: X</p>",
+   "paragraphs": [
+    "Bold and italic text."
+   ],
+   "units": [
+    {
+     "para": 0,
+     "text": "Bold and italic text.",
+     "quoted": false
+    }
+   ]
+  }
+ ]
+}

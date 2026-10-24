@@ -34,7 +34,7 @@ config :readaloud_library, ReadaloudLibrary.Repo,
 config :readaloud_library, Oban,
   engine: Oban.Engines.Lite,
   repo: ReadaloudLibrary.Repo,
-  queues: [import: 2, tts: 1]
+  queues: [import: 2, tts: 1, plan: 1]
 
 # --- Web ---
 config :readaloud_web,

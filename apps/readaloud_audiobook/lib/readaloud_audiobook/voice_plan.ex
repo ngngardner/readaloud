@@ -50,6 +50,9 @@ defmodule ReadaloudAudiobook.VoicePlan do
     Path.join([base, "books", "#{chapter.book_id}", "voice-plans", "#{padded}.json"])
   end
 
+  @doc "Whether the chapter has a plan, for any voice (a cheap check: no parsing)."
+  def exists?(chapter, base \\ storage_base()), do: File.exists?(path(chapter, base))
+
   @spec load(map(), String.t()) :: {:ok, t()} | :none | {:error, term()}
   def load(chapter, base \\ storage_base()) do
     case File.read(path(chapter, base)) do
@@ -71,7 +74,7 @@ defmodule ReadaloudAudiobook.VoicePlan do
       dest = path(chapter, base)
       File.mkdir_p!(Path.dirname(dest))
       # Write-then-rename so a generation job never reads half a plan.
-      tmp = dest <> ".tmp"
+      tmp = "#{dest}.#{System.unique_integer([:positive])}.tmp"
       File.write!(tmp, Jason.encode!(map))
       File.rename!(tmp, dest)
       {:ok, plan}

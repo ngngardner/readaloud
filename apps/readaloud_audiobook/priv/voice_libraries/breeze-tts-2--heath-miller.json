@@ -1,0 +1,110 @@
+{
+ "model": "breeze-tts-2",
+ "voice": "heath-miller",
+ "temperature": 0.6,
+ "fallback": {
+  "voice": "/models/voices/heath-miller.wav",
+  "text": "The walls were black, like some long, dormant magma chamber. But even starting from a natural cavern, it would have been a monumental labor to bring it to its current state."
+ },
+ "voices": {
+  "female-0": {
+   "label": "female, warm",
+   "sex": "female",
+   "description": "A warm, conversational female voice used for characters like Farrah, Gabrielle, Sophie, and Thel, delivering dialogue with a calm and casual tone.",
+   "group": "female",
+   "size": 48,
+   "clip": {
+    "voice": "/models/voices/hwfwm-female-0-0.wav",
+    "text": "There are villages like the one we stayed in all through the region. From here it all gets taken south and shipped downriver on barges."
+   }
+  },
+  "female-1": {
+   "label": "female, expressive",
+   "sex": "female",
+   "description": "An expressive female voice with a wider pitch range, used for characters like Phoebe, Gabrielle, and Sophie, often conveying casual or intense moods.",
+   "group": "female",
+   "size": 46,
+   "clip": {
+    "voice": "/models/voices/hwfwm-female-1-0.wav",
+    "text": "Magic Society project that these people took over. That's some serious clout. Yes, it is."
+   }
+  },
+  "female-2": {
+   "label": "female, authoritative",
+   "sex": "female",
+   "description": "A clear, slightly higher-pitched female voice, primarily used for Belinda, delivering instructions and strategic dialogue with a calm but firm tone.",
+   "group": "female",
+   "size": 28,
+   "clip": {
+    "voice": "/models/voices/hwfwm-female-2-0.wav",
+    "text": "The protection I set up in here will hide your aura so long as you're in this shed, but you can't stay here."
+   }
+  },
+  "male-0": {
+   "label": "male, casual",
+   "sex": "male",
+   "description": "A casual, mid-range male voice used for characters like Jason, Clive, and Humphrey, delivering dialogue in a relaxed and conversational manner.",
+   "group": "male",
+   "size": 235,
+   "clip": {
+    "voice": "/models/voices/hwfwm-male-0-0.wav",
+    "text": "I never said the Mercer sent me. Yes, the conversation happened to go in such a way that certain connections between myself and the Mercer family came to life."
+   }
+  },
+  "male-2": {
+   "label": "male, serious",
+   "sex": "male",
+   "description": "A serious, calm male voice, primarily used for Rufus and Vincent, delivering dialogue with a composed and instructional tone.",
+   "group": "male",
+   "size": 167,
+   "clip": {
+    "voice": "/models/voices/hwfwm-male-2-0.wav",
+    "text": "It's a delicate process, though. Changes in the ambient magic can ruin whole batches, which is why they have farms out here. No activity, no life. Very stable ambient magic."
+   }
+  },
+  "narration-0": {
+   "label": "calm narration",
+   "sex": "mixed",
+   "description": "A low-pitched, calm narration voice used for descriptive passages and general storytelling, maintaining a steady and quiet tone.",
+   "group": "narration",
+   "size": 401,
+   "clip": {
+    "voice": "/models/voices/hwfwm-narration-0-0.wav",
+    "text": "As the wind faded, Jason looked around at the leeches cast as far as dozens of metres away."
+   }
+  },
+  "narration-1": {
+   "label": "tense narration",
+   "sex": "mixed",
+   "description": "A slightly higher-pitched, tense narration voice used for more intense or suspenseful descriptive passages, conveying urgency and focus.",
+   "group": "narration",
+   "size": 373,
+   "clip": {
+    "voice": "/models/voices/hwfwm-narration-1-0.wav",
+    "text": "After a few attempts to break the surprisingly sturdy glass, he remembered the key ring he had looted from the dead body."
+   }
+  },
+  "narration-2": {
+   "label": "action narration",
+   "sex": "mixed",
+   "description": "A high-intensity, fast-paced narration voice used for action sequences, delivering dialogue with urgency and energy.",
+   "group": "narration",
+   "size": 330,
+   "clip": {
+    "voice": "/models/voices/hwfwm-narration-2-0.wav",
+    "text": "Jason maintained distance, but landed an embarrassing few meters to the left of the tortoise."
+   }
+  },
+  "narration-3": {
+   "label": "system announcement",
+   "sex": "mixed",
+   "description": "A distinct, higher-pitched narration voice used for in-world system announcements, such as item descriptions and ability details, with a clear and mechanical tone.",
+   "group": "narration",
+   "size": 119,
+   "clip": {
+    "voice": "/models/voices/hwfwm-narration-3-0.wav",
+    "text": "Attacks ignore Bronze Rank damage reduction and poison resistance. Umbral Snake Venom. Damage over time, poison stacking. Inflicts ongoing necrotic damage until poison is cleansed."
+   }
+  }
+ }
+}

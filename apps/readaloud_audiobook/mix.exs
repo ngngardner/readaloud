@@ -30,6 +30,7 @@ defmodule ReadaloudAudiobook.MixProject do
       {:readaloud_library, in_umbrella: true},
       {:readaloud_tts, in_umbrella: true},
       {:jason, "~> 1.4"},
+      {:req, "~> 0.5"},
       {:oban, "~> 2.19"},
       {:phoenix_pubsub, "~> 2.1"}
     ]

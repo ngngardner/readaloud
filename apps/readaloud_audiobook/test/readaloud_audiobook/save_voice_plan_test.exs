@@ -108,4 +108,38 @@ defmodule ReadaloudAudiobook.SaveVoicePlanTest do
 
     assert tasks(chapter) == []
   end
+
+  describe "ensure_audio_generated/3 for a voice with a narrator library" do
+    setup %{book: book} do
+      html = Path.join(System.get_env("STORAGE_PATH"), "c.html")
+      File.mkdir_p!(Path.dirname(html))
+      File.write!(html, "<p>x</p>")
+
+      {:ok, ch} =
+        ReadaloudLibrary.create_chapter(%{book_id: book.id, number: 300, content_path: html})
+
+      %ReadaloudAudiobook.ChapterAudio{}
+      |> ReadaloudAudiobook.ChapterAudio.changeset(%{
+        chapter_id: ch.id,
+        audio_path: "/tmp/x.wav",
+        duration_seconds: 1.0,
+        model: "breeze-tts-2",
+        voice: "heath-miller"
+      })
+      |> Repo.insert!()
+
+      %{ch: ch}
+    end
+
+    # Its audio was read from the plain clip; it needs a plan and a new reading.
+    test "a chapter with audio but no plan is queued", %{book: book, ch: ch} do
+      assert {:ok, 1} = ReadaloudAudiobook.ensure_audio_generated(book, [ch])
+      assert [_] = tasks(ch)
+    end
+
+    test "a chapter with audio and a plan is left alone", %{book: book, ch: ch} do
+      {:ok, _} = VoicePlan.save(ch, @plan)
+      assert {:ok, 0} = ReadaloudAudiobook.ensure_audio_generated(book, [ch])
+    end
+  end
 end

@@ -450,6 +450,13 @@ def cmd_plan(args) -> None:
             print(f"[{n}/{len(todo)}] {ch['number']}: FAILED {type(exc).__name__}: {exc}", flush=True)
 
 
+def cmd_export_library(args) -> None:
+    cl = json.loads((WORK_DIR / "clusters.json").read_text())
+    doc = plan.export_library(cl, library.load_library(WORK_DIR / "library.json"), MATCHED_TEMPERATURE)
+    _save(Path(args.out), doc)
+    print(f"{args.out}: {len(doc['voices'])} voices")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -494,5 +501,8 @@ def main() -> None:
     p.add_argument("--count", type=int, default=100)
     p.add_argument("--force", action="store_true", help="re-plan chapters that already have a plan")
     p.set_defaults(func=cmd_plan)
+    p = sub.add_parser("export-library", help="write the narrator's voice library for readaloud's planner")
+    p.add_argument("--out", required=True)
+    p.set_defaults(func=cmd_export_library)
     args = parser.parse_args()
     args.func(args)

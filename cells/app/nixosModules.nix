@@ -34,6 +34,14 @@
           default = "http://localhost:8080";
           description = "LocalAI service URL";
         };
+        bonsaiUrl = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Bonsai llama.cpp server (OpenAI-compatible) the voice planner asks who
+            speaks each line. Null: chapters are read from the voice's own clip.
+          '';
+        };
         secretKeyBaseFile = lib.mkOption {
           type = lib.types.path;
           description = "File containing SECRET_KEY_BASE";
@@ -63,7 +71,8 @@
             RELEASE_COOKIE = "readaloud";
             ELIXIR_ERL_OPTIONS = "+fnu";
             PHX_CHECK_ORIGIN = "false";
-          };
+          }
+          // lib.optionalAttrs (cfg.bonsaiUrl != null) { BONSAI_URL = cfg.bonsaiUrl; };
 
           path = with pkgs; [
             calibre
