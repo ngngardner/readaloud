@@ -29,7 +29,9 @@ defmodule ReadaloudWebWeb.PlayerEventControllerTest do
     test "responds 204 even with no events key", %{conn: conn, ref: ref} do
       conn = post(conn, ~p"/api/books/123/player-events", %{})
       assert response(conn, 204)
-      refute_received {[:readaloud, :player, :event], ^ref, _, _}
+      # Only beacon events: the handler is global, so ReaderLive tests running
+      # alongside can deliver their "ws" events to this mailbox.
+      refute_received {[:readaloud, :player, :event], ^ref, _, %{transport: "beacon"}}
     end
   end
 end

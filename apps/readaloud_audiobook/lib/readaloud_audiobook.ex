@@ -39,8 +39,8 @@ defmodule ReadaloudAudiobook do
   `current_number`, the chapter the reader is on.
 
   Nothing is queued when the book reads with a voice other than the plan's,
-  or when a job for the chapter is still waiting to start: that job reads
-  the plan when it runs. A job already running started without the plan, so
+  or when a job for the chapter with the plan's voice is still waiting to
+  start: that job reads the plan when it runs. A job already running started without the plan, so
   the chapter is queued again behind it.
   """
   @spec save_voice_plan(map(), map(), map(), integer() | nil) ::
@@ -54,7 +54,10 @@ defmodule ReadaloudAudiobook do
   defp queue_for_plan(book, chapter, plan, current_number) do
     waiting? =
       AudiobookTask
-      |> where([t], t.chapter_id == ^chapter.id)
+      |> where(
+        [t],
+        t.chapter_id == ^chapter.id and t.model == ^plan.model and t.voice == ^plan.voice
+      )
       |> TaskQuery.pending()
       |> Repo.exists?()
 

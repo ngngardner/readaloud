@@ -121,8 +121,9 @@ defmodule ReadaloudAudiobook.VoicePlan do
   defp chunk(%{"text" => text, "spoken" => spoken, "voice" => clip, "reference_text" => ref})
        when is_binary(text) and is_binary(spoken) and is_binary(clip) and is_binary(ref) do
     cond do
-      String.trim(spoken) == "" ->
-        {:error, "empty spoken text"}
+      # Breeze can fail on a request with nothing to say ("***", "……").
+      not String.match?(spoken, ~r/[\p{L}\p{N}]/u) ->
+        {:error, "no words to speak in #{inspect(spoken)}"}
 
       not voice_clip?(clip) ->
         {:error, "reference clip must be a .wav in #{@voices_dir}, got #{inspect(clip)}"}

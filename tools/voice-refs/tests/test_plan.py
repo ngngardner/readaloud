@@ -104,3 +104,23 @@ def test_readaloud_client_lists_fetches_and_uploads():
     assert api.text(12, 5)["html"] == "<p>x</p>"
     assert api.put_plan(12, 5, {"chunks": []}) == {"chunks": 1, "queue": "queued"}
     assert calls[-1] == ("PUT", "/api/books/12/chapters/5/voice-plan", {"chunks": []})
+
+
+def test_wordless_passages_join_a_neighbour_instead_of_going_alone():
+    # Breeze can fail on a request with no words in it ("***", a silent "……").
+    passages = [_p(0, "“Leave.”", HER, "female-0"),
+                _p(1, "***", NARRATION, "narration-0"),
+                _p(2, "“Now.”", HER, "female-0")]
+    chunks = plan.chunks_for(passages, LIB, {})
+    assert [c["text"] for c in chunks] == ["“Leave.”\n***", "“Now.”"]
+
+
+def test_a_wordless_first_passage_joins_the_next():
+    passages = [_p(0, "……", NARRATION, "narration-0"), _p(1, "“Leave.”", HER, "female-0")]
+    assert [c["text"] for c in plan.chunks_for(passages, LIB, {})] == ["……\n“Leave.”"]
+
+
+def test_single_word_names_are_not_learned():
+    # Learned names apply to the whole book; "Men" or "Long" would rewrite ordinary words in later chapters.
+    text = "Men Ke bowed to Long."
+    assert plan.new_names(["Men Ke", "Long"], text, existing={}) == {"Men Ke": "Mun Kuh"}

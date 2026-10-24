@@ -46,6 +46,14 @@ defmodule ReadaloudAudiobook.VoicePlanTest do
       assert {:error, _} = VoicePlan.parse(%{@plan | "chunks" => []})
     end
 
+    # Breeze can fail on a request with nothing to say, failing the chapter on every retry.
+    test "rejects a chunk with no words to speak" do
+      assert {:error, _} = VoicePlan.parse(%{@plan | "chunks" => [%{@chunk | "spoken" => "***"}]})
+
+      assert {:error, _} =
+               VoicePlan.parse(%{@plan | "chunks" => [%{@chunk | "spoken" => "“……”"}]})
+    end
+
     test "rejects a chunk missing its spoken text" do
       assert {:error, _} = VoicePlan.parse(%{@plan | "chunks" => [Map.delete(@chunk, "spoken")]})
     end

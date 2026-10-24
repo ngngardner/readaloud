@@ -2,7 +2,10 @@ import Config
 
 # --- Library test config ---
 config :readaloud_library, ReadaloudLibrary.Repo,
-  database: "readaloud_test.db",
+  # Absolute: an umbrella `mix test` runs each app from its own directory, and
+  # a relative path then opens a different, unmigrated file per app ("no such
+  # table: books", "Database busy" — intermittently, as connections reopen).
+  database: Path.expand("../readaloud_test.db", __DIR__),
   pool: Ecto.Adapters.SQL.Sandbox
 
 config :readaloud_library, Oban, testing: :manual

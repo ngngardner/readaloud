@@ -444,7 +444,7 @@ def cmd_plan(args) -> None:
             result = api.put_plan(args.book, ch["id"], doc)
             _save(learned_path, learned)
             _save(speakers_path, speakers)
-            print(f"[{n}/{len(todo)}] {ch['number']} {ch['title'][:40]!r}: {len(doc['chunks'])} chunks, "
+            print(f"[{n}/{len(todo)}] {ch['number']} {(ch['title'] or '')[:40]!r}: {len(doc['chunks'])} chunks, "
                   f"{result['queue']}, {time.monotonic() - started:.0f}s"
                   + (f", new names {fresh}" if fresh else ""), flush=True)
         except Exception as exc:  # one bad chapter must not stop a run of hundreds

@@ -28,9 +28,27 @@ def chunks_for(passages: list[Passage], lib: dict[str, list[RefClip]], name_map:
             runs[-1] = (clip, runs[-1][1] + "\n" + text)
         else:
             runs.append((clip, text))
+    pieces = _fold_wordless([(clip, piece) for clip, text in runs for piece in chunk(text, MAX_CHARS)])
     return [{"text": piece, "spoken": apply_names(piece, name_map), "voice": f"{CONTAINER_VOICES}/{clip.file}",
              "reference_text": clip.transcript}
-            for clip, text in runs for piece in chunk(text, MAX_CHARS)]
+            for clip, piece in pieces]
+
+
+def _fold_wordless(pieces: list[tuple[RefClip, str]]) -> list[tuple[RefClip, str]]:
+    """A piece with no words ("***", a silent "……") joins the piece before it, or the first one after it:
+    Breeze can fail on a request with nothing to say."""
+    out: list[tuple[RefClip, str]] = []
+    pending = ""
+    for clip, text in pieces:
+        if not re.search(r"\w", text):
+            if out:
+                out[-1] = (out[-1][0], out[-1][1] + "\n" + text)
+            else:
+                pending += text + "\n"
+            continue
+        out.append((clip, pending + text))
+        pending = ""
+    return out
 
 
 def document(passages: list[Passage], lib: dict[str, list[RefClip]], name_map: dict[str, str],
@@ -58,13 +76,11 @@ def remember_speakers(tags: list[dict], picks: list[str | None], memory: dict[st
 
 
 def new_names(found: list[str], text: str, existing: dict[str, str]) -> dict[str, str]:
-    """Respellings for pinyin names not seen before. A name that also appears in lowercase ("long") is an
-    English word, and respelling it would change ordinary prose."""
+    """Respellings for pinyin names of two or more words not seen before. Learned names apply to the whole book,
+    and a one-word name ("Long", "Men") is too often an English word: respelling it would change ordinary prose."""
     out = {}
     for name in (n.strip() for n in found):
-        if not name or name in existing or name not in text:
-            continue
-        if " " not in name and re.search(rf"\b{re.escape(name.lower())}\b", text):
+        if " " not in name or name in existing or name not in text:
             continue
         spelled = names.respell(name)
         if spelled is not None:

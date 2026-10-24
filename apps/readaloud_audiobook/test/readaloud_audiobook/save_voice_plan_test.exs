@@ -74,6 +74,18 @@ defmodule ReadaloudAudiobook.SaveVoicePlanTest do
     assert length(tasks(chapter)) == 1
   end
 
+  # A waiting job for another voice would not read the plan.
+  test "queues even when a job for another voice is waiting", %{book: book, chapter: chapter} do
+    {:ok, _} =
+      ReadaloudAudiobook.generate_for_chapter(book.id, chapter.id,
+        model: "kokoro",
+        voice: "af_heart"
+      )
+
+    assert {:ok, _, :queued} = ReadaloudAudiobook.save_voice_plan(book, chapter, @plan, 210)
+    assert length(tasks(chapter)) == 2
+  end
+
   test "saves but does not queue when the book reads with another voice", %{
     book: book,
     chapter: chapter

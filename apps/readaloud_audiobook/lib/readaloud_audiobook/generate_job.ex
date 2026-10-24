@@ -39,7 +39,10 @@ defmodule ReadaloudAudiobook.GenerateJob do
          {:ok, audio, chunk_timings} <- synthesize_chunks(chunks, voice, task) do
       audio_path = audio_storage_path(chapter)
       File.mkdir_p!(Path.dirname(audio_path))
-      File.write!(audio_path, audio)
+      # Write-then-rename: a chapter regenerated while it is being listened
+      # to (a new voice plan) keeps streaming the old file until it ends.
+      File.write!(audio_path <> ".tmp", audio)
+      File.rename!(audio_path <> ".tmp", audio_path)
 
       # Final alignment pass: reconcile per-chunk timings with full source text
       timings = TimingAligner.align(chunk_timings, clean_text)
