@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from . import audio, bonsai, chapter, laya_check, library, names, textunits, whisper
+from . import audio, bonsai, chapter, laya_check, library, names, textunits, tts, whisper
 from .config import CATEGORIES, SOURCE_BOOK, VOICES_DIR, WORK_DIR
 
 PIECE_S = 600
@@ -176,6 +176,31 @@ def cmd_names(args) -> None:
         print(f"{name:16s} {e['hanzi'] or '-':6s} {e['pinyin']:18s} {e['respelling']}")
 
 
+def _load_passages(number: int) -> list[chapter.Passage]:
+    raw = json.loads((_chapter_dir(number) / "passages.json").read_text())["passages"]
+    return [chapter.Passage(p["idx"], p["text"], bonsai.Tag(**p["tag"]), p["category"]) for p in raw]
+
+
+def cmd_generate(args) -> None:
+    ch = _chapter_dir(args.number)
+    lib_path = WORK_DIR / "library.json"
+    lib = library.load_library(lib_path) if lib_path.exists() else {}
+    entries = json.loads(NAMES_FILE.read_text())
+    name_map = {name: e["respelling"] for name, e in entries.items()}
+    methods = args.methods.split(",") if args.methods else tts.METHODS
+    if any(m != "current" for m in methods) and not lib:
+        raise SystemExit("library.json missing: run `voicerefs library` before generating matched methods")
+    gen_path = ch / "generation.json"
+    gen = json.loads(gen_path.read_text()) if gen_path.exists() else {"passages": {}, "names": {}}
+    result = tts.generate(_load_passages(args.number), lib, name_map, ch / "audio", methods=methods)
+    for idx, by_method in result.items():
+        gen["passages"].setdefault(idx, {}).update(by_method)
+    gen["names"] = tts.generate_names(entries, ch / "audio")
+    gen_path.write_text(json.dumps(gen, ensure_ascii=False, indent=1))
+    failed = [(i, m) for i, bm in gen["passages"].items() for m, r in bm.items() if "failed" in r]
+    print(f"generated {len(gen['passages'])} passages; {len(failed)} failed: {failed}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="voicerefs")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -192,5 +217,9 @@ def main() -> None:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--number", type=int, default=195, help="readaloud chapter number (195 = Chapter 944)")
         p.set_defaults(func=func)
+    p = sub.add_parser("generate", help="generate passage audio for each method, plus name samples")
+    p.add_argument("--number", type=int, default=195)
+    p.add_argument("--methods", default="", help="comma separated subset of current,matched,matched_names")
+    p.set_defaults(func=cmd_generate)
     args = parser.parse_args()
     args.func(args)
