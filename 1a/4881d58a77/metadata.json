@@ -6,6 +6,7 @@
   "checkpoints_count": 1,
   "files_touched": [
     "tools/voice-refs/tests/test_page.py",
+    "tools/voice-refs/voicerefs/cli.py",
     "tools/voice-refs/voicerefs/page.py",
     "tools/voice-refs/voicerefs/page_template.html"
   ],
@@ -19,10 +20,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 0,
-    "cache_creation_tokens": 0,
-    "cache_read_tokens": 0,
-    "output_tokens": 0,
-    "api_call_count": 0
+    "input_tokens": 2,
+    "cache_creation_tokens": 1088,
+    "cache_read_tokens": 266618,
+    "output_tokens": 721,
+    "api_call_count": 1
   }
 }
