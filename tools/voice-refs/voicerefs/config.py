@@ -9,7 +9,8 @@ CONTAINER_VOICES = "/models/voices"
 
 BREEZE_URL = "http://phanteks:8090/v1/audio/speech"
 LITELLM_URL = "http://pylon:4100/v1/audio/transcriptions"
-BONSAI_URL = "http://127.0.0.1:18120/v1/chat/completions"
+# The resident Bonsai shared with the gameassets tagger (configs: gameassets bonsai.resident).
+BONSAI_URL = os.environ.get("VOICEREFS_BONSAI_URL", "http://127.0.0.1:18111") + "/v1/chat/completions"
 
 MAX_CHARS = 400
 TARGET_DBFS = -20.0

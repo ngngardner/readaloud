@@ -6,6 +6,5 @@ Description=Plan Reverend Insanity chapters for readaloud's matched narrator voi
 [Service]
 Type=oneshot
 ExecStart=/internalmedia/voice-refs-work/plan-rest.sh
-ExecStopPost=/internalmedia/voice-refs-work/plan-release.sh
 TimeoutStartSec=infinity
 Nice=10
