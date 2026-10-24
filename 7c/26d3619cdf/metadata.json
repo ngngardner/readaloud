@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "7c26d3619cdf",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/superpowers/specs/2026-10-24-matched-reference-voice-design.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7c/26d3619cdf/0/metadata.json",
+      "transcript": "/7c/26d3619cdf/0/full.jsonl",
+      "compact_transcript": "/7c/26d3619cdf/0/transcript.jsonl",
+      "content_hash": "/7c/26d3619cdf/0/content_hash.txt",
+      "prompt": "/7c/26d3619cdf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 68,
+    "cache_creation_tokens": 86889,
+    "cache_read_tokens": 2993530,
+    "output_tokens": 18872,
+    "api_call_count": 33,
+    "subagent_tokens": {
+      "input_tokens": 78,
+      "cache_creation_tokens": 187062,
+      "cache_read_tokens": 3865624,
+      "output_tokens": 17463,
+      "api_call_count": 39
+    }
+  }
+}

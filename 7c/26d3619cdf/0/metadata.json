@@ -1,0 +1,102 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "7c26d3619cdf",
+  "session_id": "74c32b34-ed73-4b75-8918-fb54d53f63c6",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-24T04:49:40.647262883Z",
+  "branch": "master",
+  "checkpoints_count": 3,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/superpowers/specs/2026-10-24-matched-reference-voice-design.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "55c2ce49159e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 68,
+    "cache_creation_tokens": 86889,
+    "cache_read_tokens": 2993530,
+    "output_tokens": 18872,
+    "api_call_count": 33,
+    "subagent_tokens": {
+      "input_tokens": 78,
+      "cache_creation_tokens": 187062,
+      "cache_read_tokens": 3865624,
+      "output_tokens": 17463,
+      "api_call_count": 39
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01WzdZEZK83paXHkHJWkFyC1",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "superpowers:brainstorming"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "55c2ce49159e",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 47,
+        "end": 48,
+        "entry_ids": [
+          "700a1904-2ec8-4bfb-abef-c7d89b58dedb"
+        ],
+        "tool_use_id": "toolu_01WzdZEZK83paXHkHJWkFyC1"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01WzdZEZK83paXHkHJWkFyC1"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: superpowers:brainstorming",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-24T04:49:40.597714244Z",
+    "agent_lines": 136,
+    "agent_removed": 0,
+    "human_added": 32,
+    "human_modified": 20,
+    "human_removed": 0,
+    "total_committed": 178,
+    "total_lines_changed": 188,
+    "agent_percentage": 72.3404255319149,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 26,
+      "user_lines_removed": 10,
+      "agent_lines_added": 172,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/superpowers/specs/2026-10-24-matched-reference-voice-design.md": 26
+      },
+      "user_removed_per_file": {
+        "docs/superpowers/specs/2026-10-24-matched-reference-voice-design.md": 10
+      }
+    }
+  ]
+}

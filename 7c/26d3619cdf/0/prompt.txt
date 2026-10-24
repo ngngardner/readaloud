@@ -1,0 +1,41 @@
+<task-notification>
+<task-id>ac598224061b89f54</task-id>
+<tool-use-id>toolu_01LT8fqA6ZYt7hwN5u4mpoYu</tool-use-id>
+<output-file>/tmp/claude-1000/-home-noah-projects/74c32b34-ed73-4b75-8918-fb54d53f63c6/tasks/ac598224061b89f54.output</output-file>
+<status>completed</status>
+<summary>Agent "Builder check on design doc" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found three gaps worth asking about. I checked the spec's claims against the readaloud code, the configs repo, bloons-blitz's use of Laya, and phanteks itself.
+
+**1. Laya can't do the clip screening the spec gives it. What should check the audio instead?**
+Section 1 says Laya screens candidate clips for "clean audio, no music/overlap, a single speaker". But Laya is a ModernBERT text classifier. bloons-blitz (`/home/noah/projects/bloons-blitz/src/blitzpad/upgrades.py`) only feeds it OCR text. It can only judge a transcript, so it can't hear music, crosstalk or noise. The answer decides whether the plan needs one of these:
+- a signal-based audio check (SNR, music detection)
+- Whisper confidence and no-speech scores as a stand-in
+- a step where Noah listens to the candidate clips before they go into the library
+
+Picking clips is the core of the experiment. A clip with a music bed or a second voice will look like a model failure on the page.
+
+**2. Who does the "by ear" listening for the name test?**
+Section 4 has the builder test respelling against Hanzi by ear and pick the form that sounds right. If the builder is an agent like me, nobody on the build side can hear the audio. The options change what gets built:
+- A small test page for Noah first, which adds a wait before the full run.
+- Both forms on the final page as a fourth method, which adds a column and more generation time.
+- An automatic proxy, such as transcribing the output with Whisper and comparing. That can't catch a correct-but-ugly reading or a mid-sentence accent switch.
+
+**3. What counts as a "correct" name pronunciation?**
+The anti-goal says names must not be "consistent but consistently wrong", but the spec gives no reference. It could mean standard Mandarin (pinyin, maybe tones), the usual English-fan reading, or how Noah already says them. This decides how Bonsai's prompt is written. It also decides whether "correct" can be checked at all without Noah, and whether Hanzi (native Mandarin) is even the right kind of target. The Hanzi option also means Bonsai has to guess each name's characters, because the chapter is an English translation. That only matters if Mandarin readings are the goal.
+
+**4. Can the gameassets tagger timers be paused while this runs?**
+The spec says GPU 1 has room for `bonsai-text`. Today it does (1.2 of 12 GB used). But in `/home/noah/projects/configs/nix/services/modules/gameassets/default.nix`, `bonsai-text` has `Conflicts=gameassets-bonsai-gpu1.service`. And `/home/noah/projects/configs/nix/phanteks/home.nix` turns on the hourly tagger on both GPUs (timers are active, next run 01:00). Any hourly run that finds work in its queue starts the GPU 1 tagger server, which stops `bonsai-text` mid-job. The tagger also runs on GPU 0 next to LocalAI. The plan needs one of these:
+- stop those timers for the duration (this touches another project's service)
+- pause tagging through config
+- make the tooling detect `bonsai-text` going down and restart it</result>
+<usage><subagent_tokens>82572</subagent_tokens><tool_uses>10</tool_uses><duration_ms>83458</duration_ms></usage>
+</task-notification>
+
+---
+
+Mandarin
+
+---
+
+Go
