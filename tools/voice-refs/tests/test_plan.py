@@ -124,3 +124,33 @@ def test_single_word_names_are_not_learned():
     # Learned names apply to the whole book; "Men" or "Long" would rewrite ordinary words in later chapters.
     text = "Men Ke bowed to Long."
     assert plan.new_names(["Men Ke", "Long"], text, existing={}) == {"Men Ke": "Mun Kuh"}
+
+
+def test_find_names_retries_a_bad_reply_once():
+    replies = [ValueError("reply truncated at max_tokens"), {"names": ["Bo Qing", "Mo Yao"]}]
+
+    def chat(system, user, schema):
+        r = replies.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    assert plan.find_names("text", chat) == ["Bo Qing", "Mo Yao"]
+
+
+def test_find_names_gives_up_quietly_rather_than_failing_the_chapter():
+    def chat(system, user, schema):
+        raise ValueError("reply truncated at max_tokens")
+
+    assert plan.find_names("text", chat) == []
+
+
+def test_find_names_caps_the_list_so_a_runaway_reply_ends():
+    seen = {}
+
+    def chat(system, user, schema):
+        seen["schema"] = schema
+        return {"names": []}
+
+    plan.find_names("text", chat)
+    assert seen["schema"]["properties"]["names"]["maxItems"] <= 60

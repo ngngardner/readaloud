@@ -86,3 +86,27 @@ def new_names(found: list[str], text: str, existing: dict[str, str]) -> dict[str
         if spelled is not None:
             out[name] = spelled
     return out
+
+
+NAMES_SCHEMA = {
+    "type": "object",
+    # The cap ends a reply that starts repeating itself before it runs into max_tokens.
+    "properties": {"names": {"type": "array", "items": {"type": "string"}, "maxItems": 60}},
+    "required": ["names"],
+}
+NAMES_SYSTEM = """You prepare a pronunciation list for a narrator reading a Chinese web novel in English translation.
+List every Chinese name written in pinyin in the text: people, nicknames, clans, tribes and places, exactly as written (e.g. "Hei Lou Lan", "Fang Yuan", "Huang Er"). Skip anything translated into English, such as "Blazing Heaven Demoness", "Verdant Great Sun" or "Spirit Affinity House". List each name once."""
+
+
+def find_names(text: str, chat=None) -> list[str]:
+    """Pinyin names in a chapter, asked of bonsai. A bad reply is retried once; a second one gives no names
+    rather than failing the chapter, which then just uses the names already learned."""
+    from . import bonsai
+
+    chat = chat or bonsai.chat_json
+    for _attempt in range(2):
+        try:
+            return [str(n) for n in chat(NAMES_SYSTEM, text, NAMES_SCHEMA)["names"]]
+        except (ValueError, KeyError, TypeError):
+            continue
+    return []

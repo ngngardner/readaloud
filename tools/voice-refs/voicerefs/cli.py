@@ -434,8 +434,7 @@ def cmd_plan(args) -> None:
                 p.cluster = cid
 
             text = "\n".join(paragraphs)
-            found = [e["name"] for e in bonsai.chat_json(NAMES_SYSTEM, text, NAMES_SCHEMA)["names"]]
-            fresh = plan.new_names(found, text, {**learned, **curated})
+            fresh = plan.new_names(plan.find_names(text), text, {**learned, **curated})
             learned.update(fresh)
             name_map = {**learned, **curated, **words}
 
