@@ -1,0 +1,13 @@
+we added passage tagging and better reference audio, but narrator and speaker got mixed up in a passage like this
+
+Fairy Bai Qing smiled bitterly: “Why would I have these things, if I did, I would have taken action long ago, right?”
+
+although fairy bai qing is female, and her speech used a female reference, the preface narrator text also used the female reference voice
+
+---
+
+these two have the exact same issue (qi yun tian uses a different male voice)
+
+Qi Yun Tian smiled lightly: “Fairy Bai Qing, why are you lying to us? You are the first person here, why did you come here alone secretly? Is all this a coincidence?”
+
+Fairy Bai Qing’s smile became more bitter: “You say I came here secretly, that is wrong. I had used the path through Myriad Dragon Dock and Combat Immortal Sect, I came here openly, what do you mean by secretly?”
