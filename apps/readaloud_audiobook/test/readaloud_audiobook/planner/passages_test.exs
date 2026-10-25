@@ -35,6 +35,29 @@ defmodule ReadaloudAudiobook.Planner.PassagesTest do
     end
   end
 
+  describe "narrate_around_quotes/2" do
+    test "the words around a quote are the narrator's, whoever the model says speaks them" do
+      units = [
+        unit(0, "Fairy Bai Qing smiled bitterly: "),
+        %{para: 0, text: "“Why would I have these things?”", quoted: true}
+      ]
+
+      tags = Passages.narrate_around_quotes(units, [@her, @her])
+
+      assert tags == [%{@narr | mood: "intense"}, @her]
+
+      assert Enum.map(Passages.build(units, tags), & &1.text) == [
+               "Fairy Bai Qing smiled bitterly: ",
+               "“Why would I have these things?”"
+             ]
+    end
+
+    test "a paragraph with no quote keeps its tag (a book quoting with ‘ ’ has none)" do
+      units = [unit(0, "‘Leave,’ she said.")]
+      assert Passages.narrate_around_quotes(units, [@her]) == [@her]
+    end
+  end
+
   describe "chunks/2" do
     test "each chunk has the book's text, the spoken text and its clip" do
       chunks = Passages.chunks([{"Feng Jiu Ge smiled.", @n}], %{"Feng Jiu Ge" => "Fung Jyo Guhh"})

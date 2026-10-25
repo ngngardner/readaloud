@@ -45,6 +45,22 @@ defmodule ReadaloudAudiobook.Planner.Passages do
   end
 
   @doc """
+  In a paragraph with a quotation, the unquoted words are the narrator's. The model
+  tags an attribution like "Fairy Bai Qing smiled bitterly: " as her speech, which
+  `build/2` would then merge into her quote and read in her voice. A paragraph with
+  no quotation keeps its tags: the book may quote in a way `Text` doesn't cut.
+  """
+  def narrate_around_quotes(units, tags) do
+    quoted_paras = for u <- units, u.quoted, into: MapSet.new(), do: u.para
+
+    Enum.zip_with(units, tags, fn unit, tag ->
+      if not unit.quoted and unit.para in quoted_paras,
+        do: %{tag | kind: "narration", speaker: "narrator", sex: "unknown"},
+        else: tag
+    end)
+  end
+
+  @doc """
   Plan chunks from `{passage_text, clip}` pairs in reading order: neighbours with the
   same clip share one request up to #{@max_chars} characters, cut like readaloud
   cuts text, and a piece with no words joins a neighbour.

@@ -131,7 +131,7 @@ defmodule ReadaloudAudiobook.Planner do
 
     with :ok <- non_empty(units),
          {:ok, tags} <- Bonsai.tag(chat, Enum.map(units, & &1.text), context),
-         passages = Passages.build(units, tags),
+         passages = Passages.build(units, Passages.narrate_around_quotes(units, tags)),
          {:ok, picks} <-
            Bonsai.assign(
              chat,
